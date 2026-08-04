@@ -7,13 +7,15 @@ console.log('   Backend:  http://localhost:5000');
 console.log('   Frontend: http://localhost:3000');
 console.log('===========================================================');
 
-const backend = spawn('npm.cmd', ['run', 'dev'], {
+const npmCmd = process.platform === 'win32' ? 'npm.cmd' : 'npm';
+
+const backend = spawn(npmCmd, ['start'], {
   cwd: path.join(__dirname, 'backend'),
   stdio: 'inherit',
   shell: true,
 });
 
-const frontend = spawn('npm.cmd', ['run', 'dev'], {
+const frontend = spawn(npmCmd, ['start'], {
   cwd: path.join(__dirname, 'frontend'),
   stdio: 'inherit',
   shell: true,

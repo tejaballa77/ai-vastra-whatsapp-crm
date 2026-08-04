@@ -4,7 +4,11 @@ import React, { createContext, useContext, useEffect, useState, ReactNode } from
 import { io, Socket } from 'socket.io-client';
 import { Chat, Message, SessionState } from '../types/chat';
 
-const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5000';
+const getBackendUrl = () => {
+  if (process.env.NEXT_PUBLIC_BACKEND_URL) return process.env.NEXT_PUBLIC_BACKEND_URL;
+  if (typeof window !== 'undefined') return window.location.origin;
+  return 'http://localhost:5000';
+};
 
 interface SocketContextType {
   socket: Socket | null;
@@ -42,7 +46,7 @@ export const SocketProvider = ({ children }: { children: ReactNode }) => {
   const [syncedMessageCount, setSyncedMessageCount] = useState<number>(0);
 
   useEffect(() => {
-    const s = io(BACKEND_URL, {
+    const s = io(getBackendUrl(), {
       transports: ['websocket', 'polling'],
       reconnection: true,
     });
@@ -118,7 +122,7 @@ export const SocketProvider = ({ children }: { children: ReactNode }) => {
   // Fetch messages when active chat changes
   useEffect(() => {
     if (!activeChatJid) return;
-    fetch(`${BACKEND_URL}/api/messages/${encodeURIComponent(activeChatJid)}`)
+    fetch(`${getBackendUrl()}/api/messages/${encodeURIComponent(activeChatJid)}`)
       .then((res) => res.json())
       .then((msgList: Message[]) => {
         setMessages((prev) => ({
@@ -131,7 +135,7 @@ export const SocketProvider = ({ children }: { children: ReactNode }) => {
 
   const sendMessage = async (chatJid: string, text: string) => {
     try {
-      const res = await fetch(`${BACKEND_URL}/api/messages/send`, {
+      const res = await fetch(`${getBackendUrl()}/api/messages/send`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ chatJid, text }),
@@ -146,7 +150,7 @@ export const SocketProvider = ({ children }: { children: ReactNode }) => {
 
   const disconnectSession = async () => {
     try {
-      await fetch(`${BACKEND_URL}/api/session/disconnect`, { method: 'POST' });
+      await fetch(`${getBackendUrl()}/api/session/disconnect`, { method: 'POST' });
     } catch (err) {
       console.error('[SocketContext] Disconnect error:', err);
     }
@@ -154,7 +158,7 @@ export const SocketProvider = ({ children }: { children: ReactNode }) => {
 
   const reconnectSession = async () => {
     try {
-      await fetch(`${BACKEND_URL}/api/session/connect`, { method: 'POST' });
+      await fetch(`${getBackendUrl()}/api/session/connect`, { method: 'POST' });
     } catch (err) {
       console.error('[SocketContext] Reconnect error:', err);
     }
@@ -175,7 +179,7 @@ export const SocketProvider = ({ children }: { children: ReactNode }) => {
     );
 
     try {
-      await fetch(`${BACKEND_URL}/api/crm/contact/${encodeURIComponent(jid)}`, {
+      await fetch(`${getBackendUrl()}/api/crm/contact/${encodeURIComponent(jid)}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),

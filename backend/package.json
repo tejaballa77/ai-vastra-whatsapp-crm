@@ -1,0 +1,30 @@
+{
+  "name": "ai-vastra-crm-backend",
+  "version": "1.0.0",
+  "description": "AI Vastra CRM Backend - WhatsApp Real-Time Sync Engine",
+  "main": "dist/index.js",
+  "scripts": {
+    "dev": "ts-node src/index.ts",
+    "import-backup": "ts-node src/importBackupScript.ts",
+    "build": "tsc",
+    "start": "node dist/index.js"
+  },
+  "dependencies": {
+    "@whiskeysockets/baileys": "^6.7.13",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "pino": "^9.0.0",
+    "pino-pretty": "^11.0.0",
+    "qrcode": "^1.5.3",
+    "socket.io": "^4.7.5"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.17",
+    "@types/express": "^4.17.21",
+    "@types/node": "^20.12.7",
+    "@types/qrcode": "^1.5.5",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.4.5"
+  }
+}

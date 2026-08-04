@@ -4,7 +4,7 @@ const path = require('path');
 console.log('===========================================================');
 console.log('🚀 Starting AI Vastra CRM Workspace...');
 console.log('   Backend:  http://localhost:5000');
-console.log('   Frontend: http://localhost:3000');
+console.log('   Frontend: http://localhost:3010');
 console.log('===========================================================');
 
 const npmCmd = process.platform === 'win32' ? 'npm.cmd' : 'npm';

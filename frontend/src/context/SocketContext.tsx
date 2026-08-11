@@ -158,7 +158,7 @@ export const SocketProvider = ({ children }: { children: ReactNode }) => {
 
   const reconnectSession = async () => {
     try {
-      await fetch(`${getBackendUrl()}/api/session/reset`, { method: 'POST' });
+      await fetch(`${getBackendUrl()}/api/session/connect`, { method: 'POST' });
     } catch (err) {
       console.error('[SocketContext] Reconnect error:', err);
     }

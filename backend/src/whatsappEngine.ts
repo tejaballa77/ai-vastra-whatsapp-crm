@@ -26,13 +26,7 @@ export class WhatsAppEngine {
   }
 
   public async initialize() {
-    if (this.sock) {
-      try {
-        this.sock.ev.removeAllListeners('connection.update');
-        this.sock.end(undefined);
-      } catch (e) {}
-      this.sock = null;
-    }
+    if (this.sock) return;
 
     try {
       console.log('[WhatsApp Engine] Initializing Baileys Multi-Device session...');
@@ -41,18 +35,7 @@ export class WhatsAppEngine {
 
       const logger = pino({ level: 'silent' });
       const { state, saveCreds } = await useMultiFileAuthState(this.authFolder);
-      let version: [number, number, number] = [2, 3000, 1015901307];
-      try {
-        const versionRes = await Promise.race([
-          fetchLatestBaileysVersion(),
-          new Promise<null>((resolve) => setTimeout(() => resolve(null), 2500))
-        ]);
-        if (versionRes && (versionRes as any).version) {
-          version = (versionRes as any).version;
-        }
-      } catch (e) {
-        console.warn('[WhatsApp Engine] Version fetch timeout, using fallback version.');
-      }
+      const { version } = await fetchLatestBaileysVersion();
 
       console.log(`[WhatsApp Engine] Baileys Version: ${version.join('.')}`);
 
@@ -308,32 +291,21 @@ export class WhatsAppEngine {
       } else if (m.extendedTextMessage?.text) {
         text = m.extendedTextMessage.text;
       } else if (m.imageMessage) {
-        text = m.imageMessage.caption || '📷 Photo';
+        text = m.imageMessage.caption || 'Photo';
         mediaType = 'image';
       } else if (m.videoMessage) {
-        text = m.videoMessage.caption || '🎥 Video';
+        text = m.videoMessage.caption || 'Video';
         mediaType = 'video';
       } else if (m.audioMessage) {
-        text = '🎵 Voice message';
+        text = 'Voice message';
         mediaType = 'audio';
       } else if (m.documentMessage) {
-        text = m.documentMessage.fileName || m.documentMessage.title || '📄 Document';
+        text = m.documentMessage.title || m.documentMessage.fileName || 'Document';
         mediaType = 'document';
-      } else if (m.templateMessage) {
-        const hyd = (m.templateMessage as any).hydratedTemplate || (m.templateMessage as any).hydratedFourRowTemplate;
-        text = hyd?.hydratedContentText || (m.templateMessage as any).fourRowTemplate?.contentText || 'Notification Template';
-      } else if (m.interactiveMessage) {
-        text = m.interactiveMessage.body?.text || m.interactiveMessage.header?.title || 'Interactive Message';
-      } else if (m.buttonsMessage) {
-        text = m.buttonsMessage.contentText || 'Buttons Message';
-      } else if (m.listMessage) {
-        text = m.listMessage.description || m.listMessage.title || 'List Message';
       } else if (m.buttonsResponseMessage?.selectedDisplayText) {
         text = m.buttonsResponseMessage.selectedDisplayText;
       } else if (m.templateButtonReplyMessage?.selectedDisplayText) {
         text = m.templateButtonReplyMessage.selectedDisplayText;
-      } else if ((m as any).body) {
-        text = (m as any).body;
       }
     }
 
@@ -341,9 +313,9 @@ export class WhatsAppEngine {
 
     const pushName = msg.pushName;
     const resolvedName = this.resolveBestContactName(chatJid, undefined, pushName);
-    const senderName = fromMe ? 'Me' : (resolvedName !== 'Contact' && !resolvedName.startsWith('[') ? resolvedName : 'Contact');
+    const senderName = fromMe ? 'Me' : resolvedName;
 
-    if (pushName && !fromMe && pushName !== 'Contact' && !pushName.startsWith('[')) {
+    if (pushName && !fromMe) {
       db.upsertContact(chatJid, { name: pushName });
     }
 
@@ -400,7 +372,6 @@ export class WhatsAppEngine {
     console.log('[WhatsApp Engine] Disconnecting and revoking session...');
     try {
       if (this.sock) {
-        this.sock.ev.removeAllListeners('connection.update');
         await this.sock.logout();
       }
     } catch (err) {
@@ -414,7 +385,7 @@ export class WhatsAppEngine {
     this.broadcastStatus();
 
     // Trigger re-initialization to show fresh QR code immediately
-    setTimeout(() => this.initialize(), 500);
+    setTimeout(() => this.initialize(), 1000);
   }
 
   public async fetchAndCacheProfilePic(rawJid: string) {

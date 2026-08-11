@@ -150,23 +150,6 @@ async function runBackupImport() {
           const fromMe = Boolean(m.id?.startsWith('true_') || m.fromMe);
           const timestamp = m.t ? m.t * 1000 : (m.timestamp ? m.timestamp : Date.now());
 
-          let mediaUrl: string | undefined = undefined;
-          let mediaType: 'image' | 'video' | 'audio' | 'document' | undefined = undefined;
-
-          if (m.type === 'image' || m.type === 'sticker' || (m.mimetype && m.mimetype.startsWith('image/'))) {
-            mediaType = 'image';
-            mediaUrl = m.clientUrl || m.directPath || m.deprecatedMms3Url || (typeof m.body === 'string' && m.body.startsWith('data:image') ? m.body : undefined);
-          } else if (m.type === 'video' || (m.mimetype && m.mimetype.startsWith('video/'))) {
-            mediaType = 'video';
-            mediaUrl = m.clientUrl || m.directPath || m.deprecatedMms3Url;
-          } else if (m.type === 'audio' || m.type === 'ptt' || (m.mimetype && m.mimetype.startsWith('audio/'))) {
-            mediaType = 'audio';
-            mediaUrl = m.clientUrl || m.directPath;
-          } else if (m.type === 'document' || m.mimetype) {
-            mediaType = 'document';
-            mediaUrl = m.clientUrl || m.directPath;
-          }
-
           db.addMessage({
             id: m.id || `dump_${Date.now()}_${Math.random()}`,
             chatJid: chatJid,
@@ -174,8 +157,6 @@ async function runBackupImport() {
             senderName: m.senderName || 'Contact',
             fromMe: fromMe,
             text: bodyText,
-            mediaUrl: mediaUrl,
-            mediaType: mediaType,
             timestamp: timestamp,
             status: 'READ',
           });

@@ -12,9 +12,7 @@ import {
   MoreVertical, 
   PanelRightOpen, 
   PanelRightClose,
-  Sparkles,
-  Camera,
-  FileText
+  Sparkles
 } from 'lucide-react';
 import { format, isToday, isYesterday } from 'date-fns';
 
@@ -139,10 +137,6 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ isCrmOpen, toggleCrm }) 
       <div className="flex-1 overflow-y-auto p-4 space-y-3">
         {messageList.map((msg) => {
           const isOutbound = msg.fromMe;
-          const isImage = msg.mediaType === 'image' || Boolean(msg.mediaUrl) || (msg.text && (msg.text.startsWith('data:image') || msg.text.startsWith('http') && (msg.text.includes('.jpg') || msg.text.includes('.png') || msg.text.includes('.webp'))));
-          const isPhotoText = !isImage && msg.text && (msg.text.toLowerCase() === 'photo' || msg.text.toLowerCase() === '📷 image' || msg.text.toLowerCase().includes('2 photos') || msg.text.toLowerCase() === 'photo');
-          const isDocument = msg.mediaType === 'document' || (msg.text && (msg.text.endsWith('.pdf') || msg.text.endsWith('.doc')));
-
           return (
             <div
               key={msg.id}
@@ -161,40 +155,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ isCrmOpen, toggleCrm }) 
                   </span>
                 )}
 
-                {/* Photo Preview Card */}
-                {isImage && (
-                  <div className="mb-1.5 rounded-md overflow-hidden max-w-xs bg-black/20 border border-white/10">
-                    <img 
-                      src={msg.mediaUrl || msg.text} 
-                      alt="Photo" 
-                      className="w-full max-h-64 object-cover cursor-pointer hover:opacity-95 transition-opacity" 
-                      onError={(e) => {
-                        (e.target as HTMLElement).style.display = 'none';
-                      }}
-                    />
-                  </div>
-                )}
-
-                {/* Photo Attachment Placeholder */}
-                {isPhotoText && (
-                  <div className="mb-1 flex items-center space-x-2 px-2.5 py-1.5 bg-black/20 rounded border border-white/10 text-emerald-400">
-                    <Camera className="w-4 h-4 text-emerald-400 flex-shrink-0" />
-                    <span className="text-xs font-semibold text-wa-textPrimary">📷 Photo</span>
-                  </div>
-                )}
-
-                {/* Document Card */}
-                {isDocument && (
-                  <div className="mb-1 flex items-center space-x-2 px-2.5 py-1.5 bg-black/20 rounded border border-white/10 text-amber-400">
-                    <FileText className="w-4 h-4 text-amber-400 flex-shrink-0" />
-                    <span className="text-xs font-semibold text-wa-textPrimary truncate">{msg.text || 'Document.pdf'}</span>
-                  </div>
-                )}
-
-                {/* Message Text */}
-                {(!isImage || (msg.text && !msg.text.startsWith('data:image') && !msg.text.startsWith('http'))) && (
-                  <p className="whitespace-pre-wrap break-words leading-relaxed">{msg.text}</p>
-                )}
+                <p className="whitespace-pre-wrap break-words leading-relaxed">{msg.text}</p>
 
                 <div className="flex items-center justify-end space-x-1 mt-1 text-[10px] text-wa-textSecondary/80">
                   <span>{format(new Date(msg.timestamp), 'h:mm a')}</span>

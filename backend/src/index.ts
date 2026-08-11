@@ -75,11 +75,17 @@ app.post('/api/session/disconnect', async (req, res) => {
   }
 });
 
-// 3b. Reset session for fresh QR re-sync without clearing imported database chats
+// 3b. Reset session and database cache for fresh QR re-sync
 app.post('/api/session/reset', async (req, res) => {
   try {
     await waEngine.disconnect();
-    res.json({ success: true, message: 'Fresh QR session initialized cleanly' });
+    waEngine.clearAuthAndStore();
+    db.contacts.clear();
+    db.chats.clear();
+    db.messages.clear();
+    db.lidToJidMap.clear();
+    db.saveData();
+    res.json({ success: true, message: 'Session and cache cleared cleanly' });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
@@ -190,19 +196,6 @@ server.listen(PORT, async () => {
   console.log(`=======================================================`);
   console.log(`[AI Vastra CRM Backend] Server running on port ${PORT}`);
   console.log(`=======================================================`);
-
-  // Automatically check & ingest any dump backup files on boot
-  try {
-    const fs = require('fs');
-    const path = require('path');
-    const importDir = path.join(__dirname, '../backup_import');
-    if (fs.existsSync(importDir) && fs.readdirSync(importDir).length > 0) {
-      console.log('[AI Vastra CRM Backend] Found backup files — ingesting on boot...');
-      require('./importBackupScript');
-    }
-  } catch (err: any) {
-    console.warn('[AI Vastra CRM Backend] Auto-backup import note:', err.message);
-  }
 
   // Automatically start WhatsApp session engine on server launch
   await waEngine.initialize();

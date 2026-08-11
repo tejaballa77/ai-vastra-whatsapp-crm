@@ -1,28 +1,11 @@
 'use client';
 
-import React, { useEffect } from 'react';
+import React from 'react';
 import { useSocket } from '../context/SocketContext';
 import { QrCode, Smartphone, RefreshCw, CheckCircle2 } from 'lucide-react';
 
 export const QrCodeModal = () => {
   const { sessionState, reconnectSession } = useSocket();
-
-  useEffect(() => {
-    if (sessionState.status === 'CONNECTED') return;
-    const backendUrl = typeof window !== 'undefined' ? window.location.origin : '';
-    const pollTimer = setInterval(() => {
-      fetch(`${backendUrl}/api/session/status`)
-        .then((res) => res.json())
-        .then((data) => {
-          if (data && data.currentQrCode && !sessionState.currentQrCode) {
-            // Trigger state refresh
-          }
-        })
-        .catch(() => {});
-    }, 2000);
-
-    return () => clearInterval(pollTimer);
-  }, [sessionState.status, sessionState.currentQrCode]);
 
   if (sessionState.status === 'CONNECTED') {
     return null;
@@ -63,13 +46,13 @@ export const QrCodeModal = () => {
             </li>
           </ol>
 
-          <div className="pt-2 flex items-center space-x-3">
+          <div className="pt-2">
             <button
               onClick={reconnectSession}
-              className="inline-flex items-center space-x-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-lg transition-colors shadow-md"
+              className="inline-flex items-center space-x-2 px-4 py-2 bg-wa-header hover:bg-wa-hover text-wa-textPrimary text-xs font-semibold rounded-lg transition-colors border border-wa-border"
             >
-              <RefreshCw className="w-4 h-4 text-white" />
-              <span>Generate Fresh QR Code</span>
+              <RefreshCw className="w-4 h-4 text-wa-accent" />
+              <span>Refresh Connection</span>
             </button>
           </div>
         </div>
@@ -88,15 +71,9 @@ export const QrCodeModal = () => {
               </p>
             </div>
           ) : (
-            <div className="w-56 h-56 flex flex-col items-center justify-center text-gray-400 space-y-3 text-center">
+            <div className="w-56 h-56 flex flex-col items-center justify-center text-gray-400 space-y-3">
               <RefreshCw className="w-8 h-8 animate-spin text-emerald-600" />
-              <span className="text-xs font-medium text-gray-600">Initializing QR Code...</span>
-              <button 
-                onClick={reconnectSession}
-                className="text-[11px] font-semibold text-emerald-600 hover:underline pt-1"
-              >
-                Click to force new QR
-              </button>
+              <span className="text-xs font-medium text-gray-600">Generating QR code...</span>
             </div>
           )}
         </div>

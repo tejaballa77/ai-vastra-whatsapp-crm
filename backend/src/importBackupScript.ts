@@ -134,12 +134,19 @@ async function runBackupImport() {
           });
         }
 
-        // 5. Process 'message' store with exact historical timestamps
+        // 5. Process 'message' store with exact historical timestamps & media attachments
         const msgList = dump.message || dump.messages || [];
         for (const m of msgList) {
           if (!m) continue;
-          const bodyText = m.body || m.caption || m.text || '';
-          if (!bodyText) continue;
+
+          let mediaType: 'image' | 'video' | 'audio' | 'document' | undefined = undefined;
+          if (m.type === 'image') mediaType = 'image';
+          else if (m.type === 'video') mediaType = 'video';
+          else if (m.type === 'audio' || m.type === 'ptt') mediaType = 'audio';
+          else if (m.type === 'document') mediaType = 'document';
+
+          const bodyText = m.body || m.caption || m.text || (mediaType === 'image' ? '📷 Image' : mediaType === 'document' ? '📄 Document' : mediaType === 'audio' ? '🎵 Voice Note' : '');
+          if (!bodyText && !mediaType) continue;
 
           const toJid = typeof m.to === 'object' ? m.to?._serialized : String(m.to || '');
           const fromJid = typeof m.from === 'object' ? m.from?._serialized : String(m.from || '');
@@ -149,6 +156,7 @@ async function runBackupImport() {
           const chatJid = db.resolveJid(rawChatJid);
           const fromMe = Boolean(m.id?.startsWith('true_') || m.fromMe);
           const timestamp = m.t ? m.t * 1000 : (m.timestamp ? m.timestamp : Date.now());
+          const mediaUrl = m.directPath || m.deprecatedMms3Url || m.staticUrl || m.clientUrl || undefined;
 
           db.addMessage({
             id: m.id || `dump_${Date.now()}_${Math.random()}`,
@@ -156,7 +164,9 @@ async function runBackupImport() {
             senderJid: fromMe ? 'me' : fromJid,
             senderName: m.senderName || 'Contact',
             fromMe: fromMe,
-            text: bodyText,
+            text: bodyText || (mediaType ? `[${mediaType.toUpperCase()}]` : ''),
+            mediaUrl: mediaUrl,
+            mediaType: mediaType,
             timestamp: timestamp,
             status: 'READ',
           });

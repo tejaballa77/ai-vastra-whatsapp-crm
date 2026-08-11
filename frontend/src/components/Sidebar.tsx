@@ -32,6 +32,7 @@ export const Sidebar = () => {
   const [activeTab, setActiveTab] = useState<'all' | 'favourites' | 'unread' | 'groups'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
 
   const toggleTheme = () => {
     const nextTheme = theme === 'light' ? 'dark' : 'light';
@@ -162,12 +163,48 @@ export const Sidebar = () => {
           )}
 
           {/* Menu Dots */}
-          <button
-            title="Menu"
-            className="p-2 text-wa-textSecondary hover:text-wa-textPrimary hover:bg-wa-hover rounded-full transition-colors"
-          >
-            <MoreVertical className="w-5 h-5" />
-          </button>
+          <div className="relative">
+            <button
+              onClick={() => setIsMenuOpen(!isMenuOpen)}
+              title="Menu Options"
+              className="p-2 text-wa-textSecondary hover:text-wa-textPrimary hover:bg-wa-hover rounded-full transition-colors"
+            >
+              <MoreVertical className="w-5 h-5" />
+            </button>
+
+            {/* Dropdown Menu */}
+            {isMenuOpen && (
+              <div className="absolute top-12 right-0 w-64 bg-wa-sidebar border border-wa-border rounded-xl shadow-2xl z-50 py-2 text-sm text-wa-textPrimary select-none">
+                <button
+                  onClick={() => {
+                    setIsMenuOpen(false);
+                    reconnectSession();
+                  }}
+                  className="w-full px-4 py-2.5 flex items-center space-x-3 hover:bg-wa-hover transition-colors text-left"
+                >
+                  <QrCode className="w-4 h-4 text-emerald-500 flex-shrink-0" />
+                  <div className="flex flex-col">
+                    <span className="font-medium">Link WhatsApp Device</span>
+                    <span className="text-[11px] text-wa-textSecondary">Scan QR code to log in</span>
+                  </div>
+                </button>
+
+                <button
+                  onClick={() => {
+                    setIsMenuOpen(false);
+                    disconnectSession();
+                  }}
+                  className="w-full px-4 py-2.5 flex items-center space-x-3 hover:bg-wa-hover text-rose-500 transition-colors text-left border-t border-wa-border/40"
+                >
+                  <LogOut className="w-4 h-4 text-rose-500 flex-shrink-0" />
+                  <div className="flex flex-col">
+                    <span className="font-semibold">Log Out</span>
+                    <span className="text-[11px] text-rose-400/80">Disconnect WhatsApp session</span>
+                  </div>
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 

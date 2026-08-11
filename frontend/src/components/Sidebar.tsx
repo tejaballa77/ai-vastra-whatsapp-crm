@@ -394,7 +394,7 @@ export const Sidebar = () => {
                       <h4 className="text-sm font-semibold text-wa-textPrimary truncate mr-2">
                         {displayName}
                       </h4>
-                      <span className="text-[11px] text-wa-textSecondary whitespace-nowrap">
+                      <span className={`text-[11px] whitespace-nowrap ${chat.unreadCount > 0 ? 'text-[#25d366] font-semibold' : 'text-wa-textSecondary'}`}>
                         {formatTimestamp(chat.lastMessageAt)}
                       </span>
                     </div>
@@ -414,7 +414,7 @@ export const Sidebar = () => {
                         {getLeadStatusBadge(chat.leadStatus)}
                         
                         {chat.unreadCount > 0 && (
-                          <span className="w-5 h-5 rounded-full bg-wa-accent text-wa-bg font-bold text-[10px] flex items-center justify-center">
+                          <span className="w-5 h-5 rounded-full bg-[#25d366] text-white font-bold text-[11px] flex items-center justify-center shadow-sm">
                             {chat.unreadCount}
                           </span>
                         )}

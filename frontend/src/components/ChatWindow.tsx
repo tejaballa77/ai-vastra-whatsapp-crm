@@ -104,9 +104,12 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ isCrmOpen, toggleCrm }) 
     const fileName = msg.fileName || (text && (text.endsWith('.pdf') || text.endsWith('.jpg') || text.endsWith('.jpeg') || text.endsWith('.png')) ? text : undefined);
     
     const isDoc = msg.mediaType === 'document' || (text && text.endsWith('.pdf')) || (fileName && fileName.endsWith('.pdf'));
-    const isImg = msg.mediaType === 'image' || (text && /\.(jpg|jpeg|png|webp)$/i.test(text)) || (fileName && /\.(jpg|jpeg|png|webp)$/i.test(fileName));
+    const isImg = msg.mediaType === 'image' || (text && /\.(jpg|jpeg|png|webp)$/i.test(text)) || (fileName && /\.(jpg|jpeg|png|webp)$/i.test(fileName)) || text === '[IMAGE]' || text === 'Photo';
+
+    const hasValidUrl = msg.mediaUrl && typeof msg.mediaUrl === 'string' && (msg.mediaUrl.startsWith('http://') || msg.mediaUrl.startsWith('https://') || msg.mediaUrl.startsWith('data:'));
 
     if (isDoc) {
+      const docName = fileName || (text.endsWith('.pdf') ? text : 'Document.pdf');
       return (
         <div className="my-1.5 p-2.5 rounded-lg bg-wa-header/90 border border-wa-border flex items-center justify-between min-w-[220px] max-w-[300px] shadow-sm select-none">
           <div className="flex items-center space-x-3 min-w-0 mr-2">
@@ -114,23 +117,27 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ isCrmOpen, toggleCrm }) 
               PDF
             </div>
             <div className="min-w-0 flex-1">
-              <p className="text-xs font-semibold text-wa-textPrimary truncate">{fileName || 'Document.pdf'}</p>
+              <p className="text-xs font-semibold text-wa-textPrimary truncate">{docName}</p>
               <p className="text-[10px] text-wa-textSecondary">PDF Document</p>
             </div>
           </div>
-          {msg.mediaUrl ? (
+          {hasValidUrl ? (
             <a
               href={msg.mediaUrl}
               target="_blank"
               rel="noopener noreferrer"
-              download={fileName || 'document.pdf'}
+              download={docName}
               className="p-2 rounded-full hover:bg-wa-hover text-wa-accent transition-colors flex-shrink-0"
               title="Download Document"
             >
               <Download className="w-4 h-4" />
             </a>
           ) : (
-            <div className="p-2 text-wa-textSecondary/50 flex-shrink-0" title="PDF File">
+            <div 
+              onClick={() => alert(`Document file: ${docName}`)} 
+              className="p-2 text-wa-accent hover:bg-wa-hover rounded-full cursor-pointer flex-shrink-0" 
+              title="View Document"
+            >
               <FileText className="w-4 h-4" />
             </div>
           )}
@@ -141,7 +148,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ isCrmOpen, toggleCrm }) 
     if (isImg) {
       return (
         <div className="my-1.5 rounded-lg overflow-hidden border border-wa-border bg-wa-header/40 max-w-[280px]">
-          {msg.mediaUrl ? (
+          {hasValidUrl ? (
             <img src={msg.mediaUrl} alt={fileName || 'Photo'} className="w-full max-h-60 object-cover rounded-t-lg" />
           ) : (
             <div className="p-3 flex items-center space-x-2.5 text-wa-accent bg-wa-accent/10">
@@ -199,24 +206,25 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ isCrmOpen, toggleCrm }) 
           const isOutbound = msg.fromMe;
           const text = msg.text || '';
 
-          // 1. Center System Notifications (E2E encryption notices, group notices)
-          if (text === '[E2E_NOTIFICATION]' || text.includes('end-to-end encrypted') || text.includes('Messages and calls are end-to-end')) {
-            return (
-              <div key={msg.id} className="flex justify-center my-2 select-none">
-                <div className="bg-wa-header text-[11px] text-amber-200/80 px-3 py-1 rounded-md max-w-[85%] text-center border border-amber-500/20 shadow-sm">
-                  🔒 Messages and calls are end-to-end encrypted.
-                </div>
-              </div>
-            );
+          // 1. Hide System Notices ([CALL_LOG], [E2E_NOTIFICATION])
+          if (text === '[E2E_NOTIFICATION]' || text === '[CALL_LOG]' || text.includes('end-to-end encrypted') || text.includes('Messages and calls are end-to-end')) {
+            return null;
           }
 
           // 2. Hide raw artifact labels
-          const isArtifactText = text === '[CHAT]' || text === 'Contact' || text === '[DOCUMENT]' || text === '[IMAGE]' || text === 'Photo';
+          const isArtifactText = text === '[CHAT]' || text === 'Contact' || text === '[DOCUMENT]' || text === '[IMAGE]' || text === 'Photo' || text.endsWith('.pdf') || text.endsWith('.jpg') || text.endsWith('.jpeg');
           const cleanText = isArtifactText ? '' : text;
 
           // 3. Format Deleted / Revoked Messages
           const isRevoked = text === '[REVOKED]' || text === 'This message was deleted';
           
+          const mediaCard = renderMediaCard(msg);
+
+          // Prevent rendering empty message bubbles
+          if (!cleanText && !mediaCard && !isRevoked) {
+            return null;
+          }
+
           return (
             <div
               key={msg.id}
@@ -237,7 +245,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ isCrmOpen, toggleCrm }) 
                 )}
 
                 {/* Render Media Cards (PDFs, Images) */}
-                {renderMediaCard(msg)}
+                {mediaCard}
 
                 {isRevoked ? (
                   <p className="italic text-wa-textSecondary/80 text-xs flex items-center space-x-1">

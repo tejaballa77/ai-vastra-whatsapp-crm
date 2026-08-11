@@ -58,21 +58,34 @@ async function runBackupImport() {
 
           const rawId = String(c.id);
           const cleanId = rawId.split('@')[0];
+
           let phoneJid = '';
           if (c.phoneNumber) {
             phoneJid = String(c.phoneNumber).replace('@c.us', '@s.whatsapp.net');
+          } else if (c.pnJid) {
+            phoneJid = String(c.pnJid).replace('@c.us', '@s.whatsapp.net');
+          } else if (c.user && String(c.user).length <= 12) {
+            phoneJid = `${c.user}@s.whatsapp.net`;
+          } else if (!rawId.includes('@lid') && !rawId.includes('@g.us') && cleanId.length <= 12) {
+            phoneJid = `${cleanId}@s.whatsapp.net`;
           }
 
-          if (rawId.includes('@lid') && phoneJid) {
-            db.registerLidMapping(rawId, phoneJid);
+          const lidJid = c.lid || (rawId.includes('@lid') ? rawId : (cleanId.length > 12 ? cleanId : ''));
+          if (lidJid && phoneJid) {
+            db.registerLidMapping(lidJid, phoneJid);
+            db.registerLidMapping(lidJid.split('@')[0], phoneJid);
             db.registerLidMapping(cleanId, phoneJid);
           }
 
-          const rawPhoneNum = phoneJid ? phoneJid.split('@')[0] : cleanId;
-          const formattedFallback = db.formatPhoneFallback(rawPhoneNum);
-          const savedName = c.name || c.formattedName || c.shortName || c.pushname || c.verifiedName || formattedFallback;
+          const rawPhoneNum = phoneJid ? phoneJid.split('@')[0] : (cleanId.length <= 12 ? cleanId : '');
+          if (!rawPhoneNum) continue;
 
-          const targetJid = phoneJid || rawId;
+          const formattedFallback = db.formatPhoneFallback(rawPhoneNum);
+          const savedName = (c.name && !c.name.includes('@') && c.name !== cleanId ? c.name : undefined) ||
+                            (c.formattedName && !c.formattedName.includes('@') ? c.formattedName : undefined) ||
+                            c.displayName || c.shortName || c.pushname || c.verifiedName || formattedFallback;
+
+          const targetJid = phoneJid || `${rawPhoneNum}@s.whatsapp.net`;
 
           db.upsertContact(targetJid, {
             jid: targetJid,
@@ -80,8 +93,8 @@ async function runBackupImport() {
             phone: rawPhoneNum,
           });
 
-          if (phoneJid) {
-            db.upsertContact(rawId, { name: savedName });
+          if (lidJid) {
+            db.upsertContact(lidJid, { name: savedName });
             db.upsertContact(cleanId, { name: savedName });
           }
 
@@ -197,18 +210,20 @@ async function runBackupImport() {
           msgCount++;
         }
 
-        // 6. Cleanup raw LID entries in db.chats if resolved phone JID exists
+        // 6. Cleanup raw LID entries in db.chats
         for (const [jid, chat] of db.chats.entries()) {
-          if (jid.endsWith('@lid') || (jid.length > 13 && !jid.includes('@') && !jid.startsWith('91'))) {
+          const clean = jid.split('@')[0];
+          if (jid.endsWith('@lid') || (clean.length > 12 && !jid.endsWith('@g.us'))) {
             const mapped = db.resolveJid(jid);
             if (mapped !== jid && db.chats.has(mapped)) {
-              // Delete duplicate raw LID chat entry so only the real phone contact chat displays!
               db.chats.delete(jid);
             } else if (mapped !== jid) {
-              // Re-key chat to real phone JID
               db.chats.delete(jid);
               chat.jid = mapped;
               db.chats.set(mapped, chat);
+            } else {
+              // Delete raw unmapped 15-digit LID chat so raw 15-digit LID strings NEVER display in UI!
+              db.chats.delete(jid);
             }
           }
         }

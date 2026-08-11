@@ -330,8 +330,23 @@ class StorageEngine {
       tags: [],
     };
 
-    chat.lastMessagePreview = msg.text || (msg.mediaType ? `[${msg.mediaType.toUpperCase()}]` : '');
-    chat.lastMessageAt = Math.max(chat.lastMessageAt || 0, msg.timestamp);
+    const text = msg.text || '';
+    const isSystemNotice = text === '[E2E_NOTIFICATION]' || text === '[CALL_LOG]' || text.includes('end-to-end encrypted');
+
+    if (!isSystemNotice) {
+      if (text === '[REVOKED]' || text === 'This message was deleted') {
+        chat.lastMessagePreview = '🚫 This message was deleted';
+      } else if (msg.mediaType === 'image' || text === '[IMAGE]' || text === 'Photo') {
+        chat.lastMessagePreview = '📷 Photo';
+      } else if (msg.mediaType === 'document' || text === '[DOCUMENT]' || text === 'Document' || (msg.fileName && msg.fileName.endsWith('.pdf'))) {
+        chat.lastMessagePreview = `📄 ${msg.fileName || 'Document'}`;
+      } else if (msg.mediaType === 'audio' || text === '[AUDIO]') {
+        chat.lastMessagePreview = '🎵 Voice Note';
+      } else if (text && text !== '[CHAT]' && text !== 'Contact') {
+        chat.lastMessagePreview = text;
+      }
+      chat.lastMessageAt = Math.max(chat.lastMessageAt || 0, msg.timestamp);
+    }
 
     if (msg.senderName && msg.senderName !== 'Me' && msg.senderName !== chatJid.split('@')[0] && chat.name === this.formatPhoneFallback(chatJid.split('@')[0])) {
       chat.name = msg.senderName;

@@ -112,8 +112,11 @@ async function runBackupImport() {
           db.upsertChat(phoneJid, { avatarUrl });
         }
 
+        console.log(`[Backup Script] Ingesting ${contactsList.length} contacts, ${bizList.length} business names, and ${picList.length} profile pictures...`);
+
         // 4. Process 'chat' store & merge LID chats into real phone JID chats
         const chatList = dump.chat || dump.chats || [];
+        console.log(`[Backup Script] Ingesting ${chatList.length} chat threads...`);
         for (const ch of chatList) {
           if (!ch || !ch.id) continue;
           const rawId = String(ch.id);
@@ -136,6 +139,8 @@ async function runBackupImport() {
 
         // 5. Process 'message' store with exact historical timestamps & media attachments
         const msgList = dump.message || dump.messages || [];
+        console.log(`[Backup Script] Ingesting ${msgList.length} message records...`);
+        let msgCount = 0;
         for (const m of msgList) {
           if (!m) continue;
 
@@ -189,6 +194,7 @@ async function runBackupImport() {
             timestamp: timestamp,
             status: 'READ',
           });
+          msgCount++;
         }
 
         // 6. Cleanup raw LID entries in db.chats if resolved phone JID exists
@@ -207,7 +213,7 @@ async function runBackupImport() {
           }
         }
 
-        console.log(`[Backup Script] WhatsApp Web JSON Dump imported! Processed ${contactsList.length} contacts, ${bizList.length} business names, and ${picList.length} profile pictures.`);
+        console.log(`[Backup Script] WhatsApp Web JSON Dump imported! ${contactsList.length} contacts, ${msgCount} messages processed.`);
 
       } catch (err) {
         console.warn(`[Backup Script] Could not parse JSON file ${file}:`, err);

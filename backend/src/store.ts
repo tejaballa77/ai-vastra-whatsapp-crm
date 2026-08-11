@@ -95,10 +95,10 @@ class StorageEngine {
     }
   }
 
-  public registerLidMapping(lid: string, phoneJid: string) {
+  public registerLidMapping(lid: string, phoneJid: string, saveNow: boolean = false) {
     if (lid && phoneJid && lid !== phoneJid) {
       this.lidToJidMap.set(lid, phoneJid);
-      this.saveData();
+      if (saveNow) this.saveData();
     }
   }
 
@@ -162,7 +162,7 @@ class StorageEngine {
     return digits ? `+${digits}` : raw;
   }
 
-  public upsertContact(rawJid: string, partial: Partial<CRMContact>) {
+  public upsertContact(rawJid: string, partial: Partial<CRMContact>, saveNow: boolean = false) {
     const jid = this.resolveJid(rawJid);
     const rawNumber = jid.split('@')[0];
     const existing = this.contacts.get(jid) || {
@@ -198,7 +198,7 @@ class StorageEngine {
       this.chats.set(jid, chat);
     }
 
-    this.saveData();
+    if (saveNow) this.saveData();
     return updated;
   }
 
@@ -238,14 +238,14 @@ class StorageEngine {
     return matchCount;
   }
 
-  public updateContactName(rawJid: string, name: string) {
+  public updateContactName(rawJid: string, name: string, saveNow: boolean = false) {
     const jid = this.resolveJid(rawJid);
     const contact = this.contacts.get(jid);
     if (contact) {
       contact.name = name;
       this.contacts.set(jid, contact);
     } else {
-      this.upsertContact(jid, { name });
+      this.upsertContact(jid, { name }, saveNow);
     }
 
     const chat = this.chats.get(jid);
@@ -254,11 +254,11 @@ class StorageEngine {
       this.chats.set(jid, chat);
     }
 
-    this.saveData();
+    if (saveNow) this.saveData();
     return this.chats.get(jid);
   }
 
-  public upsertChat(rawJid: string, partial: Partial<CRMChat>) {
+  public upsertChat(rawJid: string, partial: Partial<CRMChat>, saveNow: boolean = false) {
     const jid = this.resolveJid(rawJid);
     const rawNumber = jid.split('@')[0];
     const contact = this.contacts.get(jid);
@@ -299,11 +299,11 @@ class StorageEngine {
     }
 
     this.chats.set(jid, updated);
-    this.saveData();
+    if (saveNow) this.saveData();
     return updated;
   }
 
-  public addMessage(msg: CRMMessage) {
+  public addMessage(msg: CRMMessage, saveNow: boolean = false) {
     const chatJid = this.resolveJid(msg.chatJid);
     msg.chatJid = chatJid;
 
@@ -335,7 +335,7 @@ class StorageEngine {
 
     if (msg.senderName && msg.senderName !== 'Me' && msg.senderName !== chatJid.split('@')[0] && chat.name === this.formatPhoneFallback(chatJid.split('@')[0])) {
       chat.name = msg.senderName;
-      this.upsertContact(chatJid, { name: msg.senderName });
+      this.upsertContact(chatJid, { name: msg.senderName }, saveNow);
     }
 
     this.chats.set(chatJid, chat);

@@ -197,6 +197,19 @@ server.listen(PORT, async () => {
   console.log(`[AI Vastra CRM Backend] Server running on port ${PORT}`);
   console.log(`=======================================================`);
 
+  // Automatically check & ingest any dump backup files on boot
+  try {
+    const fs = require('fs');
+    const path = require('path');
+    const importDir = path.join(__dirname, '../backup_import');
+    if (fs.existsSync(importDir) && fs.readdirSync(importDir).length > 0) {
+      console.log('[AI Vastra CRM Backend] Found backup files — ingesting on boot...');
+      require('./importBackupScript');
+    }
+  } catch (err: any) {
+    console.warn('[AI Vastra CRM Backend] Auto-backup import note:', err.message);
+  }
+
   // Automatically start WhatsApp session engine on server launch
   await waEngine.initialize();
 });

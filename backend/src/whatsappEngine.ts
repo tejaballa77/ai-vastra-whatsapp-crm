@@ -291,21 +291,32 @@ export class WhatsAppEngine {
       } else if (m.extendedTextMessage?.text) {
         text = m.extendedTextMessage.text;
       } else if (m.imageMessage) {
-        text = m.imageMessage.caption || 'Photo';
+        text = m.imageMessage.caption || '📷 Photo';
         mediaType = 'image';
       } else if (m.videoMessage) {
-        text = m.videoMessage.caption || 'Video';
+        text = m.videoMessage.caption || '🎥 Video';
         mediaType = 'video';
       } else if (m.audioMessage) {
-        text = 'Voice message';
+        text = '🎵 Voice message';
         mediaType = 'audio';
       } else if (m.documentMessage) {
-        text = m.documentMessage.title || m.documentMessage.fileName || 'Document';
+        text = m.documentMessage.fileName || m.documentMessage.title || '📄 Document';
         mediaType = 'document';
+      } else if (m.templateMessage) {
+        const hyd = (m.templateMessage as any).hydratedTemplate || (m.templateMessage as any).hydratedFourRowTemplate;
+        text = hyd?.hydratedContentText || (m.templateMessage as any).fourRowTemplate?.contentText || 'Notification Template';
+      } else if (m.interactiveMessage) {
+        text = m.interactiveMessage.body?.text || m.interactiveMessage.header?.title || 'Interactive Message';
+      } else if (m.buttonsMessage) {
+        text = m.buttonsMessage.contentText || 'Buttons Message';
+      } else if (m.listMessage) {
+        text = m.listMessage.description || m.listMessage.title || 'List Message';
       } else if (m.buttonsResponseMessage?.selectedDisplayText) {
         text = m.buttonsResponseMessage.selectedDisplayText;
       } else if (m.templateButtonReplyMessage?.selectedDisplayText) {
         text = m.templateButtonReplyMessage.selectedDisplayText;
+      } else if ((m as any).body) {
+        text = (m as any).body;
       }
     }
 

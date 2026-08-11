@@ -140,13 +140,31 @@ async function runBackupImport() {
           if (!m) continue;
 
           let mediaType: 'image' | 'video' | 'audio' | 'document' | undefined = undefined;
-          if (m.type === 'image') mediaType = 'image';
-          else if (m.type === 'video') mediaType = 'video';
-          else if (m.type === 'audio' || m.type === 'ptt') mediaType = 'audio';
-          else if (m.type === 'document') mediaType = 'document';
+          let fileName: string | undefined = m.filename || m.title || m.clientFilename || m.caption || undefined;
 
-          const bodyText = m.body || m.caption || m.text || (mediaType === 'image' ? '📷 Image' : mediaType === 'document' ? '📄 Document' : mediaType === 'audio' ? '🎵 Voice Note' : '');
-          if (!bodyText && !mediaType) continue;
+          const rawText = String(m.body || m.caption || m.text || '');
+
+          if (m.type === 'image' || (fileName && /\.(jpg|jpeg|png|webp)$/i.test(fileName)) || rawText.endsWith('.jpg') || rawText.endsWith('.jpeg')) {
+            mediaType = 'image';
+          } else if (m.type === 'video' || (fileName && /\.(mp4|mkv)$/i.test(fileName))) {
+            mediaType = 'video';
+          } else if (m.type === 'audio' || m.type === 'ptt') {
+            mediaType = 'audio';
+          } else if (m.type === 'document' || (fileName && /\.pdf$/i.test(fileName)) || rawText.endsWith('.pdf')) {
+            mediaType = 'document';
+          }
+
+          if (mediaType === 'document' && !fileName && rawText.endsWith('.pdf')) {
+            fileName = rawText;
+          }
+
+          // Clean up raw artifact text labels
+          let bodyText = rawText;
+          if (bodyText === '[DOCUMENT]' || bodyText === '[IMAGE]' || bodyText === '[AUDIO]' || bodyText === 'Photo' || bodyText === 'Document') {
+            bodyText = '';
+          }
+
+          if (!bodyText && !mediaType && !fileName) continue;
 
           const toJid = typeof m.to === 'object' ? m.to?._serialized : String(m.to || '');
           const fromJid = typeof m.from === 'object' ? m.from?._serialized : String(m.from || '');
@@ -164,9 +182,10 @@ async function runBackupImport() {
             senderJid: fromMe ? 'me' : fromJid,
             senderName: m.senderName || 'Contact',
             fromMe: fromMe,
-            text: bodyText || (mediaType ? `[${mediaType.toUpperCase()}]` : ''),
+            text: bodyText,
             mediaUrl: mediaUrl,
             mediaType: mediaType,
+            fileName: fileName,
             timestamp: timestamp,
             status: 'READ',
           });

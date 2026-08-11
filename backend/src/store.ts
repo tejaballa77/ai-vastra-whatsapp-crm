@@ -36,6 +36,7 @@ export interface CRMMessage {
   text: string;
   mediaUrl?: string;
   mediaType?: 'image' | 'video' | 'audio' | 'document';
+  fileName?: string;
   timestamp: number;
   status: 'PENDING' | 'SENT' | 'DELIVERED' | 'READ';
 }

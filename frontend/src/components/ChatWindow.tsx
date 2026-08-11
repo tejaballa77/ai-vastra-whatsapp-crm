@@ -12,7 +12,10 @@ import {
   MoreVertical, 
   PanelRightOpen, 
   PanelRightClose,
-  Sparkles
+  Sparkles,
+  FileText,
+  Download,
+  Image
 } from 'lucide-react';
 import { format, isToday, isYesterday } from 'date-fns';
 
@@ -96,6 +99,63 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ isCrmOpen, toggleCrm }) 
     ? `+91 ${cleanPhone.slice(2, 7)} ${cleanPhone.slice(7)}` 
     : `+${cleanPhone}`;
 
+  const renderMediaCard = (msg: any) => {
+    const text = msg.text || '';
+    const fileName = msg.fileName || (text && (text.endsWith('.pdf') || text.endsWith('.jpg') || text.endsWith('.jpeg') || text.endsWith('.png')) ? text : undefined);
+    
+    const isDoc = msg.mediaType === 'document' || (text && text.endsWith('.pdf')) || (fileName && fileName.endsWith('.pdf'));
+    const isImg = msg.mediaType === 'image' || (text && /\.(jpg|jpeg|png|webp)$/i.test(text)) || (fileName && /\.(jpg|jpeg|png|webp)$/i.test(fileName));
+
+    if (isDoc) {
+      return (
+        <div className="my-1.5 p-2.5 rounded-lg bg-wa-header/90 border border-wa-border flex items-center justify-between min-w-[220px] max-w-[300px] shadow-sm select-none">
+          <div className="flex items-center space-x-3 min-w-0 mr-2">
+            <div className="w-9 h-9 rounded bg-rose-500/20 text-rose-400 flex items-center justify-center flex-shrink-0 font-bold text-[11px]">
+              PDF
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-xs font-semibold text-wa-textPrimary truncate">{fileName || 'Document.pdf'}</p>
+              <p className="text-[10px] text-wa-textSecondary">PDF Document</p>
+            </div>
+          </div>
+          {msg.mediaUrl ? (
+            <a
+              href={msg.mediaUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              download={fileName || 'document.pdf'}
+              className="p-2 rounded-full hover:bg-wa-hover text-wa-accent transition-colors flex-shrink-0"
+              title="Download Document"
+            >
+              <Download className="w-4 h-4" />
+            </a>
+          ) : (
+            <div className="p-2 text-wa-textSecondary/50 flex-shrink-0" title="PDF File">
+              <FileText className="w-4 h-4" />
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    if (isImg) {
+      return (
+        <div className="my-1.5 rounded-lg overflow-hidden border border-wa-border bg-wa-header/40 max-w-[280px]">
+          {msg.mediaUrl ? (
+            <img src={msg.mediaUrl} alt={fileName || 'Photo'} className="w-full max-h-60 object-cover rounded-t-lg" />
+          ) : (
+            <div className="p-3 flex items-center space-x-2.5 text-wa-accent bg-wa-accent/10">
+              <Image className="w-5 h-5 flex-shrink-0" />
+              <span className="text-xs font-medium truncate">{fileName || 'Photo Attachment'}</span>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    return null;
+  };
+
   return (
     <div className="flex-1 h-full bg-wa-chatBg wa-chat-pattern flex flex-col min-w-0 border-r border-wa-border relative">
       {/* Top Chat Header */}
@@ -150,8 +210,9 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ isCrmOpen, toggleCrm }) 
             );
           }
 
-          // 2. Hide raw [CHAT] artifact label
-          const cleanText = text === '[CHAT]' || text === 'Contact' ? '' : text;
+          // 2. Hide raw artifact labels
+          const isArtifactText = text === '[CHAT]' || text === 'Contact' || text === '[DOCUMENT]' || text === '[IMAGE]' || text === 'Photo';
+          const cleanText = isArtifactText ? '' : text;
 
           // 3. Format Deleted / Revoked Messages
           const isRevoked = text === '[REVOKED]' || text === 'This message was deleted';
@@ -175,12 +236,15 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ isCrmOpen, toggleCrm }) 
                   </span>
                 )}
 
+                {/* Render Media Cards (PDFs, Images) */}
+                {renderMediaCard(msg)}
+
                 {isRevoked ? (
                   <p className="italic text-wa-textSecondary/80 text-xs flex items-center space-x-1">
                     <span>🚫 This message was deleted</span>
                   </p>
                 ) : (
-                  cleanText && <p className="whitespace-pre-wrap break-words leading-relaxed">{cleanText}</p>
+                  cleanText && cleanText !== msg.fileName && <p className="whitespace-pre-wrap break-words leading-relaxed mt-0.5">{cleanText}</p>
                 )}
 
                 <div className="flex items-center justify-end space-x-1 mt-1 text-[10px] text-wa-textSecondary/80">

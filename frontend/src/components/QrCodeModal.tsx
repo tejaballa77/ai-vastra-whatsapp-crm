@@ -46,13 +46,13 @@ export const QrCodeModal = () => {
             </li>
           </ol>
 
-          <div className="pt-2">
+          <div className="pt-2 flex items-center space-x-3">
             <button
               onClick={reconnectSession}
-              className="inline-flex items-center space-x-2 px-4 py-2 bg-wa-header hover:bg-wa-hover text-wa-textPrimary text-xs font-semibold rounded-lg transition-colors border border-wa-border"
+              className="inline-flex items-center space-x-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-lg transition-colors shadow-md"
             >
-              <RefreshCw className="w-4 h-4 text-wa-accent" />
-              <span>Refresh Connection</span>
+              <RefreshCw className="w-4 h-4 text-white" />
+              <span>Generate Fresh QR Code</span>
             </button>
           </div>
         </div>
@@ -71,9 +71,15 @@ export const QrCodeModal = () => {
               </p>
             </div>
           ) : (
-            <div className="w-56 h-56 flex flex-col items-center justify-center text-gray-400 space-y-3">
+            <div className="w-56 h-56 flex flex-col items-center justify-center text-gray-400 space-y-3 text-center">
               <RefreshCw className="w-8 h-8 animate-spin text-emerald-600" />
-              <span className="text-xs font-medium text-gray-600">Generating QR code...</span>
+              <span className="text-xs font-medium text-gray-600">Initializing QR Code...</span>
+              <button 
+                onClick={reconnectSession}
+                className="text-[11px] font-semibold text-emerald-600 hover:underline pt-1"
+              >
+                Click to force new QR
+              </button>
             </div>
           )}
         </div>

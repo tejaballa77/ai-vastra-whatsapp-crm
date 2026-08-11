@@ -75,17 +75,11 @@ app.post('/api/session/disconnect', async (req, res) => {
   }
 });
 
-// 3b. Reset session and database cache for fresh QR re-sync
+// 3b. Reset session for fresh QR re-sync without clearing imported database chats
 app.post('/api/session/reset', async (req, res) => {
   try {
     await waEngine.disconnect();
-    waEngine.clearAuthAndStore();
-    db.contacts.clear();
-    db.chats.clear();
-    db.messages.clear();
-    db.lidToJidMap.clear();
-    db.saveData();
-    res.json({ success: true, message: 'Session and cache cleared cleanly' });
+    res.json({ success: true, message: 'Fresh QR session initialized cleanly' });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }

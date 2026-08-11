@@ -25,13 +25,37 @@ interface ChatWindowProps {
   toggleCrm: () => void;
 }
 
+const getBackendUrl = () => {
+  if (process.env.NEXT_PUBLIC_BACKEND_URL) return process.env.NEXT_PUBLIC_BACKEND_URL;
+  if (typeof window !== 'undefined') return window.location.origin;
+  return 'http://localhost:5000';
+};
+
 export const ChatWindow: React.FC<ChatWindowProps> = ({ isCrmOpen, toggleCrm }) => {
   const { chats, messages, activeChatJid, sendMessage } = useSocket();
   const [inputText, setInputText] = useState('');
+  const [apiMessages, setApiMessages] = useState<any[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const activeChat = chats.find((c) => c.jid === activeChatJid);
-  const messageList = activeChatJid ? messages[activeChatJid] || [] : [];
+
+  const cleanJid = activeChatJid ? activeChatJid.split('@')[0] : '';
+  const socketMsgs = activeChatJid ? (messages[activeChatJid] || messages[cleanJid] || messages[`${cleanJid}@s.whatsapp.net`] || []) : [];
+
+  useEffect(() => {
+    if (!activeChatJid) return;
+    const url = `${getBackendUrl()}/api/messages/${encodeURIComponent(activeChatJid)}`;
+    fetch(url)
+      .then((res) => res.json())
+      .then((data) => {
+        if (Array.isArray(data) && data.length > 0) {
+          setApiMessages(data);
+        }
+      })
+      .catch((err) => console.error('Error fetching chat messages:', err));
+  }, [activeChatJid]);
+
+  const messageList = socketMsgs.length >= apiMessages.length ? socketMsgs : apiMessages;
 
   // Auto-scroll to bottom of messages instantly (latest message at bottom)
   useEffect(() => {

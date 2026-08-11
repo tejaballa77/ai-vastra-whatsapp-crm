@@ -414,17 +414,38 @@ class StorageEngine {
 
     for (const c of list) {
       const resolvedKey = this.resolveJid(c.jid);
-      const name = this.getContactName(c.jid);
-      const avatarUrl = this.contacts.get(resolvedKey)?.avatarUrl || c.avatarUrl;
+      let name = this.getContactName(c.jid);
 
+      if (name.includes('T ONE') || name.includes('REAL-WORLD') || name.includes('TESTING')) {
+        const cleanNum = resolvedKey.split('@')[0].replace(/\D/g, '');
+        name = this.formatPhoneFallback(cleanNum);
+      }
+
+      const avatarUrl = this.contacts.get(resolvedKey)?.avatarUrl || c.avatarUrl;
       const msgs = this.getMessagesForChat(c.jid);
+
       let lastMessagePreview = 'No messages';
       let lastMessageAt = 0;
 
       if (msgs.length > 0) {
-        const lastMsg = msgs[msgs.length - 1];
-        lastMessagePreview = lastMsg.text || (lastMsg.mediaType ? `[${lastMsg.mediaType.toUpperCase()}]` : '');
-        lastMessageAt = lastMsg.timestamp;
+        const validMsgs = msgs.filter(m => m.text !== '[E2E_NOTIFICATION]' && m.text !== '[CALL_LOG]' && !m.text?.includes('end-to-end encrypted'));
+        const targetMsg = validMsgs.length > 0 ? validMsgs[validMsgs.length - 1] : msgs[msgs.length - 1];
+
+        const text = targetMsg.text || '';
+        if (text === '[REVOKED]' || text === 'This message was deleted') {
+          lastMessagePreview = '🚫 This message was deleted';
+        } else if (targetMsg.mediaType === 'image' || text === '[IMAGE]' || text === 'Photo') {
+          lastMessagePreview = '📷 Photo';
+        } else if (targetMsg.mediaType === 'document' || text === '[DOCUMENT]' || text === 'Document' || (targetMsg.fileName && targetMsg.fileName.endsWith('.pdf'))) {
+          lastMessagePreview = `📄 ${targetMsg.fileName || 'Document'}`;
+        } else if (targetMsg.mediaType === 'audio' || text === '[AUDIO]') {
+          lastMessagePreview = '🎵 Voice Note';
+        } else if (text && text !== '[CHAT]' && text !== 'Contact') {
+          lastMessagePreview = text;
+        }
+
+        const rawTs = targetMsg.timestamp || 0;
+        lastMessageAt = rawTs < 10000000000 ? rawTs * 1000 : rawTs;
       }
 
       const updatedChat: CRMChat = {

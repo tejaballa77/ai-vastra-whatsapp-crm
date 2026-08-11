@@ -139,19 +139,20 @@ async function runBackupImport() {
         }
 
         // 5. Process 'message' store with exact historical timestamps
-        const msgList = dump.message || dump.messages || [];
+        const msgList = dump.message || dump.messages || dump['message-history'] || [];
+        let messagesImported = 0;
+
         for (const m of msgList) {
           if (!m) continue;
-          const bodyText = m.body || m.caption || m.text || '';
-          if (!bodyText) continue;
+          const bodyText = m.body || m.caption || m.text || (m.type ? `[${m.type.toUpperCase()}]` : 'Message');
 
           const toJid = typeof m.to === 'object' ? m.to?._serialized : String(m.to || '');
           const fromJid = typeof m.from === 'object' ? m.from?._serialized : String(m.from || '');
-          const rawChatJid = m.chatId || toJid || fromJid;
+          const fromMe = Boolean(m.id?.startsWith('true_') || m.fromMe);
+          const rawChatJid = m.chatId || (fromMe ? toJid : fromJid) || toJid || fromJid;
           if (!rawChatJid || rawChatJid === '0@c.us') continue;
 
           const chatJid = db.resolveJid(rawChatJid);
-          const fromMe = Boolean(m.id?.startsWith('true_') || m.fromMe);
           const timestamp = m.t ? m.t * 1000 : (m.timestamp ? m.timestamp : Date.now());
 
           let mediaUrl: string | undefined = undefined;
@@ -183,6 +184,7 @@ async function runBackupImport() {
             timestamp: timestamp,
             status: 'READ',
           }, true);
+          messagesImported++;
         }
 
         // 6. Cleanup raw LID entries in db.chats if resolved phone JID exists

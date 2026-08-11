@@ -361,21 +361,24 @@ class StorageEngine {
       const avatarUrl = this.contacts.get(resolvedKey)?.avatarUrl || c.avatarUrl;
 
       const msgs = this.getMessagesForChat(c.jid);
-      let lastMessagePreview = 'No messages';
-      let lastMessageAt = 0;
+      let lastMessagePreview = '';
+      let lastMessageAt = c.lastMessageAt || 0;
 
       if (msgs.length > 0) {
         const lastMsg = msgs[msgs.length - 1];
         lastMessagePreview = lastMsg.text || (lastMsg.mediaType ? `[${lastMsg.mediaType.toUpperCase()}]` : '');
-        lastMessageAt = lastMsg.timestamp;
+        lastMessageAt = Math.max(lastMessageAt, lastMsg.timestamp);
       }
+
+      // Only include active conversations with message history
+      if (!lastMessageAt && msgs.length === 0) continue;
 
       const updatedChat: CRMChat = {
         ...c,
         jid: resolvedKey,
         name,
         avatarUrl,
-        lastMessagePreview,
+        lastMessagePreview: lastMessagePreview || c.lastMessagePreview || 'Conversation started',
         lastMessageAt,
       };
 

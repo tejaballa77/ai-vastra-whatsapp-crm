@@ -73,7 +73,28 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ isCrmOpen, toggleCrm }) 
     );
   }
 
-  const displayName = activeChat?.name || activeChat?.jid?.split('@')[0] || 'Unknown';
+  const formatChatDisplayName = (chat: any) => {
+    if (!chat) return 'Unknown';
+    const name = chat.name || '';
+    if (name && name !== 'Unsaved Contact' && !name.startsWith('1489') && !name.startsWith('14') && !name.startsWith('15') && !name.startsWith('16')) {
+      return name;
+    }
+    const clean = (chat.phone || chat.jid || '').split('@')[0].replace(/\D/g, '');
+    if (clean.length === 12 && clean.startsWith('91')) {
+      const ten = clean.slice(2);
+      return `+91 ${ten.slice(0, 5)} ${ten.slice(5)}`;
+    }
+    if (clean.length === 10) {
+      return `+91 ${clean.slice(0, 5)} ${clean.slice(5)}`;
+    }
+    return clean ? `+${clean}` : 'Unsaved Contact';
+  };
+
+  const displayName = formatChatDisplayName(activeChat);
+  const cleanPhone = (activeChat.phone || activeChat.jid || '').split('@')[0].replace(/\D/g, '');
+  const phoneSub = cleanPhone.length === 12 && cleanPhone.startsWith('91') 
+    ? `+91 ${cleanPhone.slice(2, 7)} ${cleanPhone.slice(7)}` 
+    : `+${cleanPhone}`;
 
   return (
     <div className="flex-1 h-full bg-wa-chatBg wa-chat-pattern flex flex-col min-w-0 border-r border-wa-border relative">
@@ -93,7 +114,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ isCrmOpen, toggleCrm }) 
           <div className="min-w-0">
             <h3 className="text-sm font-semibold text-wa-textPrimary truncate">{displayName}</h3>
             <p className="text-xs text-wa-textSecondary truncate">
-              {activeChat.isGroup ? 'Group Chat' : activeChat.jid.split('@')[0]}
+              {activeChat.isGroup ? 'Group Chat' : phoneSub}
             </p>
           </div>
         </div>

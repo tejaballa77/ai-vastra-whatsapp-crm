@@ -64,8 +64,8 @@ async function runBackupImport() {
           }
 
           if (rawId.includes('@lid') && phoneJid) {
-            db.registerLidMapping(rawId, phoneJid);
-            db.registerLidMapping(cleanId, phoneJid);
+            db.registerLidMapping(rawId, phoneJid, true);
+            db.registerLidMapping(cleanId, phoneJid, true);
           }
 
           const rawPhoneNum = phoneJid ? phoneJid.split('@')[0] : cleanId;

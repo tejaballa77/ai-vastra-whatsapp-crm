@@ -94,10 +94,10 @@ class StorageEngine {
     }
   }
 
-  public registerLidMapping(lid: string, phoneJid: string) {
+  public registerLidMapping(lid: string, phoneJid: string, skipSave: boolean = false) {
     if (lid && phoneJid && lid !== phoneJid) {
       this.lidToJidMap.set(lid, phoneJid);
-      this.saveData();
+      if (!skipSave) this.saveData();
     }
   }
 

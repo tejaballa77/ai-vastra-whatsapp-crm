@@ -3,19 +3,19 @@
 import React, { useState } from 'react';
 import { useSocket } from '../context/SocketContext';
 import { 
-  MessageSquare, 
-  Instagram, 
   Search, 
-  Filter, 
-  LogOut, 
-  RefreshCw, 
+  Plus, 
+  MoreVertical, 
   CheckCircle2, 
   AlertCircle, 
   QrCode,
-  User,
-  Tag,
+  LogOut,
   Sun,
-  Moon
+  Moon,
+  Check,
+  CheckCheck,
+  Camera,
+  FileText
 } from 'lucide-react';
 import { format, isToday, isYesterday } from 'date-fns';
 
@@ -29,8 +29,7 @@ export const Sidebar = () => {
     reconnectSession 
   } = useSocket();
 
-  const [activePlatform, setActivePlatform] = useState<'whatsapp' | 'instagram'>('whatsapp');
-  const [activeTab, setActiveTab] = useState<'all' | 'unread' | 'followups'>('all');
+  const [activeTab, setActiveTab] = useState<'all' | 'favourites' | 'unread' | 'groups'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
 
@@ -61,7 +60,42 @@ export const Sidebar = () => {
     return clean ? `+${clean}` : 'Unsaved Contact';
   };
 
-  // Filter chats by platform, tab, and search query
+  const formatTimestamp = (ts: number) => {
+    if (!ts) return '';
+    const date = new Date(ts);
+    if (isToday(date)) return format(date, 'h:mm a').toLowerCase();
+    if (isYesterday(date)) return 'Yesterday';
+    return format(date, 'dd/MM/yyyy');
+  };
+
+  const getAvatarBgColor = (jid: string) => {
+    const bgList = ['#d8fdd2', '#fde3d2', '#d2e5fd', '#fdf3d2', '#e1d2fd', '#fdd2e9'];
+    let hash = 0;
+    for (let i = 0; i < jid.length; i++) hash = jid.charCodeAt(i) + ((hash << 5) - hash);
+    return bgList[Math.abs(hash) % bgList.length];
+  };
+
+  const getAvatarTextColor = (jid: string) => {
+    const textList = ['#007a5a', '#b75800', '#0052b7', '#9e7b00', '#6300b7', '#b70068'];
+    let hash = 0;
+    for (let i = 0; i < jid.length; i++) hash = jid.charCodeAt(i) + ((hash << 5) - hash);
+    return textList[Math.abs(hash) % textList.length];
+  };
+
+  const getLeadStatusBadge = (status?: string) => {
+    switch (status) {
+      case 'INTERESTED':
+        return <span className="px-2 py-0.5 text-[10px] font-semibold bg-emerald-500/15 text-emerald-600 rounded-full border border-emerald-500/30">Interested</span>;
+      case 'WARM_INTERESTED':
+        return <span className="px-2 py-0.5 text-[10px] font-semibold bg-amber-500/15 text-amber-600 rounded-full border border-amber-500/30">Warm</span>;
+      case 'NOT_INTERESTED':
+        return <span className="px-2 py-0.5 text-[10px] font-semibold bg-rose-500/15 text-rose-600 rounded-full border border-rose-500/30">Not Interested</span>;
+      default:
+        return null;
+    }
+  };
+
+  // Filter chats by tab and search query
   const filteredChats = chats.filter((chat) => {
     if (!chat || !chat.jid) return false;
 
@@ -71,119 +105,81 @@ export const Sidebar = () => {
 
     if (!matchesSearch) return false;
 
-    // Filter tabs
     if (activeTab === 'unread') return chat.unreadCount > 0;
-    if (activeTab === 'followups') return Boolean(chat.followUpDate);
+    if (activeTab === 'groups') return chat.isGroup;
+    if (activeTab === 'favourites') return Boolean(chat.followUpDate);
 
     return true;
   });
 
-  const formatTimestamp = (ts: number) => {
-    if (!ts) return '';
-    const date = new Date(ts);
-    if (isToday(date)) return format(date, 'h:mm a');
-    if (isYesterday(date)) return 'Yesterday';
-    return format(date, 'dd/MM/yyyy');
-  };
-
-  const getLeadStatusBadge = (status?: string) => {
-    switch (status) {
-      case 'INTERESTED':
-        return <span className="px-2 py-0.5 text-[10px] font-semibold bg-emerald-500/20 text-emerald-400 rounded-full border border-emerald-500/30">Interested</span>;
-      case 'WARM_INTERESTED':
-        return <span className="px-2 py-0.5 text-[10px] font-semibold bg-amber-500/20 text-amber-400 rounded-full border border-amber-500/30">Warm</span>;
-      case 'NOT_INTERESTED':
-        return <span className="px-2 py-0.5 text-[10px] font-semibold bg-rose-500/20 text-rose-400 rounded-full border border-rose-500/30">Not Interested</span>;
-      default:
-        return null;
-    }
-  };
-
   return (
-    <div className="w-[400px] min-w-[340px] h-full bg-wa-sidebar border-r border-wa-border flex flex-col select-none">
-      {/* Sidebar Top Header */}
-      <div className="h-16 px-4 bg-wa-header flex items-center justify-between border-b border-wa-border">
-        {/* Left Platform Switcher Icons */}
+    <div className="w-[410px] min-w-[350px] h-full bg-wa-sidebar border-r border-wa-border flex flex-col select-none flex-shrink-0">
+      {/* Sidebar Top Header (WhatsApp Logo + Controls) */}
+      <div className="h-[59px] px-4 bg-wa-header flex items-center justify-between border-b border-wa-border flex-shrink-0">
+        <h1 className="text-xl font-bold text-wa-textPrimary tracking-tight">WhatsApp</h1>
+
         <div className="flex items-center space-x-2">
-          <button 
-            onClick={() => setActivePlatform('whatsapp')}
-            title="WhatsApp Workspace"
-            className={`p-2 rounded-full transition-all ${
-              activePlatform === 'whatsapp' 
-                ? 'bg-wa-accent/20 text-wa-accent' 
-                : 'text-wa-textSecondary hover:bg-wa-hover'
-            }`}
-          >
-            <MessageSquare className="w-5 h-5" />
-          </button>
-          
-          <button 
-            onClick={() => setActivePlatform('instagram')}
-            title="Instagram Direct Messages"
-            className={`p-2 rounded-full transition-all ${
-              activePlatform === 'instagram' 
-                ? 'bg-pink-500/20 text-pink-400' 
-                : 'text-wa-textSecondary hover:bg-wa-hover'
-            }`}
-          >
-            <Instagram className="w-5 h-5" />
-          </button>
-        </div>
-
-        {/* Connection Status & Account Controls */}
-        <div className="flex items-center space-x-3">
-          {sessionState.status === 'CONNECTED' ? (
-            <div className="flex items-center space-x-1.5 px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20">
-              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-              <span className="text-xs font-medium text-emerald-400">Connected</span>
-            </div>
-          ) : sessionState.status === 'QR_READY' || sessionState.status === 'CONNECTING' ? (
-            <div className="flex items-center space-x-1.5 px-2.5 py-1 rounded-full bg-amber-500/10 border border-amber-500/20 animate-pulse">
-              <QrCode className="w-3.5 h-3.5 text-amber-400" />
-              <span className="text-xs font-medium text-amber-400">Scan QR</span>
-            </div>
-          ) : (
-            <div className="flex items-center space-x-1.5 px-2.5 py-1 rounded-full bg-rose-500/10 border border-rose-500/20">
-              <AlertCircle className="w-3.5 h-3.5 text-rose-400" />
-              <span className="text-xs font-medium text-rose-400">Offline</span>
-            </div>
-          )}
-
+          {/* Theme Switcher (Sun / Moon) */}
           <button
             onClick={toggleTheme}
-            title={theme === 'light' ? 'Switch to WhatsApp Dark Theme' : 'Switch to WhatsApp Light Theme'}
-            className="p-2 text-wa-textSecondary hover:text-wa-accent hover:bg-wa-hover rounded-full transition-colors"
+            title={theme === 'light' ? 'Switch to Dark Theme' : 'Switch to Light Theme'}
+            className="p-2 text-wa-textSecondary hover:text-wa-textPrimary hover:bg-wa-hover rounded-full transition-colors"
           >
-            {theme === 'light' ? <Moon className="w-4 h-4" /> : <Sun className="w-4 h-4" />}
+            {theme === 'light' ? <Moon className="w-5 h-5" /> : <Sun className="w-5 h-5" />}
           </button>
 
+          {/* New Chat Button */}
+          <button
+            title="New Chat"
+            className="p-2 text-wa-textSecondary hover:text-wa-textPrimary hover:bg-wa-hover rounded-full transition-colors"
+          >
+            <Plus className="w-5 h-5" />
+          </button>
+
+          {/* Connection Status Icon */}
           {sessionState.status === 'CONNECTED' ? (
             <button
               onClick={disconnectSession}
-              title="Disconnect Session"
-              className="p-2 text-wa-textSecondary hover:text-rose-400 hover:bg-wa-hover rounded-full transition-colors"
+              title="Session Connected (Click to Disconnect)"
+              className="p-2 text-emerald-500 hover:bg-wa-hover rounded-full transition-colors"
             >
-              <LogOut className="w-4 h-4" />
+              <CheckCircle2 className="w-5 h-5" />
+            </button>
+          ) : sessionState.status === 'QR_READY' || sessionState.status === 'CONNECTING' ? (
+            <button
+              onClick={reconnectSession}
+              title="Connecting / Scan QR"
+              className="p-2 text-amber-500 hover:bg-wa-hover rounded-full transition-colors animate-pulse"
+            >
+              <QrCode className="w-5 h-5" />
             </button>
           ) : (
             <button
               onClick={reconnectSession}
-              title="Reconnect Session"
-              className="p-2 text-wa-textSecondary hover:text-wa-accent hover:bg-wa-hover rounded-full transition-colors"
+              title="Offline (Click to Reconnect)"
+              className="p-2 text-rose-500 hover:bg-wa-hover rounded-full transition-colors"
             >
-              <RefreshCw className="w-4 h-4" />
+              <AlertCircle className="w-5 h-5" />
             </button>
           )}
+
+          {/* Menu Dots */}
+          <button
+            title="Menu"
+            className="p-2 text-wa-textSecondary hover:text-wa-textPrimary hover:bg-wa-hover rounded-full transition-colors"
+          >
+            <MoreVertical className="w-5 h-5" />
+          </button>
         </div>
       </div>
 
-      {/* Search Input Bar */}
+      {/* Search Bar Section */}
       <div className="p-2 bg-wa-sidebar">
-        <div className="relative flex items-center bg-wa-header rounded-lg px-3 py-1.5">
-          <Search className="w-4 h-4 text-wa-textSecondary mr-3" />
+        <div className="h-9 px-3 bg-wa-header rounded-lg flex items-center space-x-3 border border-transparent focus-within:border-wa-accent transition-all">
+          <Search className="w-4 h-4 text-wa-textSecondary flex-shrink-0" />
           <input
             type="text"
-            placeholder="Search or start new chat..."
+            placeholder="Search or start new chat"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="w-full bg-transparent text-sm text-wa-textPrimary placeholder-wa-textSecondary focus:outline-none"
@@ -191,42 +187,57 @@ export const Sidebar = () => {
         </div>
       </div>
 
-      {/* Filter Tabs (All, Unread, Follow-ups) */}
-      <div className="px-3 py-2 border-b border-wa-border flex items-center space-x-2">
+      {/* Filter Tabs (All, Favourites, Unread, Groups, +) */}
+      <div className="px-3 py-1.5 border-b border-wa-border flex items-center space-x-1.5 overflow-x-auto no-scrollbar">
         <button
           onClick={() => setActiveTab('all')}
-          className={`px-3 py-1 text-xs font-medium rounded-full transition-colors ${
+          className={`px-3 py-1 text-xs font-medium rounded-full transition-all ${
             activeTab === 'all'
-              ? 'bg-wa-accent text-wa-bg'
+              ? 'bg-[#e7fce3] text-[#008069] dark:bg-wa-accent dark:text-wa-bg font-semibold'
               : 'bg-wa-header text-wa-textSecondary hover:bg-wa-hover'
           }`}
         >
           All
         </button>
         <button
+          onClick={() => setActiveTab('favourites')}
+          className={`px-3 py-1 text-xs font-medium rounded-full transition-all ${
+            activeTab === 'favourites'
+              ? 'bg-[#e7fce3] text-[#008069] dark:bg-wa-accent dark:text-wa-bg font-semibold'
+              : 'bg-wa-header text-wa-textSecondary hover:bg-wa-hover'
+          }`}
+        >
+          Favourites
+        </button>
+        <button
           onClick={() => setActiveTab('unread')}
-          className={`px-3 py-1 text-xs font-medium rounded-full transition-colors ${
+          className={`px-3 py-1 text-xs font-medium rounded-full transition-all ${
             activeTab === 'unread'
-              ? 'bg-wa-accent text-wa-bg'
+              ? 'bg-[#e7fce3] text-[#008069] dark:bg-wa-accent dark:text-wa-bg font-semibold'
               : 'bg-wa-header text-wa-textSecondary hover:bg-wa-hover'
           }`}
         >
           Unread
         </button>
         <button
-          onClick={() => setActiveTab('followups')}
-          className={`px-3 py-1 text-xs font-medium rounded-full transition-colors ${
-            activeTab === 'followups'
-              ? 'bg-wa-accent text-wa-bg'
+          onClick={() => setActiveTab('groups')}
+          className={`px-3 py-1 text-xs font-medium rounded-full transition-all ${
+            activeTab === 'groups'
+              ? 'bg-[#e7fce3] text-[#008069] dark:bg-wa-accent dark:text-wa-bg font-semibold'
               : 'bg-wa-header text-wa-textSecondary hover:bg-wa-hover'
           }`}
         >
-          Follow-ups
+          Groups
+        </button>
+        <button
+          className="w-7 h-7 rounded-full bg-wa-header flex items-center justify-center text-wa-textSecondary hover:bg-wa-hover transition-all"
+        >
+          <Plus className="w-3.5 h-3.5" />
         </button>
       </div>
 
       {/* Chat List */}
-      <div className="flex-1 overflow-y-auto divide-y divide-wa-border/50">
+      <div className="flex-1 overflow-y-auto divide-y divide-wa-border/40">
         {filteredChats.length === 0 ? (
           <div className="p-8 text-center text-wa-textSecondary text-sm">
             {searchQuery ? 'No conversations matching search.' : 'No chats synced yet.'}
@@ -235,46 +246,64 @@ export const Sidebar = () => {
           filteredChats.map((chat) => {
             const isActive = chat.jid === activeChatJid;
             const displayName = formatChatDisplayName(chat);
+            const initial = displayName.replace(/\+/g, '').charAt(0).toUpperCase();
+
             return (
               <div
                 key={chat.jid}
                 onClick={() => setActiveChatJid(chat.jid)}
-                className={`px-4 py-3 flex items-center cursor-pointer transition-colors ${
-                  isActive ? 'bg-wa-hover' : 'hover:bg-wa-header/60'
+                className={`h-[72px] px-3.5 flex items-center space-x-3 cursor-pointer transition-colors ${
+                  isActive ? 'bg-wa-hover' : 'hover:bg-wa-hover/60'
                 }`}
               >
-                {/* Avatar */}
-                <div className="relative w-12 h-12 rounded-full overflow-hidden bg-wa-header flex items-center justify-center flex-shrink-0 mr-3">
+                {/* 49px Circular Avatar */}
+                <div className="w-[49px] h-[49px] rounded-full overflow-hidden flex items-center justify-center flex-shrink-0 relative">
                   {chat.avatarUrl ? (
                     <img src={chat.avatarUrl} alt={displayName} className="w-full h-full object-cover" />
                   ) : (
-                    <div className="w-full h-full bg-wa-accent/20 flex items-center justify-center text-wa-accent font-semibold text-lg">
-                      {displayName.charAt(0).toUpperCase()}
+                    <div 
+                      className="w-full h-full flex items-center justify-center font-medium text-lg"
+                      style={{ 
+                        backgroundColor: getAvatarBgColor(chat.jid), 
+                        color: getAvatarTextColor(chat.jid) 
+                      }}
+                    >
+                      {initial}
                     </div>
                   )}
                 </div>
 
-                {/* Chat Info */}
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between mb-1">
-                    <h4 className="text-sm font-semibold text-wa-textPrimary truncate mr-2">
+                {/* Right Content Block */}
+                <div className="flex-1 min-w-0 h-full flex flex-col justify-center border-b border-wa-border/30">
+                  {/* Top Row: Name + Timestamp */}
+                  <div className="flex items-center justify-between mb-0.5">
+                    <span className="text-[16px] font-medium text-wa-textPrimary truncate max-w-[210px]">
                       {displayName}
-                    </h4>
-                    <span className="text-[11px] text-wa-textSecondary whitespace-nowrap">
+                    </span>
+                    <span className={`text-[12px] flex-shrink-0 ${
+                      chat.unreadCount > 0 ? 'text-[#25d366] font-medium' : 'text-wa-textSecondary'
+                    }`}>
                       {formatTimestamp(chat.lastMessageAt)}
                     </span>
                   </div>
 
-                  <div className="flex items-center justify-between">
-                    <p className="text-xs text-wa-textSecondary truncate mr-2">
-                      {chat.lastMessagePreview || 'No messages'}
-                    </p>
-                    
-                    <div className="flex items-center space-x-1.5 flex-shrink-0">
+                  {/* Bottom Row: Message Preview + Unread Badge / Lead Status */}
+                  <div className="flex items-center justify-between text-[14px] text-wa-textSecondary">
+                    <div className="flex items-center space-x-1 truncate max-w-[230px]">
+                      {chat.lastMessagePreview?.toLowerCase().includes('photo') ? (
+                        <div className="flex items-center space-x-1 text-wa-textSecondary">
+                          <Camera className="w-3.5 h-3.5 text-wa-textSecondary" />
+                          <span>Photo</span>
+                        </div>
+                      ) : (
+                        <span className="truncate">{chat.lastMessagePreview || 'Click to open conversation'}</span>
+                      )}
+                    </div>
+
+                    <div className="flex items-center space-x-1.5 flex-shrink-0 ml-1">
                       {getLeadStatusBadge(chat.leadStatus)}
-                      
                       {chat.unreadCount > 0 && (
-                        <span className="w-5 h-5 rounded-full bg-wa-accent text-wa-bg font-bold text-[10px] flex items-center justify-center">
+                        <span className="min-w-[19px] h-[19px] px-1 rounded-full bg-[#25d366] text-white text-[11px] font-semibold flex items-center justify-center">
                           {chat.unreadCount}
                         </span>
                       )}

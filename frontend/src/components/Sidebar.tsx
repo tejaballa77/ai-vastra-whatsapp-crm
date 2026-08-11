@@ -58,12 +58,6 @@ export const Sidebar = () => {
   const filteredChats = chats.filter((chat) => {
     if (!chat || !chat.jid) return false;
 
-    const cleanJid = chat.jid.split('@')[0].replace(/\D/g, '');
-    // Exclude raw 15-digit LID chat items from sidebar list
-    if (cleanJid.length > 12 && !chat.jid.endsWith('@g.us') && (!chat.name || chat.name === cleanJid || chat.name === 'Unsaved Contact' || chat.name.includes('@lid'))) {
-      return false;
-    }
-
     const name = formatChatDisplayName(chat);
     const matchesSearch = name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       chat.jid.toLowerCase().includes(searchQuery.toLowerCase());

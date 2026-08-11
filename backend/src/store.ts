@@ -108,28 +108,43 @@ class StorageEngine {
   }
 
   public getContactName(rawJid: string): string {
+    if (!rawJid) return 'Unsaved Contact';
+
     const resolvedJid = this.resolveJid(rawJid);
-    const cleanNum = resolvedJid.split('@')[0];
-    const rawNum = rawJid.split('@')[0];
+    const cleanNum = resolvedJid.split('@')[0].replace(/\D/g, '');
+    const rawNum = rawJid.split('@')[0].replace(/\D/g, '');
 
-    const contact = 
-      this.contacts.get(resolvedJid) ||
-      this.contacts.get(rawJid) ||
-      this.contacts.get(cleanNum) ||
-      this.contacts.get(rawNum);
+    const keyCandidates = [
+      resolvedJid,
+      rawJid,
+      cleanNum,
+      rawNum,
+      `${cleanNum}@s.whatsapp.net`,
+      `${cleanNum}@c.us`,
+      `${rawNum}@s.whatsapp.net`,
+      `${rawNum}@c.us`
+    ];
 
-    if (contact && contact.name && !contact.name.includes('@') && !contact.name.startsWith('+3') && !contact.name.startsWith('+8') && !contact.name.startsWith('+1') && !contact.name.startsWith('+2') && contact.name !== cleanNum && contact.name !== rawNum) {
-      return contact.name;
+    for (const key of keyCandidates) {
+      const contact = this.contacts.get(key);
+      if (contact && contact.name && contact.name !== 'Unsaved Contact' && contact.name !== cleanNum && contact.name !== rawNum && !contact.name.includes('@') && !/^\d{13,}$/.test(contact.name.replace(/\D/g, ''))) {
+        return contact.name;
+      }
     }
 
     // Try finding by phone number in contacts
     for (const c of this.contacts.values()) {
-      if ((c.phone === cleanNum || c.phone === rawNum) && c.name && !c.name.includes('@') && !c.name.startsWith('+')) {
-        return c.name;
+      if (c.phone) {
+        const cp = c.phone.replace(/\D/g, '');
+        if (cp && (cp === cleanNum || cp === rawNum || cp.endsWith(cleanNum) || cleanNum.endsWith(cp))) {
+          if (c.name && c.name !== 'Unsaved Contact' && !c.name.includes('@') && !/^\d{13,}$/.test(c.name.replace(/\D/g, ''))) {
+            return c.name;
+          }
+        }
       }
     }
 
-    return this.formatPhoneFallback(cleanNum);
+    return this.formatPhoneFallback(cleanNum || rawNum);
   }
 
   public formatPhoneFallback(raw: string): string {

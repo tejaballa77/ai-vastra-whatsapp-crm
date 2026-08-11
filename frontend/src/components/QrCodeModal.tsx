@@ -6,14 +6,24 @@ import { QrCode, Smartphone, RefreshCw, CheckCircle2 } from 'lucide-react';
 
 export const QrCodeModal = () => {
   const { sessionState, reconnectSession } = useSocket();
+  const [isDismissed, setIsDismissed] = React.useState(false);
 
-  if (sessionState.status === 'CONNECTED') {
+  if (sessionState.status === 'CONNECTED' || isDismissed) {
     return null;
   }
 
   return (
-    <div className="fixed inset-0 z-50 bg-wa-bg/95 backdrop-blur-md flex items-center justify-center p-4 select-none">
-      <div className="max-w-3xl w-full bg-wa-sidebar border border-wa-border rounded-2xl shadow-2xl p-8 flex flex-col md:flex-row items-center justify-between space-y-6 md:space-y-0 md:space-x-8">
+    <div className="fixed inset-0 z-50 bg-wa-bg/90 backdrop-blur-md flex items-center justify-center p-4 select-none">
+      <div className="max-w-3xl w-full bg-wa-sidebar border border-wa-border rounded-2xl shadow-2xl p-8 flex flex-col md:flex-row items-center justify-between space-y-6 md:space-y-0 md:space-x-8 relative">
+        
+        {/* Close Button */}
+        <button
+          onClick={() => setIsDismissed(true)}
+          className="absolute top-4 right-4 p-2 text-wa-textSecondary hover:text-wa-textPrimary hover:bg-wa-hover rounded-full transition-colors"
+          title="Close & Continue to Dashboard"
+        >
+          <span className="text-sm font-bold px-2 py-0.5 bg-wa-header rounded-md border border-wa-border">✕ Close</span>
+        </button>
         
         {/* Left Column: Instructions */}
         <div className="flex-1 space-y-6">
@@ -46,13 +56,20 @@ export const QrCodeModal = () => {
             </li>
           </ol>
 
-          <div className="pt-2">
+          <div className="pt-2 flex items-center space-x-3">
             <button
               onClick={reconnectSession}
               className="inline-flex items-center space-x-2 px-4 py-2 bg-wa-header hover:bg-wa-hover text-wa-textPrimary text-xs font-semibold rounded-lg transition-colors border border-wa-border"
             >
               <RefreshCw className="w-4 h-4 text-wa-accent" />
               <span>Refresh Connection</span>
+            </button>
+
+            <button
+              onClick={() => setIsDismissed(true)}
+              className="inline-flex items-center space-x-2 px-4 py-2 bg-wa-accent hover:opacity-90 text-white text-xs font-semibold rounded-lg transition-all shadow-sm"
+            >
+              <span>Continue to Dashboard →</span>
             </button>
           </div>
         </div>

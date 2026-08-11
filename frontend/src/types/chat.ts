@@ -1,6 +1,7 @@
 export interface Chat {
   jid: string;
   name: string;
+  phone?: string;
   unreadCount: number;
   lastMessagePreview?: string;
   lastMessageAt: number;

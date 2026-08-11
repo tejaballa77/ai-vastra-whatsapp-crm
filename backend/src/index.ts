@@ -55,6 +55,11 @@ app.get('/api/session/status', (req, res) => {
   });
 });
 
+// 1b. Get all sorted chats
+app.get('/api/chats', (req, res) => {
+  res.json(db.getAllChatsSorted());
+});
+
 // 2. Initialize / Reconnect session
 app.post('/api/session/connect', async (req, res) => {
   try {

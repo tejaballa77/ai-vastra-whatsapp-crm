@@ -46,6 +46,16 @@ export const SocketProvider = ({ children }: { children: ReactNode }) => {
   const [syncedMessageCount, setSyncedMessageCount] = useState<number>(0);
 
   useEffect(() => {
+    // Initial REST fetch for instant chat list render
+    fetch(`${getBackendUrl()}/api/chats`)
+      .then((res) => res.json())
+      .then((initialChats: Chat[]) => {
+        if (Array.isArray(initialChats) && initialChats.length > 0) {
+          setChats(initialChats);
+        }
+      })
+      .catch((err) => console.error('Error fetching initial chats:', err));
+
     const s = io(getBackendUrl(), {
       transports: ['websocket', 'polling'],
       reconnection: true,

@@ -324,9 +324,9 @@ export class WhatsAppEngine {
 
     const pushName = msg.pushName;
     const resolvedName = this.resolveBestContactName(chatJid, undefined, pushName);
-    const senderName = fromMe ? 'Me' : resolvedName;
+    const senderName = fromMe ? 'Me' : (resolvedName !== 'Contact' && !resolvedName.startsWith('[') ? resolvedName : 'Contact');
 
-    if (pushName && !fromMe) {
+    if (pushName && !fromMe && pushName !== 'Contact' && !pushName.startsWith('[')) {
       db.upsertContact(chatJid, { name: pushName });
     }
 

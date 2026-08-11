@@ -329,10 +329,21 @@ class StorageEngine {
       tags: [],
     };
 
-    chat.lastMessagePreview = msg.text || (msg.mediaType ? `[${msg.mediaType.toUpperCase()}]` : '');
+    const cleanText = (msg.text && !msg.text.startsWith('[') && msg.text !== 'Contact') ? msg.text : (msg.mediaType ? `📷 ${msg.mediaType.toUpperCase()}` : '');
+    if (cleanText) {
+      chat.lastMessagePreview = cleanText;
+    }
     chat.lastMessageAt = Math.max(chat.lastMessageAt || 0, msg.timestamp);
 
-    if (msg.senderName && msg.senderName !== 'Me' && msg.senderName !== chatJid.split('@')[0] && chat.name === this.formatPhoneFallback(chatJid.split('@')[0])) {
+    if (
+      msg.senderName && 
+      msg.senderName !== 'Me' && 
+      msg.senderName !== 'Contact' && 
+      msg.senderName !== 'Unsaved Contact' && 
+      !msg.senderName.startsWith('[') && 
+      msg.senderName !== chatJid.split('@')[0] && 
+      (!chat.name || chat.name === 'Unsaved Contact' || chat.name === this.formatPhoneFallback(chatJid.split('@')[0]))
+    ) {
       chat.name = msg.senderName;
       this.upsertContact(chatJid, { name: msg.senderName });
     }

@@ -15,7 +15,8 @@ import {
   Sparkles,
   FileText,
   Download,
-  Image
+  Image,
+  Info
 } from 'lucide-react';
 import { format, isToday, isYesterday } from 'date-fns';
 
@@ -54,11 +55,26 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ isCrmOpen, toggleCrm }) 
       case 'SENT':
         return <Check className="w-3.5 h-3.5 text-wa-textSecondary" />;
       case 'DELIVERED':
-        return <CheckCheck className="w-3.5 h-3.5 text-wa-textSecondary" />;
+        return (
+          <div className="flex -space-x-1.5 items-center" title="Delivered">
+            <Check className="w-3.5 h-3.5 text-wa-textSecondary" />
+            <Check className="w-3.5 h-3.5 text-wa-textSecondary" />
+          </div>
+        );
       case 'READ':
-        return <CheckCheck className="w-3.5 h-3.5 text-sky-400" />;
+        return (
+          <div className="flex -space-x-1.5 items-center" title="Read">
+            <Check className="w-3.5 h-3.5 text-sky-400" />
+            <Check className="w-3.5 h-3.5 text-sky-400" />
+          </div>
+        );
       default:
-        return <Check className="w-3.5 h-3.5 text-wa-textSecondary" />;
+        return (
+          <div className="flex -space-x-1.5 items-center">
+            <Check className="w-3.5 h-3.5 text-wa-textSecondary" />
+            <Check className="w-3.5 h-3.5 text-wa-textSecondary" />
+          </div>
+        );
     }
   };
 
@@ -186,16 +202,16 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ isCrmOpen, toggleCrm }) 
           </div>
         </div>
 
-        {/* Action Controls */}
+        {/* Action Controls - Info Button (i symbol with circle) */}
         <div className="flex items-center space-x-2">
           <button
             onClick={toggleCrm}
-            title={isCrmOpen ? 'Close CRM Drawer' : 'Open CRM Drawer'}
+            title={isCrmOpen ? 'Close Contact Info' : 'Open Contact Info'}
             className={`p-2 rounded-full transition-colors ${
               isCrmOpen ? 'bg-wa-accent/20 text-wa-accent' : 'text-wa-textSecondary hover:bg-wa-hover'
             }`}
           >
-            {isCrmOpen ? <PanelRightClose className="w-5 h-5" /> : <PanelRightOpen className="w-5 h-5" />}
+            <Info className="w-5 h-5" />
           </button>
         </div>
       </div>

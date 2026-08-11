@@ -173,7 +173,44 @@ app.put('/api/contacts/name', (req, res) => {
   res.json({ success: true, chat: updated });
 });
 
-// 10. Import WhatsApp Chat Backup Export File (.txt)
+// 10. Start a new chat by phone number
+app.post('/api/chats/create', (req, res) => {
+  const { phone, name } = req.body;
+  if (!phone) {
+    return res.status(400).json({ error: 'Phone number is required' });
+  }
+
+  const cleanDigits = phone.replace(/\D/g, '');
+  if (!cleanDigits) {
+    return res.status(400).json({ error: 'Invalid phone number' });
+  }
+
+  const fullNum = cleanDigits.length === 10 ? `91${cleanDigits}` : cleanDigits;
+  const jid = `${fullNum}@s.whatsapp.net`;
+  const contactName = name || db.formatPhoneFallback(fullNum);
+
+  db.upsertContact(jid, { jid, name: contactName, phone: fullNum }, true);
+  const chat = db.upsertChat(jid, { jid, name: contactName, lastMessageAt: Date.now() }, true);
+
+  io.emit('chats_updated', db.getAllChatsSorted());
+
+  res.json({ success: true, chat });
+});
+
+// 11. Delete a chat by JID
+app.delete('/api/chats/:jid', (req, res) => {
+  const { jid } = req.params;
+  if (!jid) {
+    return res.status(400).json({ error: 'JID is required' });
+  }
+
+  db.deleteChat(jid);
+  io.emit('chats_updated', db.getAllChatsSorted());
+
+  res.json({ success: true, message: 'Chat deleted successfully' });
+});
+
+// 12. Import WhatsApp Chat Backup Export File (.txt)
 app.post('/api/chats/import-backup', (req, res) => {
   const { fileContent, fileName } = req.body;
   if (!fileContent) {

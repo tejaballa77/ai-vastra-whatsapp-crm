@@ -220,22 +220,41 @@ export class WhatsAppEngine {
       // Message Status / Read Receipts Updates
       this.sock.ev.on('messages.update', (updates) => {
         for (const update of updates) {
-          if (update.key.id && update.key.remoteJid && update.update.status) {
+          if (update.key.id && update.key.remoteJid && update.update.status !== undefined) {
             let statusStr: CRMMessage['status'] = 'SENT';
-            const s = update.update.status;
-            if (s === proto.WebMessageInfo.Status.PENDING) statusStr = 'PENDING';
-            if (s === proto.WebMessageInfo.Status.SERVER_ACK) statusStr = 'SENT';
-            if (s === proto.WebMessageInfo.Status.DELIVERY_ACK) statusStr = 'DELIVERED';
-            if (s === proto.WebMessageInfo.Status.READ || s === proto.WebMessageInfo.Status.PLAYED) statusStr = 'READ';
+            const s = Number(update.update.status);
+            if (s === 1 || s === proto.WebMessageInfo.Status.PENDING) statusStr = 'PENDING';
+            if (s === 2 || s === proto.WebMessageInfo.Status.SERVER_ACK) statusStr = 'SENT';
+            if (s === 3 || s === proto.WebMessageInfo.Status.DELIVERY_ACK) statusStr = 'DELIVERED';
+            if (s === 4 || s === proto.WebMessageInfo.Status.READ || s === proto.WebMessageInfo.Status.PLAYED) statusStr = 'READ';
 
-            const updatedMsg = db.updateMessageStatus(update.key.id, update.key.remoteJid, statusStr);
+            const resolvedJid = db.resolveJid(update.key.remoteJid);
+            const updatedMsg = db.updateMessageStatus(update.key.id, resolvedJid, statusStr);
             if (updatedMsg) {
               this.io.emit('message_status', {
                 id: update.key.id,
-                chatJid: update.key.remoteJid,
+                chatJid: resolvedJid,
                 status: statusStr,
               });
             }
+          }
+        }
+      });
+
+      this.sock.ev.on('message-receipt.update', (receipts) => {
+        for (const r of receipts) {
+          if (r.key && r.key.id && r.key.remoteJid) {
+            let statusStr: CRMMessage['status'] = 'SENT';
+            if (r.receipt.readTimestamp) statusStr = 'READ';
+            else if (r.receipt.receiptTimestamp) statusStr = 'DELIVERED';
+
+            const resolvedJid = db.resolveJid(r.key.remoteJid);
+            db.updateMessageStatus(r.key.id, resolvedJid, statusStr);
+            this.io.emit('message_status', {
+              id: r.key.id,
+              chatJid: resolvedJid,
+              status: statusStr,
+            });
           }
         }
       });

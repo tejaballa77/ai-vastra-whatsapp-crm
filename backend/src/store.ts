@@ -382,6 +382,18 @@ class StorageEngine {
     return msg;
   }
 
+  public deleteChat(rawJid: string) {
+    const jid = this.resolveJid(rawJid);
+    const clean = jid.split('@')[0];
+    this.chats.delete(jid);
+    this.chats.delete(rawJid);
+    this.chats.delete(clean);
+    this.messages.delete(jid);
+    this.messages.delete(rawJid);
+    this.messages.delete(clean);
+    this.saveData();
+  }
+
   public updateMessageStatus(id: string, rawChatJid: string, status: CRMMessage['status']) {
     const chatJid = this.resolveJid(rawChatJid);
     const list = this.messages.get(chatJid);

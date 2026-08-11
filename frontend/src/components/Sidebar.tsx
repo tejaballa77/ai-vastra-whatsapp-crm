@@ -13,9 +13,17 @@ import {
   AlertCircle, 
   QrCode,
   User,
-  Tag
+  Tag,
+  X,
+  MoreVertical
 } from 'lucide-react';
 import { format, isToday, isYesterday } from 'date-fns';
+
+const getBackendUrl = () => {
+  if (process.env.NEXT_PUBLIC_BACKEND_URL) return process.env.NEXT_PUBLIC_BACKEND_URL;
+  if (typeof window !== 'undefined') return window.location.origin;
+  return 'http://localhost:5000';
+};
 
 export const Sidebar = () => {
   const { 
@@ -30,6 +38,12 @@ export const Sidebar = () => {
   const [activePlatform, setActivePlatform] = useState<'whatsapp' | 'instagram'>('whatsapp');
   const [activeTab, setActiveTab] = useState<'all' | 'unread' | 'followups'>('all');
   const [searchQuery, setSearchQuery] = useState('');
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [isAddChatOpen, setIsAddChatOpen] = useState(false);
+  const [newPhoneInput, setNewPhoneInput] = useState('');
+  const [newNameInput, setNewNameInput] = useState('');
+  const [isSelectMode, setIsSelectMode] = useState(false);
+  const [selectedJids, setSelectedJids] = useState<string[]>([]);
 
   const formatChatDisplayName = (chat: any) => {
     if (!chat) return 'Unsaved Contact';
@@ -92,72 +106,189 @@ export const Sidebar = () => {
     }
   };
 
+  const handleCreateChat = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newPhoneInput.trim()) return;
+
+    try {
+      const res = await fetch(`${getBackendUrl()}/api/chats/create`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone: newPhoneInput.trim(), name: newNameInput.trim() }),
+      });
+      const data = await res.json();
+      if (data.success && data.chat) {
+        setActiveChatJid(data.chat.jid);
+        setIsAddChatOpen(false);
+        setNewPhoneInput('');
+        setNewNameInput('');
+      }
+    } catch (err) {
+      console.error('Error creating chat:', err);
+    }
+  };
+
+  const handleDeleteSelectedChats = async () => {
+    const toDelete = selectedJids.length > 0 ? selectedJids : (activeChatJid ? [activeChatJid] : []);
+    if (toDelete.length === 0) return;
+
+    if (confirm(`Delete ${toDelete.length} selected chat(s)?`)) {
+      for (const jid of toDelete) {
+        try {
+          await fetch(`${getBackendUrl()}/api/chats/${encodeURIComponent(jid)}`, { method: 'DELETE' });
+        } catch (err) {
+          console.error('Error deleting chat:', err);
+        }
+      }
+      setSelectedJids([]);
+      setIsSelectMode(false);
+      setIsMenuOpen(false);
+      if (activeChatJid && toDelete.includes(activeChatJid)) {
+        setActiveChatJid(null);
+      }
+    }
+  };
+
+  const toggleSelectJid = (jid: string) => {
+    setSelectedJids((prev) => 
+      prev.includes(jid) ? prev.filter((item) => item !== jid) : [...prev, jid]
+    );
+  };
+
   return (
-    <div className="w-[400px] min-w-[340px] h-full bg-wa-sidebar border-r border-wa-border flex flex-col select-none">
+    <div className="w-[400px] min-w-[340px] h-full bg-wa-sidebar border-r border-wa-border flex flex-col select-none relative">
+      {/* Start New Chat Modal */}
+      {isAddChatOpen && (
+        <div className="absolute inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+          <div className="bg-wa-header border border-wa-border rounded-xl p-5 w-full max-w-sm shadow-2xl">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-base font-semibold text-wa-textPrimary">Start New Chat</h3>
+              <button onClick={() => setIsAddChatOpen(false)} className="text-wa-textSecondary hover:text-wa-textPrimary">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateChat} className="space-y-3">
+              <div>
+                <label className="block text-xs text-wa-textSecondary mb-1">Phone Number (with Country Code)</label>
+                <input
+                  type="text"
+                  placeholder="e.g. 919876543210 or 9876543210"
+                  value={newPhoneInput}
+                  onChange={(e) => setNewPhoneInput(e.target.value)}
+                  className="w-full px-3 py-2 bg-wa-sidebar border border-wa-border rounded-lg text-sm text-wa-textPrimary focus:outline-none focus:border-wa-accent"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs text-wa-textSecondary mb-1">Contact Name (Optional)</label>
+                <input
+                  type="text"
+                  placeholder="e.g. John Lead"
+                  value={newNameInput}
+                  onChange={(e) => setNewNameInput(e.target.value)}
+                  className="w-full px-3 py-2 bg-wa-sidebar border border-wa-border rounded-lg text-sm text-wa-textPrimary focus:outline-none focus:border-wa-accent"
+                />
+              </div>
+
+              <div className="flex space-x-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setIsAddChatOpen(false)}
+                  className="flex-1 py-2 bg-wa-sidebar hover:bg-wa-hover text-wa-textSecondary rounded-lg text-xs font-semibold"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 py-2 bg-wa-accent hover:bg-emerald-600 text-wa-bg rounded-lg text-xs font-semibold"
+                >
+                  Start Chat
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* Sidebar Top Header */}
       <div className="h-16 px-4 bg-wa-header flex items-center justify-between border-b border-wa-border">
-        {/* Left Platform Switcher Icons */}
-        <div className="flex items-center space-x-2">
-          <button 
-            onClick={() => setActivePlatform('whatsapp')}
-            title="WhatsApp Workspace"
-            className={`p-2 rounded-full transition-all ${
-              activePlatform === 'whatsapp' 
-                ? 'bg-wa-accent/20 text-wa-accent' 
-                : 'text-wa-textSecondary hover:bg-wa-hover'
-            }`}
+        <div className="flex items-center space-x-3">
+          <div className="flex items-center space-x-2">
+            <button 
+              onClick={() => setActivePlatform('whatsapp')}
+              title="WhatsApp Workspace"
+              className={`p-2 rounded-full transition-all ${
+                activePlatform === 'whatsapp' 
+                  ? 'bg-wa-accent/20 text-wa-accent' 
+                  : 'text-wa-textSecondary hover:bg-wa-hover'
+              }`}
+            >
+              <MessageSquare className="w-5 h-5" />
+            </button>
+            <span className="text-sm font-semibold text-wa-textPrimary">WhatsApp</span>
+          </div>
+
+          <button
+            onClick={() => setIsAddChatOpen(true)}
+            title="Start New Chat"
+            className="p-1.5 bg-wa-accent/20 text-wa-accent hover:bg-wa-accent/30 rounded-full transition-colors"
           >
-            <MessageSquare className="w-5 h-5" />
-          </button>
-          
-          <button 
-            onClick={() => setActivePlatform('instagram')}
-            title="Instagram Direct Messages"
-            className={`p-2 rounded-full transition-all ${
-              activePlatform === 'instagram' 
-                ? 'bg-pink-500/20 text-pink-400' 
-                : 'text-wa-textSecondary hover:bg-wa-hover'
-            }`}
-          >
-            <Instagram className="w-5 h-5" />
+            <span className="text-base font-bold leading-none px-1">+</span>
           </button>
         </div>
 
-        {/* Connection Status & Account Controls */}
-        <div className="flex items-center space-x-3">
+        <div className="flex items-center space-x-2 relative">
           {sessionState.status === 'CONNECTED' ? (
             <div className="flex items-center space-x-1.5 px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20">
               <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
               <span className="text-xs font-medium text-emerald-400">Connected</span>
             </div>
-          ) : sessionState.status === 'QR_READY' || sessionState.status === 'CONNECTING' ? (
-            <div className="flex items-center space-x-1.5 px-2.5 py-1 rounded-full bg-amber-500/10 border border-amber-500/20 animate-pulse">
+          ) : (
+            <div className="flex items-center space-x-1.5 px-2.5 py-1 rounded-full bg-amber-500/10 border border-amber-500/20">
               <QrCode className="w-3.5 h-3.5 text-amber-400" />
               <span className="text-xs font-medium text-amber-400">Scan QR</span>
             </div>
-          ) : (
-            <div className="flex items-center space-x-1.5 px-2.5 py-1 rounded-full bg-rose-500/10 border border-rose-500/20">
-              <AlertCircle className="w-3.5 h-3.5 text-rose-400" />
-              <span className="text-xs font-medium text-rose-400">Offline</span>
-            </div>
           )}
 
-          {sessionState.status === 'CONNECTED' ? (
-            <button
-              onClick={disconnectSession}
-              title="Disconnect Session"
-              className="p-2 text-wa-textSecondary hover:text-rose-400 hover:bg-wa-hover rounded-full transition-colors"
-            >
-              <LogOut className="w-4 h-4" />
-            </button>
-          ) : (
-            <button
-              onClick={reconnectSession}
-              title="Reconnect Session"
-              className="p-2 text-wa-textSecondary hover:text-wa-accent hover:bg-wa-hover rounded-full transition-colors"
-            >
-              <RefreshCw className="w-4 h-4" />
-            </button>
+          <button
+            onClick={() => setIsMenuOpen(!isMenuOpen)}
+            title="Menu Options"
+            className="p-2 text-wa-textSecondary hover:bg-wa-hover rounded-full transition-colors"
+          >
+            <MoreVertical className="w-5 h-5" />
+          </button>
+
+          {isMenuOpen && (
+            <div className="absolute right-0 top-12 w-48 bg-wa-header border border-wa-border rounded-xl shadow-2xl py-1 z-50 text-sm">
+              <button
+                onClick={() => {
+                  setIsSelectMode(!isSelectMode);
+                  setIsMenuOpen(false);
+                }}
+                className="w-full px-4 py-2 text-left hover:bg-wa-hover text-wa-textPrimary flex items-center space-x-2"
+              >
+                <span>{isSelectMode ? '✓ Cancel selection' : '1. Select chats'}</span>
+              </button>
+
+              <button
+                onClick={handleDeleteSelectedChats}
+                className="w-full px-4 py-2 text-left hover:bg-wa-hover text-rose-400 flex items-center space-x-2"
+              >
+                <span>2. Delete chats</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  setIsMenuOpen(false);
+                  disconnectSession();
+                }}
+                className="w-full px-4 py-2 text-left hover:bg-wa-hover text-wa-textSecondary flex items-center space-x-2 border-t border-wa-border/50 mt-1"
+              >
+                <span>3. Log out</span>
+              </button>
+            </div>
           )}
         </div>
       </div>
@@ -171,13 +302,13 @@ export const Sidebar = () => {
             placeholder="Search or start new chat..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full bg-transparent text-sm text-wa-textPrimary placeholder-wa-textSecondary focus:outline-none"
+            className="w-full bg-transparent text-sm text-wa-textPrimary focus:outline-none placeholder-wa-textSecondary/60"
           />
         </div>
       </div>
 
-      {/* Filter Tabs (All, Unread, Follow-ups) */}
-      <div className="px-3 py-2 border-b border-wa-border flex items-center space-x-2">
+      {/* Filter Tabs */}
+      <div className="flex items-center space-x-2 px-3 py-2 bg-wa-sidebar border-b border-wa-border">
         <button
           onClick={() => setActiveTab('all')}
           className={`px-3 py-1 text-xs font-medium rounded-full transition-colors ${
@@ -226,63 +357,73 @@ export const Sidebar = () => {
               return tsB - tsA;
             })
             .map((chat) => {
-            const isActive = chat.jid === activeChatJid;
-            const displayName = formatChatDisplayName(chat);
-            return (
-              <div
-                key={chat.jid}
-                onClick={() => setActiveChatJid(chat.jid)}
-                className={`px-4 py-3 flex items-center cursor-pointer transition-colors ${
-                  isActive ? 'bg-wa-hover' : 'hover:bg-wa-header/60'
-                }`}
-              >
-                {/* Avatar */}
-                <div className="relative w-12 h-12 rounded-full overflow-hidden bg-wa-header flex items-center justify-center flex-shrink-0 mr-3">
-                  {chat.avatarUrl ? (
-                    <img src={chat.avatarUrl} alt={displayName} className="w-full h-full object-cover" />
-                  ) : (
-                    <div className="w-full h-full bg-wa-accent/20 flex items-center justify-center text-wa-accent font-semibold text-lg">
-                      {displayName.charAt(0).toUpperCase()}
-                    </div>
+              const isActive = chat.jid === activeChatJid;
+              const displayName = formatChatDisplayName(chat);
+              const isSelected = selectedJids.includes(chat.jid);
+              return (
+                <div
+                  key={chat.jid}
+                  onClick={() => isSelectMode ? toggleSelectJid(chat.jid) : setActiveChatJid(chat.jid)}
+                  className={`px-4 py-3 flex items-center cursor-pointer transition-colors ${
+                    isActive ? 'bg-wa-hover' : 'hover:bg-wa-header/60'
+                  }`}
+                >
+                  {isSelectMode && (
+                    <input
+                      type="checkbox"
+                      checked={isSelected}
+                      onChange={() => toggleSelectJid(chat.jid)}
+                      className="mr-3 w-4 h-4 accent-wa-accent rounded cursor-pointer"
+                    />
                   )}
-                </div>
 
-                {/* Chat Info */}
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between mb-1">
-                    <h4 className="text-sm font-semibold text-wa-textPrimary truncate mr-2">
-                      {displayName}
-                    </h4>
-                    <span className="text-[11px] text-wa-textSecondary whitespace-nowrap">
-                      {formatTimestamp(chat.lastMessageAt)}
-                    </span>
+                  {/* Avatar */}
+                  <div className="relative w-12 h-12 rounded-full overflow-hidden bg-wa-header flex items-center justify-center flex-shrink-0 mr-3">
+                    {chat.avatarUrl ? (
+                      <img src={chat.avatarUrl} alt={displayName} className="w-full h-full object-cover" />
+                    ) : (
+                      <div className="w-full h-full bg-wa-accent/20 flex items-center justify-center text-wa-accent font-semibold text-lg">
+                        {displayName.charAt(0).toUpperCase()}
+                      </div>
+                    )}
                   </div>
 
-                  <div className="flex items-center justify-between">
-                    <p className="text-xs text-wa-textSecondary truncate mr-2">
-                      {chat.lastMessagePreview === '[REVOKED]'
-                        ? '🚫 This message was deleted'
-                        : chat.lastMessagePreview === '[E2E_NOTIFICATION]'
-                        ? '🔒 Encryption notice'
-                        : chat.lastMessagePreview === '[CHAT]'
-                        ? '👤 Contact Card'
-                        : chat.lastMessagePreview || 'No messages'}
-                    </p>
-                    
-                    <div className="flex items-center space-x-1.5 flex-shrink-0">
-                      {getLeadStatusBadge(chat.leadStatus)}
+                  {/* Chat Info */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between mb-1">
+                      <h4 className="text-sm font-semibold text-wa-textPrimary truncate mr-2">
+                        {displayName}
+                      </h4>
+                      <span className="text-[11px] text-wa-textSecondary whitespace-nowrap">
+                        {formatTimestamp(chat.lastMessageAt)}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs text-wa-textSecondary truncate mr-2">
+                        {chat.lastMessagePreview === '[REVOKED]'
+                          ? '🚫 This message was deleted'
+                          : chat.lastMessagePreview === '[E2E_NOTIFICATION]'
+                          ? '🔒 Encryption notice'
+                          : chat.lastMessagePreview === '[CHAT]'
+                          ? '👤 Contact Card'
+                          : chat.lastMessagePreview || 'No messages'}
+                      </p>
                       
-                      {chat.unreadCount > 0 && (
-                        <span className="w-5 h-5 rounded-full bg-wa-accent text-wa-bg font-bold text-[10px] flex items-center justify-center">
-                          {chat.unreadCount}
-                        </span>
-                      )}
+                      <div className="flex items-center space-x-1.5 flex-shrink-0">
+                        {getLeadStatusBadge(chat.leadStatus)}
+                        
+                        {chat.unreadCount > 0 && (
+                          <span className="w-5 h-5 rounded-full bg-wa-accent text-wa-bg font-bold text-[10px] flex items-center justify-center">
+                            {chat.unreadCount}
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
-            );
-          })
+              );
+            })
         )}
       </div>
     </div>

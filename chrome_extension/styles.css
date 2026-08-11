@@ -14,48 +14,48 @@
 
 /* Floating CRM Trigger Button on WhatsApp Web */
 #aiv-crm-trigger-btn {
-  position: fixed;
-  bottom: 24px;
-  right: 24px;
-  z-index: 99999;
-  background: linear-gradient(135deg, #00a884 0%, #008f70 100%);
-  color: #ffffff;
-  border: none;
-  border-radius: 30px;
-  padding: 12px 20px;
-  font-family: var(--aiv-font);
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-  box-shadow: 0 8px 24px rgba(0, 168, 132, 0.4);
-  display: flex;
-  items-center: center;
-  gap: 8px;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  position: fixed !important;
+  bottom: 30px !important;
+  right: 30px !important;
+  z-index: 9999999 !important;
+  background: linear-gradient(135deg, #00a884 0%, #008f70 100%) !important;
+  color: #ffffff !important;
+  border: 1px solid rgba(255, 255, 255, 0.2) !important;
+  border-radius: 30px !important;
+  padding: 14px 22px !important;
+  font-family: var(--aiv-font) !important;
+  font-size: 14px !important;
+  font-weight: 700 !important;
+  cursor: pointer !important;
+  box-shadow: 0 10px 30px rgba(0, 168, 132, 0.6) !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 10px !important;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
 }
 
 #aiv-crm-trigger-btn:hover {
-  transform: translateY(-2px) scale(1.03);
-  box-shadow: 0 12px 28px rgba(0, 168, 132, 0.5);
+  transform: translateY(-3px) scale(1.04) !important;
+  box-shadow: 0 14px 36px rgba(0, 168, 132, 0.7) !important;
 }
 
 /* Slide-Over Side Panel */
 #aiv-crm-panel {
-  position: fixed;
-  top: 0;
-  right: -420px;
-  width: 400px;
-  height: 100vh;
-  z-index: 99998;
-  background: var(--aiv-bg);
-  border-left: 1px solid var(--aiv-border);
-  box-shadow: -10px 0 30px rgba(0, 0, 0, 0.5);
-  font-family: var(--aiv-font);
-  color: var(--aiv-text-primary);
-  display: flex;
-  flex-direction: column;
-  transition: right 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  box-sizing: border-box;
+  position: fixed !important;
+  top: 0 !important;
+  right: -440px !important;
+  width: 420px !important;
+  height: 100vh !important;
+  z-index: 9999998 !important;
+  background: var(--aiv-bg) !important;
+  border-left: 1px solid var(--aiv-border) !important;
+  box-shadow: -12px 0 36px rgba(0, 0, 0, 0.6) !important;
+  font-family: var(--aiv-font) !important;
+  color: var(--aiv-text-primary) !important;
+  display: flex !important;
+  flex-direction: column !important;
+  transition: right 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  box-sizing: border-box !important;
 }
 
 #aiv-crm-panel.aiv-open {

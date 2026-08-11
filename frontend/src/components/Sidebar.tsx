@@ -217,7 +217,15 @@ export const Sidebar = () => {
             {searchQuery ? 'No conversations matching search.' : 'No chats synced yet.'}
           </div>
         ) : (
-          filteredChats.map((chat) => {
+          [...filteredChats]
+            .sort((a, b) => {
+              let tsA = a.lastMessageAt || 0;
+              let tsB = b.lastMessageAt || 0;
+              if (tsA > 0 && tsA < 10000000000) tsA *= 1000;
+              if (tsB > 0 && tsB < 10000000000) tsB *= 1000;
+              return tsB - tsA;
+            })
+            .map((chat) => {
             const isActive = chat.jid === activeChatJid;
             const displayName = formatChatDisplayName(chat);
             return (

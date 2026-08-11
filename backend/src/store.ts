@@ -322,6 +322,10 @@ class StorageEngine {
     const chatJid = this.resolveJid(msg.chatJid);
     msg.chatJid = chatJid;
 
+    if (msg.timestamp && msg.timestamp < 10000000000) {
+      msg.timestamp = msg.timestamp * 1000;
+    }
+
     const list = this.messages.get(chatJid) || [];
     const existingIdx = list.findIndex(m => m.id === msg.id);
     if (existingIdx >= 0) {

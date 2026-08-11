@@ -54,48 +54,52 @@ async function runBackupImport() {
         // 1. Process WhatsApp Web 'contact' store and build full LID->Phone map
         const contactsList = dump.contact || dump.contacts || [];
         for (const c of contactsList) {
-          if (!c || !c.id) continue;
+          if (!c) continue;
 
-          const rawId = String(c.id);
-          const cleanId = rawId.split('@')[0];
+          const rawId = typeof c.id === 'object' ? String(c.id?._serialized || c.id?.user || '') : String(c.id || '');
+          const cleanId = rawId.split('@')[0].replace(/\D/g, '');
 
-          let phoneJid = '';
+          let phoneNum = '';
           if (c.phoneNumber) {
-            phoneJid = String(c.phoneNumber).replace('@c.us', '@s.whatsapp.net');
+            phoneNum = String(c.phoneNumber).split('@')[0].replace(/\D/g, '');
           } else if (c.pnJid) {
-            phoneJid = String(c.pnJid).replace('@c.us', '@s.whatsapp.net');
+            phoneNum = String(c.pnJid).split('@')[0].replace(/\D/g, '');
           } else if (c.user && String(c.user).length <= 12) {
-            phoneJid = `${c.user}@s.whatsapp.net`;
-          } else if (!rawId.includes('@lid') && !rawId.includes('@g.us') && cleanId.length <= 12) {
-            phoneJid = `${cleanId}@s.whatsapp.net`;
+            phoneNum = String(c.user).replace(/\D/g, '');
+          } else if (cleanId.length <= 12) {
+            phoneNum = cleanId;
           }
 
-          const lidJid = c.lid || (rawId.includes('@lid') ? rawId : (cleanId.length > 12 ? cleanId : ''));
+          const phoneJid = phoneNum ? `${phoneNum}@s.whatsapp.net` : '';
+          const lidJid = c.lid || (rawId.includes('@lid') ? rawId : (cleanId.length > 12 ? `${cleanId}@lid` : ''));
+
           if (lidJid && phoneJid) {
             db.registerLidMapping(lidJid, phoneJid);
             db.registerLidMapping(lidJid.split('@')[0], phoneJid);
             db.registerLidMapping(cleanId, phoneJid);
           }
 
-          const rawPhoneNum = phoneJid ? phoneJid.split('@')[0] : (cleanId.length <= 12 ? cleanId : '');
-          if (!rawPhoneNum) continue;
+          const savedName = c.name || c.formattedName || c.displayName || c.shortName || c.pushname || c.verifiedName;
+          if (!savedName || savedName.includes('@') || savedName === cleanId) continue;
 
-          const formattedFallback = db.formatPhoneFallback(rawPhoneNum);
-          const savedName = (c.name && !c.name.includes('@') && c.name !== cleanId ? c.name : undefined) ||
-                            (c.formattedName && !c.formattedName.includes('@') ? c.formattedName : undefined) ||
-                            c.displayName || c.shortName || c.pushname || c.verifiedName || formattedFallback;
+          // Save contact name under phone JID
+          if (phoneJid) {
+            db.upsertContact(phoneJid, { jid: phoneJid, name: savedName, phone: phoneNum });
+            db.updateContactName(phoneJid, savedName);
+          }
 
-          const targetJid = phoneJid || `${rawPhoneNum}@s.whatsapp.net`;
-
-          db.upsertContact(targetJid, {
-            jid: targetJid,
-            name: savedName,
-            phone: rawPhoneNum,
-          });
-
+          // Save contact name under LID keys
           if (lidJid) {
             db.upsertContact(lidJid, { name: savedName });
+            db.updateContactName(lidJid, savedName);
+          }
+          if (cleanId) {
             db.upsertContact(cleanId, { name: savedName });
+            db.updateContactName(cleanId, savedName);
+          }
+          if (rawId) {
+            db.upsertContact(rawId, { name: savedName });
+            db.updateContactName(rawId, savedName);
           }
 
           contactsImported++;

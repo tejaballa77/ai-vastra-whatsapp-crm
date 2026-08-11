@@ -32,18 +32,24 @@ export const Sidebar = () => {
   const [searchQuery, setSearchQuery] = useState('');
 
   const formatChatDisplayName = (chat: any) => {
-    if (!chat) return 'Unknown';
+    if (!chat) return 'Unsaved Contact';
+    const clean = (chat.phone || chat.jid || '').split('@')[0].replace(/\D/g, '');
     const name = chat.name || '';
-    if (name && name !== 'Unsaved Contact' && !name.startsWith('1489') && !name.startsWith('14') && !name.startsWith('15') && !name.startsWith('16')) {
+
+    // If chat.name is a real saved contact name (e.g. BALAJEE TEXTILE, Durga Rao Sir, Nikhil Amartex, etc.)
+    if (name && name !== 'Unsaved Contact' && name !== clean && !name.includes('@') && clean.length <= 12 && !/^\d{13,}$/.test(name.replace(/\D/g, ''))) {
       return name;
     }
-    const clean = (chat.phone || chat.jid || '').split('@')[0].replace(/\D/g, '');
+
     if (clean.length === 12 && clean.startsWith('91')) {
       const ten = clean.slice(2);
       return `+91 ${ten.slice(0, 5)} ${ten.slice(5)}`;
     }
     if (clean.length === 10) {
       return `+91 ${clean.slice(0, 5)} ${clean.slice(5)}`;
+    }
+    if (clean.length > 12) {
+      return 'Unsaved Contact';
     }
     return clean ? `+${clean}` : 'Unsaved Contact';
   };

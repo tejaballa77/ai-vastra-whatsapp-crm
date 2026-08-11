@@ -246,7 +246,13 @@ export const Sidebar = () => {
 
                   <div className="flex items-center justify-between">
                     <p className="text-xs text-wa-textSecondary truncate mr-2">
-                      {chat.lastMessagePreview || 'No messages'}
+                      {chat.lastMessagePreview === '[REVOKED]'
+                        ? '🚫 This message was deleted'
+                        : chat.lastMessagePreview === '[E2E_NOTIFICATION]'
+                        ? '🔒 Encryption notice'
+                        : chat.lastMessagePreview === '[CHAT]'
+                        ? '👤 Contact Card'
+                        : chat.lastMessagePreview || 'No messages'}
                     </p>
                     
                     <div className="flex items-center space-x-1.5 flex-shrink-0">

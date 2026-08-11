@@ -137,6 +137,25 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ isCrmOpen, toggleCrm }) 
       <div className="flex-1 overflow-y-auto p-4 space-y-3">
         {messageList.map((msg) => {
           const isOutbound = msg.fromMe;
+          const text = msg.text || '';
+
+          // 1. Center System Notifications (E2E encryption notices, group notices)
+          if (text === '[E2E_NOTIFICATION]' || text.includes('end-to-end encrypted') || text.includes('Messages and calls are end-to-end')) {
+            return (
+              <div key={msg.id} className="flex justify-center my-2 select-none">
+                <div className="bg-wa-header text-[11px] text-amber-200/80 px-3 py-1 rounded-md max-w-[85%] text-center border border-amber-500/20 shadow-sm">
+                  🔒 Messages and calls are end-to-end encrypted.
+                </div>
+              </div>
+            );
+          }
+
+          // 2. Hide raw [CHAT] artifact label
+          const cleanText = text === '[CHAT]' || text === 'Contact' ? '' : text;
+
+          // 3. Format Deleted / Revoked Messages
+          const isRevoked = text === '[REVOKED]' || text === 'This message was deleted';
+          
           return (
             <div
               key={msg.id}
@@ -149,13 +168,20 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ isCrmOpen, toggleCrm }) 
                     : 'bg-wa-incomingBubble text-wa-textPrimary rounded-tl-none'
                 }`}
               >
-                {!isOutbound && msg.senderName && (
+                {/* Only show sender name in Group Chats */}
+                {!isOutbound && activeChat.isGroup && msg.senderName && (
                   <span className="block text-[11px] font-semibold text-wa-accent mb-0.5">
                     {msg.senderName}
                   </span>
                 )}
 
-                <p className="whitespace-pre-wrap break-words leading-relaxed">{msg.text}</p>
+                {isRevoked ? (
+                  <p className="italic text-wa-textSecondary/80 text-xs flex items-center space-x-1">
+                    <span>🚫 This message was deleted</span>
+                  </p>
+                ) : (
+                  cleanText && <p className="whitespace-pre-wrap break-words leading-relaxed">{cleanText}</p>
+                )}
 
                 <div className="flex items-center justify-end space-x-1 mt-1 text-[10px] text-wa-textSecondary/80">
                   <span>{format(new Date(msg.timestamp), 'h:mm a')}</span>

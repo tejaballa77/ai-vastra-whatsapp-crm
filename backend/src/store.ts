@@ -302,7 +302,7 @@ class StorageEngine {
     return updated;
   }
 
-  public addMessage(msg: CRMMessage) {
+  public addMessage(msg: CRMMessage, skipSave: boolean = false) {
     const chatJid = this.resolveJid(msg.chatJid);
     msg.chatJid = chatJid;
 
@@ -332,13 +332,8 @@ class StorageEngine {
     chat.lastMessagePreview = msg.text || (msg.mediaType ? `[${msg.mediaType.toUpperCase()}]` : '');
     chat.lastMessageAt = Math.max(chat.lastMessageAt || 0, msg.timestamp);
 
-    if (msg.senderName && msg.senderName !== 'Me' && msg.senderName !== chatJid.split('@')[0] && chat.name === this.formatPhoneFallback(chatJid.split('@')[0])) {
-      chat.name = msg.senderName;
-      this.upsertContact(chatJid, { name: msg.senderName });
-    }
-
     this.chats.set(chatJid, chat);
-    this.saveData();
+    if (!skipSave) this.saveData();
     return msg;
   }
 

@@ -182,7 +182,7 @@ async function runBackupImport() {
             mediaType: mediaType,
             timestamp: timestamp,
             status: 'READ',
-          });
+          }, true);
         }
 
         // 6. Cleanup raw LID entries in db.chats if resolved phone JID exists

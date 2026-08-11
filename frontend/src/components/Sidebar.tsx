@@ -138,21 +138,19 @@ export const Sidebar = () => {
 
           {/* Connection Status Icon */}
           {sessionState.status === 'CONNECTED' ? (
-            <button
-              onClick={disconnectSession}
-              title="Session Connected (Click to Disconnect)"
-              className="p-2 text-emerald-500 hover:bg-wa-hover rounded-full transition-colors"
+            <div
+              title="Session Connected"
+              className="p-2 text-emerald-500 rounded-full"
             >
               <CheckCircle2 className="w-5 h-5" />
-            </button>
+            </div>
           ) : sessionState.status === 'QR_READY' || sessionState.status === 'CONNECTING' ? (
-            <button
-              onClick={reconnectSession}
+            <div
               title="Connecting / Scan QR"
-              className="p-2 text-amber-500 hover:bg-wa-hover rounded-full transition-colors animate-pulse"
+              className="p-2 text-amber-500 rounded-full animate-pulse"
             >
               <QrCode className="w-5 h-5" />
-            </button>
+            </div>
           ) : (
             <button
               onClick={reconnectSession}

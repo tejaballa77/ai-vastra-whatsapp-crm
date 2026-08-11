@@ -35,7 +35,18 @@ export class WhatsAppEngine {
 
       const logger = pino({ level: 'silent' });
       const { state, saveCreds } = await useMultiFileAuthState(this.authFolder);
-      const { version } = await fetchLatestBaileysVersion();
+      let version: [number, number, number] = [2, 3000, 1015901307];
+      try {
+        const versionRes = await Promise.race([
+          fetchLatestBaileysVersion(),
+          new Promise<null>((resolve) => setTimeout(() => resolve(null), 2500))
+        ]);
+        if (versionRes && (versionRes as any).version) {
+          version = (versionRes as any).version;
+        }
+      } catch (e) {
+        console.warn('[WhatsApp Engine] Version fetch timeout, using fallback version.');
+      }
 
       console.log(`[WhatsApp Engine] Baileys Version: ${version.join('.')}`);
 
@@ -383,6 +394,7 @@ export class WhatsAppEngine {
     console.log('[WhatsApp Engine] Disconnecting and revoking session...');
     try {
       if (this.sock) {
+        this.sock.ev.removeAllListeners('connection.update');
         await this.sock.logout();
       }
     } catch (err) {
@@ -396,7 +408,7 @@ export class WhatsAppEngine {
     this.broadcastStatus();
 
     // Trigger re-initialization to show fresh QR code immediately
-    setTimeout(() => this.initialize(), 1000);
+    setTimeout(() => this.initialize(), 500);
   }
 
   public async fetchAndCacheProfilePic(rawJid: string) {

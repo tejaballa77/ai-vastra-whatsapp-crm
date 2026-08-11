@@ -1,11 +1,28 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect } from 'react';
 import { useSocket } from '../context/SocketContext';
 import { QrCode, Smartphone, RefreshCw, CheckCircle2 } from 'lucide-react';
 
 export const QrCodeModal = () => {
   const { sessionState, reconnectSession } = useSocket();
+
+  useEffect(() => {
+    if (sessionState.status === 'CONNECTED') return;
+    const backendUrl = typeof window !== 'undefined' ? window.location.origin : '';
+    const pollTimer = setInterval(() => {
+      fetch(`${backendUrl}/api/session/status`)
+        .then((res) => res.json())
+        .then((data) => {
+          if (data && data.currentQrCode && !sessionState.currentQrCode) {
+            // Trigger state refresh
+          }
+        })
+        .catch(() => {});
+    }, 2000);
+
+    return () => clearInterval(pollTimer);
+  }, [sessionState.status, sessionState.currentQrCode]);
 
   if (sessionState.status === 'CONNECTED') {
     return null;

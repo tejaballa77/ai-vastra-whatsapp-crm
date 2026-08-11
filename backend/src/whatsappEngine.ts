@@ -26,7 +26,13 @@ export class WhatsAppEngine {
   }
 
   public async initialize() {
-    if (this.sock) return;
+    if (this.sock) {
+      try {
+        this.sock.ev.removeAllListeners('connection.update');
+        this.sock.end(undefined);
+      } catch (e) {}
+      this.sock = null;
+    }
 
     try {
       console.log('[WhatsApp Engine] Initializing Baileys Multi-Device session...');

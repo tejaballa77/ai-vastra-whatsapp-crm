@@ -104,7 +104,12 @@ class StorageEngine {
 
   public resolveJid(jid: string): string {
     if (!jid) return jid;
-    return this.lidToJidMap.get(jid) || this.lidToJidMap.get(jid.split('@')[0]) || jid;
+    const clean = jid.split('@')[0];
+    const mapped = this.lidToJidMap.get(jid) || this.lidToJidMap.get(clean);
+    const target = mapped || jid;
+    const targetClean = target.split('@')[0];
+    if (target.endsWith('@g.us')) return `${targetClean}@g.us`;
+    return `${targetClean}@s.whatsapp.net`;
   }
 
   public getContactName(rawJid: string): string {

@@ -226,9 +226,37 @@ async function runBackupImport() {
               chat.jid = mapped;
               db.chats.set(mapped, chat);
             } else {
-              // Delete raw unmapped 15-digit LID chat so raw 15-digit LID strings NEVER display in UI!
               db.chats.delete(jid);
             }
+          }
+        }
+
+        // 7. Recalculate lastMessageAt & lastMessagePreview for ALL chats from message history
+        for (const [jid, chat] of db.chats.entries()) {
+          const msgs = db.messages.get(jid) || [];
+          if (msgs.length > 0) {
+            const lastMsg = msgs[msgs.length - 1];
+            if (lastMsg.timestamp) {
+              const normalizedTs = lastMsg.timestamp < 10000000000 ? lastMsg.timestamp * 1000 : lastMsg.timestamp;
+              chat.lastMessageAt = Math.max(chat.lastMessageAt || 0, normalizedTs);
+            }
+
+            const text = lastMsg.text || '';
+            const isNotice = text === '[E2E_NOTIFICATION]' || text === '[CALL_LOG]' || text.includes('end-to-end encrypted');
+            if (!isNotice) {
+              if (text === '[REVOKED]' || text === 'This message was deleted') {
+                chat.lastMessagePreview = '🚫 This message was deleted';
+              } else if (lastMsg.mediaType === 'image' || text === '[IMAGE]' || text === 'Photo') {
+                chat.lastMessagePreview = '📷 Photo';
+              } else if (lastMsg.mediaType === 'document' || text === '[DOCUMENT]' || text === 'Document' || (lastMsg.fileName && lastMsg.fileName.endsWith('.pdf'))) {
+                chat.lastMessagePreview = `📄 ${lastMsg.fileName || 'Document'}`;
+              } else if (lastMsg.mediaType === 'audio' || text === '[AUDIO]') {
+                chat.lastMessagePreview = '🎵 Voice Note';
+              } else if (text && text !== '[CHAT]' && text !== 'Contact') {
+                chat.lastMessagePreview = text;
+              }
+            }
+            db.chats.set(jid, chat);
           }
         }
 

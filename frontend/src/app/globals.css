@@ -3,36 +3,14 @@
 @tailwind utilities;
 
 :root {
-  --wa-bg: #f0f2f5;
-  --wa-sidebar: #ffffff;
-  --wa-header: #f0f2f5;
-  --wa-chat-bg: #efeae2;
-  --wa-incoming-bubble: #ffffff;
-  --wa-outgoing-bubble: #d9fdd3;
-  --wa-accent: #00a884;
-  --wa-hover: #f5f6f6;
-  --wa-text-primary: #111b21;
-  --wa-text-secondary: #667781;
-  --wa-border: #e9edef;
-}
-
-[data-theme='dark'] {
-  --wa-bg: #0b141a;
-  --wa-sidebar: #111b21;
-  --wa-header: #202c33;
-  --wa-chat-bg: #0b141a;
-  --wa-incoming-bubble: #202c33;
-  --wa-outgoing-bubble: #005c4b;
-  --wa-accent: #00a884;
-  --wa-hover: #2a3942;
-  --wa-text-primary: #e9edef;
-  --wa-text-secondary: #8696a0;
-  --wa-border: #222d34;
+  --foreground-rgb: 233, 237, 239;
+  --background-start-rgb: 11, 20, 26;
+  --background-end-rgb: 17, 27, 33;
 }
 
 body {
-  color: var(--wa-text-primary);
-  background: var(--wa-bg);
+  color: rgb(var(--foreground-rgb));
+  background: #0b141a;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   overflow: hidden;
   user-select: none;
@@ -59,7 +37,7 @@ body {
 
 /* WhatsApp Chat Wallpaper Overlay Pattern */
 .wa-chat-pattern {
-  background-color: var(--wa-chat-bg);
-  background-image: radial-gradient(rgba(0, 0, 0, 0.04) 1px, transparent 0);
+  background-color: #0b141a;
+  background-image: radial-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 0);
   background-size: 24px 24px;
 }

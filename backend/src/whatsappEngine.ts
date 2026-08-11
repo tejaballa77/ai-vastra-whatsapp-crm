@@ -250,12 +250,14 @@ export class WhatsAppEngine {
   private resolveBestContactName(jid: string, name?: string, notify?: string, verifiedName?: string): string {
     const rawNumber = jid.split('@')[0];
 
+    if (name && name !== rawNumber) return name;
+    if (notify && notify !== rawNumber) return notify;
+    if (verifiedName && verifiedName !== rawNumber) return verifiedName;
+
     const existingContact = db.contacts.get(jid);
-    if (existingContact?.name && existingContact.name !== rawNumber && !existingContact.name.startsWith('+3') && !existingContact.name.startsWith('+8') && existingContact.name !== 'Unsaved Contact') {
+    if (existingContact?.name && existingContact.name !== rawNumber) {
       return existingContact.name;
     }
-
-    if (name && name !== rawNumber) return name;
 
     return db.formatPhoneFallback(rawNumber);
   }
@@ -312,6 +314,10 @@ export class WhatsAppEngine {
     const pushName = msg.pushName;
     const resolvedName = this.resolveBestContactName(chatJid, undefined, pushName);
     const senderName = fromMe ? 'Me' : resolvedName;
+
+    if (pushName && !fromMe) {
+      db.upsertContact(chatJid, { name: pushName });
+    }
 
     const crmMsg: CRMMessage = {
       id,

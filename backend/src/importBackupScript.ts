@@ -64,28 +64,25 @@ async function runBackupImport() {
           }
 
           if (rawId.includes('@lid') && phoneJid) {
-            db.registerLidMapping(rawId, phoneJid, true);
-            db.registerLidMapping(cleanId, phoneJid, true);
+            db.registerLidMapping(rawId, phoneJid);
+            db.registerLidMapping(cleanId, phoneJid);
           }
 
           const rawPhoneNum = phoneJid ? phoneJid.split('@')[0] : cleanId;
-          const formattedPhone = db.formatPhoneFallback(rawPhoneNum);
-
-          // Rule: Use c.name ONLY if it's a saved address book name. If unsaved, ALWAYS use clean formatted phone number (+91 XXXXX XXXXX). NEVER use pushname or raw LID.
-          const isSavedInAddressBook = Boolean(c.name && !c.name.includes('@') && !c.name.startsWith('+') && c.name !== rawPhoneNum && c.name !== cleanId);
-          const contactName = isSavedInAddressBook ? c.name : formattedPhone;
+          const formattedFallback = db.formatPhoneFallback(rawPhoneNum);
+          const savedName = c.name || c.formattedName || c.shortName || c.pushname || c.verifiedName || formattedFallback;
 
           const targetJid = phoneJid || rawId;
 
           db.upsertContact(targetJid, {
             jid: targetJid,
-            name: contactName,
+            name: savedName,
             phone: rawPhoneNum,
           });
 
           if (phoneJid) {
-            db.upsertContact(rawId, { name: contactName });
-            db.upsertContact(cleanId, { name: contactName });
+            db.upsertContact(rawId, { name: savedName });
+            db.upsertContact(cleanId, { name: savedName });
           }
 
           contactsImported++;
@@ -126,8 +123,7 @@ async function runBackupImport() {
           const contact = db.contacts.get(resolvedJid) || db.contacts.get(rawId);
           const rawNum = resolvedJid.split('@')[0];
 
-          const isSavedName = Boolean(contact?.name && !contact.name.includes('@') && !contact.name.startsWith('+3') && !contact.name.startsWith('+8') && !contact.name.startsWith('+1') && !contact.name.startsWith('+2') && contact.name !== 'Unsaved Contact');
-          const name = isSavedName ? contact!.name : db.formatPhoneFallback(rawNum);
+          const name = contact?.name || ch.name || ch.formattedTitle || db.formatPhoneFallback(rawNum);
 
           db.upsertChat(resolvedJid, {
             jid: resolvedJid,
@@ -139,20 +135,19 @@ async function runBackupImport() {
         }
 
         // 5. Process 'message' store with exact historical timestamps
-        const msgList = dump.message || dump.messages || dump['message-history'] || [];
-        let messagesImported = 0;
-
+        const msgList = dump.message || dump.messages || [];
         for (const m of msgList) {
           if (!m) continue;
-          const bodyText = m.body || m.caption || m.text || (m.type ? `[${m.type.toUpperCase()}]` : 'Message');
+          const bodyText = m.body || m.caption || m.text || '';
+          if (!bodyText) continue;
 
           const toJid = typeof m.to === 'object' ? m.to?._serialized : String(m.to || '');
           const fromJid = typeof m.from === 'object' ? m.from?._serialized : String(m.from || '');
-          const fromMe = Boolean(m.id?.startsWith('true_') || m.fromMe);
-          const rawChatJid = m.chatId || (fromMe ? toJid : fromJid) || toJid || fromJid;
+          const rawChatJid = m.chatId || toJid || fromJid;
           if (!rawChatJid || rawChatJid === '0@c.us') continue;
 
           const chatJid = db.resolveJid(rawChatJid);
+          const fromMe = Boolean(m.id?.startsWith('true_') || m.fromMe);
           const timestamp = m.t ? m.t * 1000 : (m.timestamp ? m.timestamp : Date.now());
 
           let mediaUrl: string | undefined = undefined;
@@ -183,8 +178,7 @@ async function runBackupImport() {
             mediaType: mediaType,
             timestamp: timestamp,
             status: 'READ',
-          }, true);
-          messagesImported++;
+          });
         }
 
         // 6. Cleanup raw LID entries in db.chats if resolved phone JID exists

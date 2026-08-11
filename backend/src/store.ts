@@ -94,10 +94,10 @@ class StorageEngine {
     }
   }
 
-  public registerLidMapping(lid: string, phoneJid: string, skipSave: boolean = false) {
+  public registerLidMapping(lid: string, phoneJid: string) {
     if (lid && phoneJid && lid !== phoneJid) {
       this.lidToJidMap.set(lid, phoneJid);
-      if (!skipSave) this.saveData();
+      this.saveData();
     }
   }
 
@@ -302,7 +302,7 @@ class StorageEngine {
     return updated;
   }
 
-  public addMessage(msg: CRMMessage, skipSave: boolean = false) {
+  public addMessage(msg: CRMMessage) {
     const chatJid = this.resolveJid(msg.chatJid);
     msg.chatJid = chatJid;
 
@@ -332,8 +332,13 @@ class StorageEngine {
     chat.lastMessagePreview = msg.text || (msg.mediaType ? `[${msg.mediaType.toUpperCase()}]` : '');
     chat.lastMessageAt = Math.max(chat.lastMessageAt || 0, msg.timestamp);
 
+    if (msg.senderName && msg.senderName !== 'Me' && msg.senderName !== chatJid.split('@')[0] && chat.name === this.formatPhoneFallback(chatJid.split('@')[0])) {
+      chat.name = msg.senderName;
+      this.upsertContact(chatJid, { name: msg.senderName });
+    }
+
     this.chats.set(chatJid, chat);
-    if (!skipSave) this.saveData();
+    this.saveData();
     return msg;
   }
 
@@ -361,24 +366,21 @@ class StorageEngine {
       const avatarUrl = this.contacts.get(resolvedKey)?.avatarUrl || c.avatarUrl;
 
       const msgs = this.getMessagesForChat(c.jid);
-      let lastMessagePreview = '';
-      let lastMessageAt = c.lastMessageAt || 0;
+      let lastMessagePreview = 'No messages';
+      let lastMessageAt = 0;
 
       if (msgs.length > 0) {
         const lastMsg = msgs[msgs.length - 1];
         lastMessagePreview = lastMsg.text || (lastMsg.mediaType ? `[${lastMsg.mediaType.toUpperCase()}]` : '');
-        lastMessageAt = Math.max(lastMessageAt, lastMsg.timestamp);
+        lastMessageAt = lastMsg.timestamp;
       }
-
-      // Only include active conversations with message history
-      if (!lastMessageAt && msgs.length === 0) continue;
 
       const updatedChat: CRMChat = {
         ...c,
         jid: resolvedKey,
         name,
         avatarUrl,
-        lastMessagePreview: lastMessagePreview || c.lastMessagePreview || 'Conversation started',
+        lastMessagePreview,
         lastMessageAt,
       };
 

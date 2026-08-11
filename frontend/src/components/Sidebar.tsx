@@ -13,7 +13,9 @@ import {
   AlertCircle, 
   QrCode,
   User,
-  Tag
+  Tag,
+  Sun,
+  Moon
 } from 'lucide-react';
 import { format, isToday, isYesterday } from 'date-fns';
 
@@ -30,6 +32,17 @@ export const Sidebar = () => {
   const [activePlatform, setActivePlatform] = useState<'whatsapp' | 'instagram'>('whatsapp');
   const [activeTab, setActiveTab] = useState<'all' | 'unread' | 'followups'>('all');
   const [searchQuery, setSearchQuery] = useState('');
+  const [theme, setTheme] = useState<'light' | 'dark'>('light');
+
+  const toggleTheme = () => {
+    const nextTheme = theme === 'light' ? 'dark' : 'light';
+    setTheme(nextTheme);
+    if (nextTheme === 'dark') {
+      document.documentElement.setAttribute('data-theme', 'dark');
+    } else {
+      document.documentElement.removeAttribute('data-theme');
+    }
+  };
 
   const formatChatDisplayName = (chat: any) => {
     if (!chat) return 'Unknown';
@@ -135,6 +148,14 @@ export const Sidebar = () => {
               <span className="text-xs font-medium text-rose-400">Offline</span>
             </div>
           )}
+
+          <button
+            onClick={toggleTheme}
+            title={theme === 'light' ? 'Switch to WhatsApp Dark Theme' : 'Switch to WhatsApp Light Theme'}
+            className="p-2 text-wa-textSecondary hover:text-wa-accent hover:bg-wa-hover rounded-full transition-colors"
+          >
+            {theme === 'light' ? <Moon className="w-4 h-4" /> : <Sun className="w-4 h-4" />}
+          </button>
 
           {sessionState.status === 'CONNECTED' ? (
             <button

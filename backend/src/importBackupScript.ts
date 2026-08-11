@@ -69,20 +69,23 @@ async function runBackupImport() {
           }
 
           const rawPhoneNum = phoneJid ? phoneJid.split('@')[0] : cleanId;
-          const formattedFallback = db.formatPhoneFallback(rawPhoneNum);
-          const savedName = c.name || c.formattedName || c.shortName || c.pushname || c.verifiedName || formattedFallback;
+          const formattedPhone = db.formatPhoneFallback(rawPhoneNum);
+
+          // Rule: Use c.name ONLY if it's a saved address book name. If unsaved, ALWAYS use clean formatted phone number (+91 XXXXX XXXXX). NEVER use pushname or raw LID.
+          const isSavedInAddressBook = Boolean(c.name && !c.name.includes('@') && !c.name.startsWith('+') && c.name !== rawPhoneNum && c.name !== cleanId);
+          const contactName = isSavedInAddressBook ? c.name : formattedPhone;
 
           const targetJid = phoneJid || rawId;
 
           db.upsertContact(targetJid, {
             jid: targetJid,
-            name: savedName,
+            name: contactName,
             phone: rawPhoneNum,
           });
 
           if (phoneJid) {
-            db.upsertContact(rawId, { name: savedName });
-            db.upsertContact(cleanId, { name: savedName });
+            db.upsertContact(rawId, { name: contactName });
+            db.upsertContact(cleanId, { name: contactName });
           }
 
           contactsImported++;
@@ -123,7 +126,8 @@ async function runBackupImport() {
           const contact = db.contacts.get(resolvedJid) || db.contacts.get(rawId);
           const rawNum = resolvedJid.split('@')[0];
 
-          const name = contact?.name || ch.name || ch.formattedTitle || db.formatPhoneFallback(rawNum);
+          const isSavedName = Boolean(contact?.name && !contact.name.includes('@') && !contact.name.startsWith('+3') && !contact.name.startsWith('+8') && !contact.name.startsWith('+1') && !contact.name.startsWith('+2') && contact.name !== 'Unsaved Contact');
+          const name = isSavedName ? contact!.name : db.formatPhoneFallback(rawNum);
 
           db.upsertChat(resolvedJid, {
             jid: resolvedJid,

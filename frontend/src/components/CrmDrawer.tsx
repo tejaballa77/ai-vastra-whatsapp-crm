@@ -12,7 +12,8 @@ import {
   ThumbsDown,
   Pencil,
   Plus,
-  Trash2
+  Trash2,
+  RotateCcw
 } from 'lucide-react';
 
 interface CrmDrawerProps {
@@ -83,6 +84,23 @@ export const CrmDrawer: React.FC<CrmDrawerProps> = ({ isOpen, onClose }) => {
     updateAndSave({ notesList: updated });
   };
 
+  const handleClearAll = () => {
+    setLeadStatus('UNASSIGNED');
+    setCallStatus(undefined);
+    setFollowUpDate('');
+    setNotesList([]);
+    setNewNoteInput('');
+
+    if (!activeChatJid) return;
+    updateCrmMetadata(activeChatJid, {
+      leadStatus: 'UNASSIGNED',
+      callStatus: undefined,
+      followUpDate: undefined,
+      notes: '',
+      notesList: [],
+    });
+  };
+
   const displayName = activeChat?.name || activeChat?.jid?.split('@')[0] || 'Unknown';
   
   // Clean phone number formatting (never display raw 13+ digit numbers)
@@ -98,9 +116,19 @@ export const CrmDrawer: React.FC<CrmDrawerProps> = ({ isOpen, onClose }) => {
       {/* 1. Header - Clean Contact Info */}
       <div className="h-16 px-4 bg-wa-header flex items-center justify-between border-b border-wa-border flex-shrink-0">
         <h3 className="text-base font-semibold text-wa-textPrimary">Contact Info</h3>
-        <button onClick={onClose} className="p-1.5 text-wa-textSecondary hover:text-wa-textPrimary hover:bg-wa-hover rounded-full transition-colors">
-          <X className="w-5 h-5" />
-        </button>
+        <div className="flex items-center space-x-2">
+          <button
+            onClick={handleClearAll}
+            title="Clear all selected options and notes for this contact"
+            className="px-2.5 py-1 text-xs font-semibold text-rose-600 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-md transition-colors flex items-center space-x-1 shadow-sm"
+          >
+            <RotateCcw className="w-3.5 h-3.5" />
+            <span>Clear</span>
+          </button>
+          <button onClick={onClose} className="p-1.5 text-wa-textSecondary hover:text-wa-textPrimary hover:bg-wa-hover rounded-full transition-colors">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
       </div>
 
       {/* Content Body */}

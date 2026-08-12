@@ -343,7 +343,7 @@ export const Sidebar = () => {
           onClick={() => setActiveTab('all')}
           className={`px-3 py-1 text-xs font-medium rounded-full transition-colors ${
             activeTab === 'all'
-              ? 'bg-wa-accent text-wa-bg'
+              ? 'bg-[#00a884] text-white font-semibold'
               : 'bg-wa-header text-wa-textSecondary hover:bg-wa-hover'
           }`}
         >
@@ -353,17 +353,19 @@ export const Sidebar = () => {
           onClick={() => setActiveTab('unread')}
           className={`px-3 py-1 text-xs font-medium rounded-full transition-colors ${
             activeTab === 'unread'
-              ? 'bg-wa-accent text-wa-bg'
+              ? 'bg-[#00a884] text-white font-semibold'
               : 'bg-wa-header text-wa-textSecondary hover:bg-wa-hover'
           }`}
         >
-          Unread
+          {chats.filter((c) => (c.unreadCount || 0) > 0).length > 0
+            ? `Unread ${chats.filter((c) => (c.unreadCount || 0) > 0).length}`
+            : 'Unread'}
         </button>
         <button
           onClick={() => setActiveTab('followups')}
           className={`px-3 py-1 text-xs font-medium rounded-full transition-colors ${
             activeTab === 'followups'
-              ? 'bg-wa-accent text-wa-bg'
+              ? 'bg-[#00a884] text-white font-semibold'
               : 'bg-wa-header text-wa-textSecondary hover:bg-wa-hover'
           }`}
         >

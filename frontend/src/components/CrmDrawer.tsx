@@ -31,7 +31,7 @@ export const CrmDrawer: React.FC<CrmDrawerProps> = ({ isOpen, onClose }) => {
   const [newNoteInput, setNewNoteInput] = useState<string>('');
   const [notesList, setNotesList] = useState<string[]>([]);
 
-  // Sync state when active chat changes
+  // Sync state ONLY when active chat changes
   useEffect(() => {
     if (activeChat) {
       setLeadStatus(activeChat.leadStatus || 'UNASSIGNED');
@@ -41,34 +41,46 @@ export const CrmDrawer: React.FC<CrmDrawerProps> = ({ isOpen, onClose }) => {
       const existingList = activeChat.notesList || (activeChat.notes ? [activeChat.notes] : []);
       setNotesList(existingList);
     }
-  }, [activeChat]);
+  }, [activeChatJid]);
 
-  // Save metadata changes
-  useEffect(() => {
+  const updateAndSave = (updates: {
+    leadStatus?: string;
+    callStatus?: 'YES' | 'NO';
+    followUpDate?: string;
+    notesList?: string[];
+  }) => {
     if (!activeChatJid) return;
-    const timer = setTimeout(() => {
-      updateCrmMetadata(activeChatJid, {
-        leadStatus: leadStatus as any,
-        callStatus: callStatus,
-        followUpDate: followUpDate || undefined,
-        notes: notesList.join('\n\n'),
-        notesList: notesList,
-      });
-    }, 400);
+    const newLeadStatus = updates.leadStatus !== undefined ? updates.leadStatus : leadStatus;
+    const newCallStatus = updates.callStatus !== undefined ? updates.callStatus : callStatus;
+    const newFollowUp = updates.followUpDate !== undefined ? updates.followUpDate : followUpDate;
+    const newNotes = updates.notesList !== undefined ? updates.notesList : notesList;
 
-    return () => clearTimeout(timer);
-  }, [leadStatus, callStatus, followUpDate, notesList, activeChatJid]);
+    if (updates.leadStatus !== undefined) setLeadStatus(newLeadStatus);
+    if (updates.callStatus !== undefined) setCallStatus(newCallStatus);
+    if (updates.followUpDate !== undefined) setFollowUpDate(newFollowUp);
+    if (updates.notesList !== undefined) setNotesList(newNotes);
+
+    updateCrmMetadata(activeChatJid, {
+      leadStatus: newLeadStatus as any,
+      callStatus: newCallStatus,
+      followUpDate: newFollowUp || undefined,
+      notes: newNotes.join('\n\n'),
+      notesList: newNotes,
+    });
+  };
 
   if (!isOpen || !activeChat) return null;
 
   const handleAddNote = () => {
     if (!newNoteInput.trim()) return;
-    setNotesList([newNoteInput.trim(), ...notesList]);
+    const updated = [newNoteInput.trim(), ...notesList];
     setNewNoteInput('');
+    updateAndSave({ notesList: updated });
   };
 
   const handleDeleteNote = (index: number) => {
-    setNotesList(notesList.filter((_, i) => i !== index));
+    const updated = notesList.filter((_, i) => i !== index);
+    updateAndSave({ notesList: updated });
   };
 
   const displayName = activeChat?.name || activeChat?.jid?.split('@')[0] || 'Unknown';
@@ -120,7 +132,7 @@ export const CrmDrawer: React.FC<CrmDrawerProps> = ({ isOpen, onClose }) => {
           </label>
           <div className="grid grid-cols-3 gap-2">
             <button
-              onClick={() => setLeadStatus('INTERESTED')}
+              onClick={() => updateAndSave({ leadStatus: 'INTERESTED' })}
               className={`p-2.5 rounded-lg border text-xs font-medium flex flex-col items-center justify-center transition-all ${
                 leadStatus === 'INTERESTED'
                   ? 'bg-emerald-500/20 text-emerald-600 border-emerald-500 font-semibold'
@@ -132,7 +144,7 @@ export const CrmDrawer: React.FC<CrmDrawerProps> = ({ isOpen, onClose }) => {
             </button>
 
             <button
-              onClick={() => setLeadStatus('WARM_INTERESTED')}
+              onClick={() => updateAndSave({ leadStatus: 'WARM_INTERESTED' })}
               className={`p-2.5 rounded-lg border text-xs font-medium flex flex-col items-center justify-center transition-all ${
                 leadStatus === 'WARM_INTERESTED'
                   ? 'bg-amber-500/20 text-amber-600 border-amber-500 font-semibold'
@@ -144,7 +156,7 @@ export const CrmDrawer: React.FC<CrmDrawerProps> = ({ isOpen, onClose }) => {
             </button>
 
             <button
-              onClick={() => setLeadStatus('NOT_INTERESTED')}
+              onClick={() => updateAndSave({ leadStatus: 'NOT_INTERESTED' })}
               className={`p-2.5 rounded-lg border text-xs font-medium flex flex-col items-center justify-center transition-all ${
                 leadStatus === 'NOT_INTERESTED'
                   ? 'bg-rose-500/20 text-rose-600 border-rose-500 font-semibold'
@@ -164,7 +176,7 @@ export const CrmDrawer: React.FC<CrmDrawerProps> = ({ isOpen, onClose }) => {
           </label>
           <div className="grid grid-cols-2 gap-2">
             <button
-              onClick={() => setCallStatus('YES')}
+              onClick={() => updateAndSave({ callStatus: 'YES' })}
               className={`py-2 px-4 rounded-lg border text-xs font-semibold flex items-center justify-center space-x-2 transition-all ${
                 callStatus === 'YES'
                   ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm'
@@ -175,7 +187,7 @@ export const CrmDrawer: React.FC<CrmDrawerProps> = ({ isOpen, onClose }) => {
             </button>
 
             <button
-              onClick={() => setCallStatus('NO')}
+              onClick={() => updateAndSave({ callStatus: 'NO' })}
               className={`py-2 px-4 rounded-lg border text-xs font-semibold flex items-center justify-center space-x-2 transition-all ${
                 callStatus === 'NO'
                   ? 'bg-rose-600 text-white border-rose-600 shadow-sm'
@@ -197,7 +209,7 @@ export const CrmDrawer: React.FC<CrmDrawerProps> = ({ isOpen, onClose }) => {
             <input
               type="date"
               value={followUpDate}
-              onChange={(e) => setFollowUpDate(e.target.value)}
+              onChange={(e) => updateAndSave({ followUpDate: e.target.value })}
               className="bg-transparent text-xs text-wa-textPrimary focus:outline-none w-full cursor-pointer"
             />
           </div>

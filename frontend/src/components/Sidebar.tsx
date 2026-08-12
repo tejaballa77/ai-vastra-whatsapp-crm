@@ -15,7 +15,8 @@ import {
   User,
   Tag,
   X,
-  MoreVertical
+  MoreVertical,
+  Check
 } from 'lucide-react';
 import { format, isToday, isYesterday } from 'date-fns';
 
@@ -153,6 +154,35 @@ export const Sidebar = () => {
     setSelectedJids((prev) => 
       prev.includes(jid) ? prev.filter((item) => item !== jid) : [...prev, jid]
     );
+  };
+
+  const renderSidebarStatusTicks = (status?: string) => {
+    switch (status) {
+      case 'PENDING':
+      case 'SENT':
+        return <Check className="w-3.5 h-3.5 text-wa-textSecondary flex-shrink-0 mr-1 inline" />;
+      case 'DELIVERED':
+        return (
+          <span className="inline-flex -space-x-1.5 items-center flex-shrink-0 mr-1" title="Delivered">
+            <Check className="w-3.5 h-3.5 text-wa-textSecondary" />
+            <Check className="w-3.5 h-3.5 text-wa-textSecondary" />
+          </span>
+        );
+      case 'READ':
+        return (
+          <span className="inline-flex -space-x-1.5 items-center flex-shrink-0 mr-1" title="Read">
+            <Check className="w-3.5 h-3.5 text-[#53bdeb]" />
+            <Check className="w-3.5 h-3.5 text-[#53bdeb]" />
+          </span>
+        );
+      default:
+        return (
+          <span className="inline-flex -space-x-1.5 items-center flex-shrink-0 mr-1">
+            <Check className="w-3.5 h-3.5 text-wa-textSecondary" />
+            <Check className="w-3.5 h-3.5 text-wa-textSecondary" />
+          </span>
+        );
+    }
   };
 
   return (
@@ -400,15 +430,18 @@ export const Sidebar = () => {
                     </div>
 
                     <div className="flex items-center justify-between">
-                      <p className="text-xs text-wa-textSecondary truncate mr-2">
-                        {chat.lastMessagePreview === '[REVOKED]'
-                          ? '🚫 This message was deleted'
-                          : chat.lastMessagePreview === '[E2E_NOTIFICATION]'
-                          ? '🔒 Encryption notice'
-                          : chat.lastMessagePreview === '[CHAT]'
-                          ? '👤 Contact Card'
-                          : chat.lastMessagePreview || 'No messages'}
-                      </p>
+                      <div className="flex items-center text-xs text-wa-textSecondary truncate mr-2 min-w-0">
+                        {chat.lastMessageFromMe && renderSidebarStatusTicks(chat.lastMessageStatus)}
+                        <span className="truncate">
+                          {chat.lastMessagePreview === '[REVOKED]'
+                            ? '🚫 This message was deleted'
+                            : chat.lastMessagePreview === '[E2E_NOTIFICATION]'
+                            ? '🔒 Encryption notice'
+                            : chat.lastMessagePreview === '[CHAT]'
+                            ? '👤 Contact Card'
+                            : chat.lastMessagePreview || 'No messages'}
+                        </span>
+                      </div>
                       
                       <div className="flex items-center space-x-1.5 flex-shrink-0">
                         {getLeadStatusBadge(chat.leadStatus)}

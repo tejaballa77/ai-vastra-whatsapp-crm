@@ -21,6 +21,8 @@ export interface CRMChat {
   unreadCount: number;
   lastMessagePreview?: string;
   lastMessageAt: number;
+  lastMessageFromMe?: boolean;
+  lastMessageStatus?: CRMMessage['status'];
   avatarUrl?: string;
   isGroup: boolean;
   leadStatus: 'INTERESTED' | 'WARM_INTERESTED' | 'NOT_INTERESTED' | 'UNASSIGNED';
@@ -39,7 +41,7 @@ export interface CRMMessage {
   fromMe: boolean;
   text: string;
   mediaUrl?: string;
-  mediaType?: 'image' | 'video' | 'audio' | 'document';
+  mediaType?: 'image' | 'video' | 'audio' | 'document' | 'call';
   fileName?: string;
   timestamp: number;
   status: 'PENDING' | 'SENT' | 'DELIVERED' | 'READ';
@@ -443,21 +445,30 @@ class StorageEngine {
 
       let lastMessagePreview = 'No messages';
       let lastMessageAt = 0;
+      let lastMessageFromMe = false;
+      let lastMessageStatus: CRMMessage['status'] = 'SENT';
 
       if (msgs.length > 0) {
-        const validMsgs = msgs.filter(m => m.text !== '[E2E_NOTIFICATION]' && m.text !== '[CALL_LOG]' && !m.text?.includes('end-to-end encrypted'));
+        const validMsgs = msgs.filter(m => m.text !== '[E2E_NOTIFICATION]' && !m.text?.includes('end-to-end encrypted'));
         const targetMsg = validMsgs.length > 0 ? validMsgs[validMsgs.length - 1] : msgs[msgs.length - 1];
+
+        lastMessageFromMe = Boolean(targetMsg.fromMe);
+        lastMessageStatus = targetMsg.status || 'SENT';
 
         const text = targetMsg.text || '';
         if (text === '[REVOKED]' || text === 'This message was deleted') {
           lastMessagePreview = '🚫 This message was deleted';
+        } else if (text.includes('Missed voice call') || text.includes('Missed call') || (text.includes('Voice call') && !lastMessageFromMe)) {
+          lastMessagePreview = '📞 Missed voice call';
+        } else if (text.includes('Voice call') || text.includes('Video call') || targetMsg.mediaType === 'call' || text === '[CALL_LOG]') {
+          lastMessagePreview = '📞 Voice call';
         } else if (targetMsg.mediaType === 'image' || text === '[IMAGE]' || text === 'Photo') {
           lastMessagePreview = '📷 Photo';
         } else if (targetMsg.mediaType === 'document' || text === '[DOCUMENT]' || text === 'Document' || (targetMsg.fileName && targetMsg.fileName.endsWith('.pdf'))) {
           lastMessagePreview = `📄 ${targetMsg.fileName || 'Document'}`;
         } else if (targetMsg.mediaType === 'audio' || text === '[AUDIO]') {
           lastMessagePreview = '🎵 Voice Note';
-        } else if (text && text !== '[CHAT]' && text !== 'Contact') {
+        } else if (text && text !== '[CHAT]' && text !== 'Contact' && text !== '[INTERACTIVE]') {
           lastMessagePreview = text;
         }
 
@@ -472,6 +483,8 @@ class StorageEngine {
         avatarUrl,
         lastMessagePreview,
         lastMessageAt,
+        lastMessageFromMe,
+        lastMessageStatus,
       };
 
       if (!uniqueMap.has(resolvedKey) || lastMessageAt > uniqueMap.get(resolvedKey)!.lastMessageAt) {

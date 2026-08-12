@@ -78,15 +78,31 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ isCrmOpen, toggleCrm }) 
 
   const renderCallCard = (msg: any) => {
     const text = msg.text || '';
-    const isCall = text.includes('Voice call') || text.includes('Video call') || msg.mediaType === 'call';
+    const isCall = text.includes('Voice call') || text.includes('Video call') || text.includes('Missed') || msg.mediaType === 'call';
     if (!isCall) return null;
 
+    const isMissed = text.includes('Missed') || (!msg.fromMe && (text.includes('Voice call') || text === '[CALL_LOG]'));
     const isVideo = text.includes('Video');
-    const duration = text.replace(/Voice call|Video call/gi, '').trim() || '1 minute';
+
+    if (isMissed) {
+      return (
+        <div className="my-1.5 p-3 rounded-xl bg-white border border-wa-border flex items-center space-x-3 min-w-[210px] shadow-sm select-none">
+          <div className="w-10 h-10 rounded-full bg-red-100/80 flex items-center justify-center text-rose-600 shadow-inner flex-shrink-0">
+            <Phone className="w-5 h-5 transform -rotate-45" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-xs font-semibold text-[#111b21]">Missed {isVideo ? 'video' : 'voice'} call</p>
+            <p className="text-[11px] text-[#667781]">Click to call back</p>
+          </div>
+        </div>
+      );
+    }
+
+    const duration = text.replace(/Voice call|Video call|Missed voice call/gi, '').trim() || '1 minute';
 
     return (
-      <div className="my-1.5 p-3 rounded-xl bg-white border border-wa-border flex items-center space-x-3 min-w-[210px] shadow-sm select-none">
-        <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-800 shadow-inner flex-shrink-0">
+      <div className="my-1.5 p-3 rounded-xl bg-white/90 border border-wa-border flex items-center space-x-3 min-w-[210px] shadow-sm select-none">
+        <div className="w-10 h-10 rounded-full bg-white flex items-center justify-center text-slate-800 shadow-sm border border-wa-border flex-shrink-0">
           <Phone className="w-5 h-5" />
         </div>
         <div className="flex-1 min-w-0">

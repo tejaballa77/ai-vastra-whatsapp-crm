@@ -5,6 +5,8 @@ export interface Chat {
   unreadCount: number;
   lastMessagePreview?: string;
   lastMessageAt: number;
+  lastMessageFromMe?: boolean;
+  lastMessageStatus?: Message['status'];
   avatarUrl?: string;
   isGroup: boolean;
   leadStatus: 'INTERESTED' | 'WARM_INTERESTED' | 'NOT_INTERESTED' | 'UNASSIGNED';
@@ -23,7 +25,7 @@ export interface Message {
   fromMe: boolean;
   text: string;
   mediaUrl?: string;
-  mediaType?: 'image' | 'video' | 'audio' | 'document';
+  mediaType?: 'image' | 'video' | 'audio' | 'document' | 'call';
   fileName?: string;
   timestamp: number;
   status: 'PENDING' | 'SENT' | 'DELIVERED' | 'READ';

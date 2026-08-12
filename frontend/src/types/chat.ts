@@ -8,8 +8,10 @@ export interface Chat {
   avatarUrl?: string;
   isGroup: boolean;
   leadStatus: 'INTERESTED' | 'WARM_INTERESTED' | 'NOT_INTERESTED' | 'UNASSIGNED';
+  callStatus?: 'YES' | 'NO';
   followUpDate?: string;
   notes?: string;
+  notesList?: string[];
   tags: string[];
 }
 

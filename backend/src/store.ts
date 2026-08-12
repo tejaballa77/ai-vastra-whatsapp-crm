@@ -7,8 +7,10 @@ export interface CRMContact {
   phone: string;
   avatarUrl?: string;
   leadStatus: 'INTERESTED' | 'WARM_INTERESTED' | 'NOT_INTERESTED' | 'UNASSIGNED';
+  callStatus?: 'YES' | 'NO';
   followUpDate?: string;
   notes?: string;
+  notesList?: string[];
   tags: string[];
   customFields?: Record<string, string>;
 }
@@ -22,8 +24,10 @@ export interface CRMChat {
   avatarUrl?: string;
   isGroup: boolean;
   leadStatus: 'INTERESTED' | 'WARM_INTERESTED' | 'NOT_INTERESTED' | 'UNASSIGNED';
+  callStatus?: 'YES' | 'NO';
   followUpDate?: string;
   notes?: string;
+  notesList?: string[];
   tags: string[];
 }
 
@@ -512,16 +516,20 @@ class StorageEngine {
 
   public updateCrmMetadata(rawJid: string, metadata: {
     leadStatus?: 'INTERESTED' | 'WARM_INTERESTED' | 'NOT_INTERESTED' | 'UNASSIGNED';
+    callStatus?: 'YES' | 'NO';
     followUpDate?: string;
     notes?: string;
+    notesList?: string[];
     tags?: string[];
   }) {
     const jid = this.resolveJid(rawJid);
     const chat = this.chats.get(jid);
     if (chat) {
       if (metadata.leadStatus !== undefined) chat.leadStatus = metadata.leadStatus;
+      if (metadata.callStatus !== undefined) chat.callStatus = metadata.callStatus;
       if (metadata.followUpDate !== undefined) chat.followUpDate = metadata.followUpDate;
       if (metadata.notes !== undefined) chat.notes = metadata.notes;
+      if (metadata.notesList !== undefined) chat.notesList = metadata.notesList;
       if (metadata.tags !== undefined) chat.tags = metadata.tags;
       this.chats.set(jid, chat);
     }
@@ -529,8 +537,10 @@ class StorageEngine {
     const contact = this.contacts.get(jid);
     if (contact) {
       if (metadata.leadStatus !== undefined) contact.leadStatus = metadata.leadStatus;
+      if (metadata.callStatus !== undefined) contact.callStatus = metadata.callStatus;
       if (metadata.followUpDate !== undefined) contact.followUpDate = metadata.followUpDate;
       if (metadata.notes !== undefined) contact.notes = metadata.notes;
+      if (metadata.notesList !== undefined) contact.notesList = metadata.notesList;
       if (metadata.tags !== undefined) contact.tags = metadata.tags;
       this.contacts.set(jid, contact);
     } else {

@@ -118,15 +118,17 @@ app.post('/api/messages/send', async (req, res) => {
   }
 });
 
-// 7. Update CRM metadata (Lead Status, Follow-up date, Notes, Tags)
+// 7. Update CRM metadata (Lead Status, Call Status, Follow-up date, Notes, Tags)
 app.put('/api/crm/contact/:jid', (req, res) => {
   const { jid } = req.params;
-  const { leadStatus, followUpDate, notes, tags } = req.body;
+  const { leadStatus, callStatus, followUpDate, notes, notesList, tags } = req.body;
 
   const updatedChat = db.updateCrmMetadata(jid, {
     leadStatus,
+    callStatus,
     followUpDate,
     notes,
+    notesList,
     tags,
   });
 

@@ -22,8 +22,10 @@ interface SocketContextType {
   reconnectSession: () => Promise<void>;
   updateCrmMetadata: (jid: string, data: {
     leadStatus?: 'INTERESTED' | 'WARM_INTERESTED' | 'NOT_INTERESTED' | 'UNASSIGNED';
+    callStatus?: 'YES' | 'NO';
     followUpDate?: string;
     notes?: string;
+    notesList?: string[];
     tags?: string[];
   }) => Promise<void>;
   isHistorySyncing: boolean;

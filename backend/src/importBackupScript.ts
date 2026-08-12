@@ -214,17 +214,19 @@ async function runBackupImport() {
           msgCount++;
         }
 
-        // 6. Cleanup raw LID entries in db.chats
-        for (const [jid, chat] of db.chats.entries()) {
+        // 6. Transfer messages from LID chats to Phone JID chats & Cleanup raw LID chats
+        for (const [jid, chat] of Array.from(db.chats.entries())) {
           const clean = jid.split('@')[0];
           if (jid.endsWith('@lid') || (clean.length > 12 && !jid.endsWith('@g.us'))) {
             const mapped = db.resolveJid(jid);
-            if (mapped !== jid && db.chats.has(mapped)) {
+            if (mapped && mapped !== jid && !mapped.includes('@lid') && mapped.split('@')[0].length <= 12) {
+              const lidMsgs = db.messages.get(jid) || [];
+              for (const m of lidMsgs) {
+                m.chatJid = mapped;
+                db.addMessage(m, false);
+              }
+              db.messages.delete(jid);
               db.chats.delete(jid);
-            } else if (mapped !== jid) {
-              db.chats.delete(jid);
-              chat.jid = mapped;
-              db.chats.set(mapped, chat);
             } else {
               db.chats.delete(jid);
             }

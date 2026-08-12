@@ -210,6 +210,16 @@ app.delete('/api/chats/:jid', (req, res) => {
   res.json({ success: true, message: 'Chat deleted successfully' });
 });
 
+// 12. Mark a chat as read
+app.post('/api/chats/mark-read', (req, res) => {
+  const { jid } = req.body;
+  if (jid) {
+    db.markChatAsRead(jid);
+    io.emit('chats_updated', db.getAllChatsSorted());
+  }
+  res.json({ success: true });
+});
+
 // 12. Import WhatsApp Chat Backup Export File (.txt)
 app.post('/api/chats/import-backup', (req, res) => {
   const { fileContent, fileName } = req.body;

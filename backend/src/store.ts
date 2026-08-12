@@ -382,6 +382,19 @@ class StorageEngine {
     return msg;
   }
 
+  public markChatAsRead(rawJid: string) {
+    const jid = this.resolveJid(rawJid);
+    const clean = jid.split('@')[0];
+    for (const key of [jid, rawJid, clean]) {
+      const chat = this.chats.get(key);
+      if (chat) {
+        chat.unreadCount = 0;
+        this.chats.set(key, chat);
+      }
+    }
+    this.saveData();
+  }
+
   public deleteChat(rawJid: string) {
     const jid = this.resolveJid(rawJid);
     const clean = jid.split('@')[0];

@@ -16,7 +16,11 @@ import {
   FileText,
   Download,
   Image,
-  Info
+  Info,
+  Phone,
+  PhoneIncoming,
+  PhoneOutgoing,
+  Video
 } from 'lucide-react';
 import { format, isToday, isYesterday } from 'date-fns';
 
@@ -53,9 +57,45 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ isCrmOpen, toggleCrm }) 
         }
       })
       .catch((err) => console.error('Error fetching chat messages:', err));
+
+    // Clear unread count when chat is opened
+    fetch(`${getBackendUrl()}/api/chats/mark-read`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ jid: activeChatJid }),
+    }).catch(() => {});
   }, [activeChatJid]);
 
   const messageList = socketMsgs.length >= apiMessages.length ? socketMsgs : apiMessages;
+
+  // Header Subtitle Cleanup
+  const cleanPhoneNum = activeChatJid ? activeChatJid.split('@')[0].replace(/\D/g, '') : '';
+  const phoneSub = cleanPhoneNum.length > 12 
+    ? 'WhatsApp Contact' 
+    : (cleanPhoneNum.length === 12 && cleanPhoneNum.startsWith('91')
+      ? `+91 ${cleanPhoneNum.slice(2, 7)} ${cleanPhoneNum.slice(7)}`
+      : (cleanPhoneNum.length === 10 ? `+91 ${cleanPhoneNum.slice(0, 5)} ${cleanPhoneNum.slice(5)}` : `+${cleanPhoneNum}`));
+
+  const renderCallCard = (msg: any) => {
+    const text = msg.text || '';
+    const isCall = text.includes('Voice call') || text.includes('Video call') || msg.mediaType === 'call';
+    if (!isCall) return null;
+
+    const isVideo = text.includes('Video');
+    const duration = text.replace(/Voice call|Video call/gi, '').trim() || '1 minute';
+
+    return (
+      <div className="my-1.5 p-3 rounded-xl bg-white border border-wa-border flex items-center space-x-3 min-w-[210px] shadow-sm select-none">
+        <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-800 shadow-inner flex-shrink-0">
+          <Phone className="w-5 h-5" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-xs font-semibold text-[#111b21]">{isVideo ? 'Video call' : 'Voice call'}</p>
+          <p className="text-[11px] text-[#667781]">{duration}</p>
+        </div>
+      </div>
+    );
+  };
 
   // Auto-scroll to bottom of messages instantly (latest message at bottom)
   useEffect(() => {
@@ -134,10 +174,6 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ isCrmOpen, toggleCrm }) 
   };
 
   const displayName = formatChatDisplayName(activeChat);
-  const cleanPhone = (activeChat.phone || activeChat.jid || '').split('@')[0].replace(/\D/g, '');
-  const phoneSub = cleanPhone.length === 12 && cleanPhone.startsWith('91') 
-    ? `+91 ${cleanPhone.slice(2, 7)} ${cleanPhone.slice(7)}` 
-    : `+${cleanPhone}`;
 
   const renderMediaCard = (msg: any) => {
     const text = msg.text || '';
@@ -242,67 +278,95 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ isCrmOpen, toggleCrm }) 
 
       {/* Message Stream */}
       <div className="flex-1 overflow-y-auto p-4 space-y-3">
-        {messageList.map((msg) => {
-          const isOutbound = msg.fromMe;
-          const text = msg.text || '';
+        {(() => {
+          let lastDateLabel = '';
 
-          // 1. Hide System Notices ([CALL_LOG], [E2E_NOTIFICATION])
-          if (text === '[E2E_NOTIFICATION]' || text === '[CALL_LOG]' || text.includes('end-to-end encrypted') || text.includes('Messages and calls are end-to-end')) {
-            return null;
-          }
+          return messageList.map((msg) => {
+            const isOutbound = msg.fromMe;
+            const text = msg.text || '';
 
-          // 2. Hide raw artifact labels
-          const isArtifactText = text === '[CHAT]' || text === 'Contact' || text === '[DOCUMENT]' || text === '[IMAGE]' || text === 'Photo' || text.endsWith('.pdf') || text.endsWith('.jpg') || text.endsWith('.jpeg');
-          const cleanText = isArtifactText ? '' : text;
+            // Date Divider logic
+            const rawTs = msg.timestamp || Date.now();
+            const msgDate = new Date(rawTs < 10000000000 ? rawTs * 1000 : rawTs);
+            let currentDateLabel = '';
+            if (isToday(msgDate)) currentDateLabel = 'Today';
+            else if (isYesterday(msgDate)) currentDateLabel = 'Yesterday';
+            else currentDateLabel = format(msgDate, 'MMMM d, yyyy');
 
-          // 3. Format Deleted / Revoked Messages
-          const isRevoked = text === '[REVOKED]' || text === 'This message was deleted';
-          
-          const mediaCard = renderMediaCard(msg);
+            let showDateDivider = false;
+            if (currentDateLabel !== lastDateLabel) {
+              lastDateLabel = currentDateLabel;
+              showDateDivider = true;
+            }
 
-          // Prevent rendering empty message bubbles
-          if (!cleanText && !mediaCard && !isRevoked) {
-            return null;
-          }
+            // Hide system encryption notices
+            if (text === '[E2E_NOTIFICATION]' || text.includes('end-to-end encrypted') || text.includes('Messages and calls are end-to-end')) {
+              return null;
+            }
 
-          return (
-            <div
-              key={msg.id}
-              className={`flex ${isOutbound ? 'justify-end' : 'justify-start'}`}
-            >
-              <div
-                className={`max-w-[65%] rounded-lg px-3 py-2 shadow-sm text-sm relative group ${
-                  isOutbound
-                    ? 'bg-wa-outgoingBubble text-wa-textPrimary rounded-tr-none'
-                    : 'bg-wa-incomingBubble text-wa-textPrimary rounded-tl-none'
-                }`}
-              >
-                {/* Only show sender name in Group Chats */}
-                {!isOutbound && activeChat.isGroup && msg.senderName && (
-                  <span className="block text-[11px] font-semibold text-wa-accent mb-0.5">
-                    {msg.senderName}
-                  </span>
+            // Call Card
+            const callCard = renderCallCard(msg);
+
+            // Media Card
+            const mediaCard = renderMediaCard(msg);
+
+            // Clean Text
+            let cleanText = text;
+            if (cleanText === '[INTERACTIVE]' || cleanText === '[CHAT]' || cleanText === 'Contact' || cleanText === '[DOCUMENT]' || cleanText === '[IMAGE]' || cleanText === 'Photo' || cleanText === '[CALL_LOG]') {
+              cleanText = '';
+            }
+
+            const isRevoked = text === '[REVOKED]' || text === 'This message was deleted';
+
+            if (!cleanText && !mediaCard && !callCard && !isRevoked) {
+              return null;
+            }
+
+            return (
+              <React.Fragment key={msg.id}>
+                {showDateDivider && (
+                  <div className="flex justify-center my-3">
+                    <div className="bg-white border border-wa-border/50 shadow-sm text-[11px] text-[#54656f] px-3 py-1 rounded-md font-medium select-none">
+                      {currentDateLabel}
+                    </div>
+                  </div>
                 )}
 
-                {/* Render Media Cards (PDFs, Images) */}
-                {mediaCard}
+                <div className={`flex ${isOutbound ? 'justify-end' : 'justify-start'}`}>
+                  <div
+                    className={`max-w-[65%] rounded-lg px-3 py-2 shadow-sm text-sm relative group ${
+                      isOutbound
+                        ? 'bg-wa-outgoingBubble text-wa-textPrimary rounded-tr-none'
+                        : 'bg-wa-incomingBubble text-wa-textPrimary rounded-tl-none'
+                    }`}
+                  >
+                    {!isOutbound && activeChat?.isGroup && msg.senderName && (
+                      <span className="block text-[11px] font-semibold text-wa-accent mb-0.5">
+                        {msg.senderName}
+                      </span>
+                    )}
 
-                {isRevoked ? (
-                  <p className="italic text-wa-textSecondary/80 text-xs flex items-center space-x-1">
-                    <span>🚫 This message was deleted</span>
-                  </p>
-                ) : (
-                  cleanText && cleanText !== msg.fileName && <p className="whitespace-pre-wrap break-words leading-relaxed mt-0.5">{cleanText}</p>
-                )}
+                    {callCard}
+                    {mediaCard}
 
-                <div className="flex items-center justify-end space-x-1 mt-1 text-[10px] text-wa-textSecondary/80">
-                  <span>{format(new Date(msg.timestamp), 'h:mm a')}</span>
-                  {isOutbound && renderStatusTicks(msg.status)}
+                    {isRevoked ? (
+                      <p className="italic text-wa-textSecondary/80 text-xs flex items-center space-x-1">
+                        <span>🚫 This message was deleted</span>
+                      </p>
+                    ) : (
+                      cleanText && cleanText !== msg.fileName && <p className="whitespace-pre-wrap break-words leading-relaxed mt-0.5">{cleanText}</p>
+                    )}
+
+                    <div className="flex items-center justify-end space-x-1 mt-1 text-[10px] text-wa-textSecondary/80">
+                      <span>{format(msgDate, 'h:mm a')}</span>
+                      {isOutbound && renderStatusTicks(msg.status)}
+                    </div>
+                  </div>
                 </div>
-              </div>
-            </div>
-          );
-        })}
+              </React.Fragment>
+            );
+          });
+        })()}
         <div ref={messagesEndRef} />
       </div>
 

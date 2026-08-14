@@ -57,13 +57,6 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ isCrmOpen, toggleCrm }) 
         }
       })
       .catch((err) => console.error('Error fetching chat messages:', err));
-
-    // Clear unread count when chat is opened
-    fetch(`${getBackendUrl()}/api/chats/mark-read`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ jid: activeChatJid }),
-    }).catch(() => {});
   }, [activeChatJid]);
 
   const messageList = socketMsgs.length >= apiMessages.length ? socketMsgs : apiMessages;

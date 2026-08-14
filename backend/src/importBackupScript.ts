@@ -233,7 +233,7 @@ async function runBackupImport() {
           }
         }
 
-        // 7. Recalculate lastMessageAt & lastMessagePreview for ALL chats from message history
+        // 7. Recalculate lastMessageAt, lastMessagePreview & unreadCount for ALL chats from message history
         for (const [jid, chat] of db.chats.entries()) {
           const msgs = db.messages.get(jid) || [];
           if (msgs.length > 0) {
@@ -242,6 +242,14 @@ async function runBackupImport() {
               const normalizedTs = lastMsg.timestamp < 10000000000 ? lastMsg.timestamp * 1000 : lastMsg.timestamp;
               chat.lastMessageAt = Math.max(chat.lastMessageAt || 0, normalizedTs);
             }
+
+            // Calculate unread count from consecutive incoming messages from client
+            let unread = 0;
+            for (let i = msgs.length - 1; i >= 0; i--) {
+              if (msgs[i].fromMe) break;
+              unread++;
+            }
+            chat.unreadCount = unread;
 
             const text = lastMsg.text || '';
             const isNotice = text === '[E2E_NOTIFICATION]' || text === '[CALL_LOG]' || text.includes('end-to-end encrypted');

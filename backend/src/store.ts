@@ -476,10 +476,21 @@ class StorageEngine {
         lastMessageAt = rawTs < 10000000000 ? rawTs * 1000 : rawTs;
       }
 
+      let unreadCount = c.unreadCount;
+      if (unreadCount === undefined || unreadCount === null) {
+        let count = 0;
+        for (let i = msgs.length - 1; i >= 0; i--) {
+          if (msgs[i].fromMe) break;
+          count++;
+        }
+        unreadCount = count;
+      }
+
       const updatedChat: CRMChat = {
         ...c,
         jid: resolvedKey,
         name,
+        unreadCount,
         avatarUrl,
         lastMessagePreview,
         lastMessageAt,

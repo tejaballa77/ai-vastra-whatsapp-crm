@@ -266,15 +266,23 @@ export class WhatsAppEngine {
     }
   }
 
-  private resolveBestContactName(jid: string, name?: string, notify?: string, verifiedName?: string): string {
+  private resolveBestContactName(rawJid: string, name?: string, notify?: string, verifiedName?: string): string {
+    const jid = db.resolveJid(rawJid);
     const rawNumber = jid.split('@')[0];
+    const isGroup = jid.endsWith('@g.us');
 
-    if (name && name !== rawNumber) return name;
-    if (notify && notify !== rawNumber) return notify;
+    if (isGroup) {
+      if (name && name !== rawNumber) return name;
+      if (notify && notify !== rawNumber) return notify;
+    }
+
+    if (name && name !== rawNumber && name !== 'Unsaved Contact' && !/^\d{13,}$/.test(name.replace(/\D/g, ''))) {
+      return name;
+    }
     if (verifiedName && verifiedName !== rawNumber) return verifiedName;
 
-    const existingContact = db.contacts.get(jid);
-    if (existingContact?.name && existingContact.name !== rawNumber) {
+    const existingContact = db.contacts.get(jid) || db.contacts.get(rawJid);
+    if (existingContact?.name && existingContact.name !== rawNumber && existingContact.name !== 'Unsaved Contact') {
       return existingContact.name;
     }
 
@@ -333,10 +341,6 @@ export class WhatsAppEngine {
     const pushName = msg.pushName;
     const resolvedName = this.resolveBestContactName(chatJid, undefined, pushName);
     const senderName = fromMe ? 'Me' : resolvedName;
-
-    if (pushName && !fromMe) {
-      db.upsertContact(chatJid, { name: pushName });
-    }
 
     const crmMsg: CRMMessage = {
       id,

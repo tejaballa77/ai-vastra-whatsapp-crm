@@ -79,7 +79,7 @@ async function runBackupImport() {
             db.registerLidMapping(cleanId, phoneJid);
           }
 
-          const savedName = c.name || c.formattedName || c.displayName || c.shortName || c.pushname || c.verifiedName;
+          const savedName = c.name || c.formattedName || c.displayName || c.verifiedName;
           if (!savedName || savedName.includes('@') || savedName === cleanId) continue;
 
           // Save contact name under phone JID
@@ -143,7 +143,9 @@ async function runBackupImport() {
           const contact = db.contacts.get(resolvedJid) || db.contacts.get(rawId);
           const rawNum = resolvedJid.split('@')[0];
 
-          const name = contact?.name || ch.name || ch.formattedTitle || db.formatPhoneFallback(rawNum);
+          const isGroup = resolvedJid.endsWith('@g.us') || (ch.id && String(ch.id).endsWith('@g.us'));
+          const groupTitle = isGroup ? (ch.name || ch.formattedTitle) : undefined;
+          const name = contact?.name || groupTitle || db.formatPhoneFallback(rawNum);
 
           db.upsertChat(resolvedJid, {
             jid: resolvedJid,

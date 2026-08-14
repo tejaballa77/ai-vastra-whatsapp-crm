@@ -47,15 +47,25 @@ export const Sidebar = () => {
   const [selectedJids, setSelectedJids] = useState<string[]>([]);
 
   const formatChatDisplayName = (chat: any) => {
-    if (!chat) return 'Unsaved Contact';
-    const clean = (chat.phone || chat.jid || '').split('@')[0].replace(/\D/g, '');
-    const name = chat.name || '';
+    if (!chat) return 'Unknown';
+    let name = (chat.name || '').trim();
+    const rawJid = chat.phone || chat.jid || '';
+    const clean = rawJid.split('@')[0].replace(/\D/g, '');
 
-    // If chat.name is a real saved contact name (e.g. BALAJEE TEXTILE, Durga Rao Sir, Nikhil Amartex, etc.)
-    if (name && name !== 'Unsaved Contact' && name !== clean && !name.includes('@') && clean.length <= 12 && !/^\d{13,}$/.test(name.replace(/\D/g, ''))) {
+    // 1. Strip trailing phone numbers appended to saved names (e.g. "Dheeraj Tagra 9873335506" -> "Dheeraj Tagra")
+    if (name) {
+      name = name.replace(/\s*\+?\d{8,15}$/, '').trim();
+    }
+
+    // 2. Check if name is a real saved name (NOT "Unsaved Contact", NOT raw LID digits starting with 14/15/16)
+    const isLidDigits = /^\d{13,}$/.test(name.replace(/\D/g, ''));
+    const isInvalidName = !name || name === 'Unsaved Contact' || name.includes('@') || isLidDigits;
+
+    if (!isInvalidName) {
       return name;
     }
 
+    // 3. Render clean formatted WhatsApp phone number (e.g. +91 90169 61709)
     if (clean.length === 12 && clean.startsWith('91')) {
       const ten = clean.slice(2);
       return `+91 ${ten.slice(0, 5)} ${ten.slice(5)}`;
@@ -64,9 +74,9 @@ export const Sidebar = () => {
       return `+91 ${clean.slice(0, 5)} ${clean.slice(5)}`;
     }
     if (clean.length > 12) {
-      return 'Unsaved Contact';
+      return `+91 ${clean.slice(0, 5)} ${clean.slice(5, 10)}`;
     }
-    return clean ? `+${clean}` : 'Unsaved Contact';
+    return clean ? `+${clean}` : 'WhatsApp Contact';
   };
 
   // Filter chats by platform, tab, and search query

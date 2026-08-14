@@ -405,7 +405,21 @@ export const Sidebar = () => {
               return (
                 <div
                   key={chat.jid}
-                  onClick={() => isSelectMode ? toggleSelectJid(chat.jid) : setActiveChatJid(chat.jid)}
+                  onClick={() => {
+                    if (isSelectMode) {
+                      toggleSelectJid(chat.jid);
+                    } else {
+                      setActiveChatJid(chat.jid);
+                      if (chat.unreadCount > 0) {
+                        chat.unreadCount = 0;
+                        fetch(`${getBackendUrl()}/api/chats/mark-read`, {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ jid: chat.jid }),
+                        }).catch(() => {});
+                      }
+                    }
+                  }}
                   className={`px-4 py-3 flex items-center cursor-pointer transition-colors ${
                     isActive ? 'bg-wa-hover' : 'hover:bg-wa-header/60'
                   }`}

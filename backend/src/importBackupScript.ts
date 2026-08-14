@@ -79,7 +79,8 @@ async function runBackupImport() {
             db.registerLidMapping(cleanId, phoneJid);
           }
 
-          const savedName = c.name || c.formattedName || c.displayName || c.verifiedName;
+          const isRealAddressBook = Boolean(c.isAddressBookContact || c.isMyContact);
+          const savedName = isRealAddressBook ? (c.name || c.formattedName || c.displayName) : c.verifiedName;
           if (!savedName || savedName.includes('@') || savedName === cleanId) continue;
 
           // Save contact name under phone JID
@@ -269,6 +270,17 @@ async function runBackupImport() {
               }
             }
             db.chats.set(jid, chat);
+          }
+        }
+        // 8. Purge pushnames for non-group chats that are not in address book
+        for (const [jid, chat] of db.chats.entries()) {
+          if (!jid.endsWith('@g.us') && !chat.isGroup) {
+            const contact = db.contacts.get(jid);
+            if (!contact || !contact.name || contact.name.includes('@') || contact.name === 'Unsaved Contact') {
+              const cleanNum = jid.split('@')[0];
+              chat.name = db.formatPhoneFallback(cleanNum);
+              db.chats.set(jid, chat);
+            }
           }
         }
 

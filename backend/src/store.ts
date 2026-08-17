@@ -18,6 +18,7 @@ export interface CRMContact {
 export interface CRMChat {
   jid: string;
   name: string;
+  phone?: string;
   unreadCount: number;
   lastMessagePreview?: string;
   lastMessageAt: number;
@@ -63,6 +64,14 @@ class StorageEngine {
     this.loadData();
   }
 
+  private canonicalPhone(digits: string): string {
+    if (!digits) return digits;
+    const clean = digits.replace(/\D/g, '');
+    if (clean.length === 12 && clean.startsWith('91')) return clean.slice(2);
+    if (clean.length === 13 && clean.startsWith('091')) return clean.slice(3);
+    return clean;
+  }
+
   private loadData() {
     try {
       if (fs.existsSync(this.dataFilePath)) {
@@ -80,7 +89,76 @@ class StorageEngine {
         if (parsed.lidToJidMap) {
           this.lidToJidMap = new Map(Object.entries(parsed.lidToJidMap));
         }
-        console.log(`[Storage] Loaded ${this.chats.size} chats and ${this.contacts.size} contacts from storage.`);
+
+        // ============================================================
+        // PERMANENT DATABASE CLEANUP & DEDUPLICATION:
+        // Remove bare number keys (no '@') and merge duplicate chats
+        // ============================================================
+        const cleanedChats = new Map<string, CRMChat>();
+        const phoneToCanonicalJid = new Map<string, string>();
+
+        for (const [key, chat] of this.chats.entries()) {
+          const isGroup = key.endsWith('@g.us') || (chat.jid && chat.jid.endsWith('@g.us'));
+          if (isGroup) {
+            const groupJid = key.includes('@g.us') ? key : chat.jid;
+            cleanedChats.set(groupJid, { ...chat, jid: groupJid, isGroup: true });
+            continue;
+          }
+
+          const rawNum = (chat.phone || chat.jid || key).split('@')[0].replace(/\D/g, '');
+          const tenDigit = this.canonicalPhone(rawNum);
+
+          if (!tenDigit || tenDigit.length < 10) {
+            // Keep groups or non-phone chats with '@'
+            if (key.includes('@')) cleanedChats.set(key, chat);
+            continue;
+          }
+
+          const canonicalJid = `91${tenDigit}@s.whatsapp.net`;
+
+          if (!cleanedChats.has(canonicalJid)) {
+            cleanedChats.set(canonicalJid, {
+              ...chat,
+              jid: canonicalJid,
+              phone: `91${tenDigit}`,
+            });
+            phoneToCanonicalJid.set(tenDigit, canonicalJid);
+          } else {
+            const existing = cleanedChats.get(canonicalJid)!;
+            // Merge metadata
+            const mergedLead = (chat.leadStatus && chat.leadStatus !== 'UNASSIGNED') ? chat.leadStatus : existing.leadStatus;
+            const mergedCall = chat.callStatus || existing.callStatus;
+            const mergedFollow = chat.followUpDate || existing.followUpDate;
+            const mergedNotes = chat.notes || existing.notes;
+            const mergedNotesList = (chat.notesList && chat.notesList.length > 0) ? chat.notesList : existing.notesList;
+            const newestTime = Math.max(existing.lastMessageAt || 0, chat.lastMessageAt || 0);
+
+            // Merge messages if stored under old key
+            const oldMsgs = this.messages.get(key) || [];
+            if (oldMsgs.length > 0 && key !== canonicalJid) {
+              const existingMsgs = this.messages.get(canonicalJid) || [];
+              const combined = [...existingMsgs, ...oldMsgs];
+              const uniqueMsgs = Array.from(new Map(combined.map(m => [m.id, m])).values());
+              uniqueMsgs.sort((a, b) => a.timestamp - b.timestamp);
+              this.messages.set(canonicalJid, uniqueMsgs);
+            }
+
+            cleanedChats.set(canonicalJid, {
+              ...existing,
+              leadStatus: mergedLead || 'UNASSIGNED',
+              callStatus: mergedCall,
+              followUpDate: mergedFollow,
+              notes: mergedNotes,
+              notesList: mergedNotesList,
+              lastMessageAt: newestTime,
+              unreadCount: Math.max(existing.unreadCount || 0, chat.unreadCount || 0),
+            });
+          }
+        }
+
+        this.chats = cleanedChats;
+        this.saveData();
+        console.log(`[Storage] Loaded & cleaned: ${this.chats.size} unique chats and ${this.contacts.size} contacts from storage.`);
       }
     } catch (err) {
       console.error('[Storage] Error loading db.json:', err);
@@ -115,6 +193,9 @@ class StorageEngine {
     const target = mapped || jid;
     const targetClean = target.split('@')[0];
     if (target.endsWith('@g.us')) return `${targetClean}@g.us`;
+    const digits = targetClean.replace(/\D/g, '');
+    const ten = this.canonicalPhone(digits);
+    if (ten && ten.length === 10) return `91${ten}@s.whatsapp.net`;
     return `${targetClean}@s.whatsapp.net`;
   }
 
@@ -427,14 +508,6 @@ class StorageEngine {
     return null;
   }
 
-  // Normalize any Indian phone number to its canonical 10-digit form for deduplication
-  // e.g. "919714515645" → "9714515645", "9714515645" → "9714515645"
-  private canonicalPhone(digits: string): string {
-    if (!digits) return digits;
-    if (digits.length === 12 && digits.startsWith('91')) return digits.slice(2);
-    if (digits.length === 13 && digits.startsWith('091')) return digits.slice(3);
-    return digits;
-  }
 
   public getAllChatsSorted(): CRMChat[] {
     const list = Array.from(this.chats.values());
@@ -601,46 +674,87 @@ class StorageEngine {
     tags?: string[];
   }) {
     const jid = this.resolveJid(rawJid);
-    const cleanNum = (metadata.phone || rawJid).replace(/\D/g, '') || jid.split('@')[0].replace(/\D/g, '');
+    const rawDigits = (metadata.phone || rawJid).replace(/\D/g, '') || jid.split('@')[0].replace(/\D/g, '');
+    const tenDigit = this.canonicalPhone(rawDigits);
+    const canonicalJid = jid.endsWith('@g.us') ? jid : (tenDigit.length >= 10 ? `91${tenDigit}@s.whatsapp.net` : jid);
 
     const BAD_NAMES = new Set(['.', 'contact', 'unsaved contact', 'unknown contact']);
-    // Always use name from extension — it reads directly from WhatsApp UI header (most accurate source)
     const incomingNameClean = (metadata.name || '').trim();
     const incomingNameIsValid = incomingNameClean.length > 1 && !BAD_NAMES.has(incomingNameClean.toLowerCase());
 
-    // 1. Update Contact
-    let contact = this.contacts.get(jid) || (cleanNum ? this.contacts.get(cleanNum) : undefined);
+    // 1. Update or create Contact strictly under canonicalJid
+    let contact = this.contacts.get(canonicalJid) || this.contacts.get(jid);
     if (!contact) {
-      contact = this.upsertContact(jid, {
-        phone: cleanNum,
-        name: incomingNameIsValid ? incomingNameClean : (this.getContactName(rawJid) || this.formatPhoneFallback(cleanNum)),
-        ...metadata
-      });
+      contact = {
+        jid: canonicalJid,
+        phone: tenDigit ? `91${tenDigit}` : rawDigits,
+        name: incomingNameIsValid ? incomingNameClean : this.formatPhoneFallback(rawDigits),
+        leadStatus: metadata.leadStatus || 'UNASSIGNED',
+        tags: metadata.tags || [],
+        notes: metadata.notes,
+        notesList: metadata.notesList || [],
+        followUpDate: metadata.followUpDate,
+        callStatus: metadata.callStatus,
+      };
     } else {
-      // Always update name if extension provides a valid one (extension reads from WA UI directly)
-      if (incomingNameIsValid) {
-        contact.name = incomingNameClean;
-      }
-      if (metadata.phone) contact.phone = metadata.phone;
+      if (incomingNameIsValid) contact.name = incomingNameClean;
       if (metadata.leadStatus !== undefined) contact.leadStatus = metadata.leadStatus;
       if (metadata.callStatus !== undefined) contact.callStatus = metadata.callStatus;
       if (metadata.followUpDate !== undefined) contact.followUpDate = metadata.followUpDate;
       if (metadata.notes !== undefined) contact.notes = metadata.notes;
       if (metadata.notesList !== undefined) contact.notesList = metadata.notesList;
       if (metadata.tags !== undefined) contact.tags = metadata.tags;
-      this.contacts.set(jid, contact);
-      if (cleanNum) this.contacts.set(cleanNum, contact);
+      if (tenDigit) contact.phone = `91${tenDigit}`;
+    }
+    this.contacts.set(canonicalJid, contact);
+
+    // 2. Find and merge ANY existing chat entries for this number into canonicalJid
+    let chat = this.chats.get(canonicalJid) || this.chats.get(jid);
+    const keysToDelete: string[] = [];
+
+    if (tenDigit && tenDigit.length >= 10) {
+      for (const [k, c] of this.chats.entries()) {
+        if (k === canonicalJid) continue;
+        const cDigits = this.canonicalPhone((c.phone || c.jid || k).split('@')[0].replace(/\D/g, ''));
+        if (cDigits === tenDigit) {
+          if (!chat) chat = { ...c };
+          else {
+            if (c.leadStatus && c.leadStatus !== 'UNASSIGNED') chat.leadStatus = c.leadStatus;
+            if (c.callStatus) chat.callStatus = c.callStatus;
+            if (c.notes) chat.notes = c.notes;
+            if (c.notesList && c.notesList.length > 0) chat.notesList = c.notesList;
+            if (c.followUpDate) chat.followUpDate = c.followUpDate;
+            chat.lastMessageAt = Math.max(chat.lastMessageAt || 0, c.lastMessageAt || 0);
+          }
+          keysToDelete.push(k);
+
+          // Merge messages to canonicalJid
+          const oldMsgs = this.messages.get(k) || [];
+          if (oldMsgs.length > 0) {
+            const curMsgs = this.messages.get(canonicalJid) || [];
+            const combined = [...curMsgs, ...oldMsgs];
+            const uniqueMsgs = Array.from(new Map(combined.map(m => [m.id, m])).values());
+            uniqueMsgs.sort((a, b) => a.timestamp - b.timestamp);
+            this.messages.set(canonicalJid, uniqueMsgs);
+            this.messages.delete(k);
+          }
+        }
+      }
     }
 
-    // 2. Update or Create Chat in DB
-    let chat = this.chats.get(jid) || (cleanNum ? this.chats.get(cleanNum) : undefined);
+    // Delete duplicate keys from chats map
+    for (const k of keysToDelete) {
+      this.chats.delete(k);
+    }
+
     if (!chat) {
       chat = {
-        jid: jid.includes('@') ? jid : `${jid}@s.whatsapp.net`,
-        name: incomingNameIsValid ? incomingNameClean : (contact?.name || this.formatPhoneFallback(cleanNum)),
+        jid: canonicalJid,
+        phone: tenDigit ? `91${tenDigit}` : rawDigits,
+        name: incomingNameIsValid ? incomingNameClean : (contact.name || this.formatPhoneFallback(rawDigits)),
         unreadCount: 0,
         lastMessageAt: Date.now(),
-        isGroup: false,
+        isGroup: canonicalJid.endsWith('@g.us'),
         leadStatus: metadata.leadStatus || 'UNASSIGNED',
         callStatus: metadata.callStatus,
         followUpDate: metadata.followUpDate,
@@ -648,41 +762,21 @@ class StorageEngine {
         notesList: metadata.notesList || [],
         tags: metadata.tags || [],
       };
-      this.chats.set(chat.jid, chat);
-      if (cleanNum) this.chats.set(cleanNum, chat);
     } else {
-      // Always update name if extension provides a valid one
-      if (incomingNameIsValid) {
-        chat.name = incomingNameClean;
-      }
+      if (incomingNameIsValid) chat.name = incomingNameClean;
       if (metadata.leadStatus !== undefined) chat.leadStatus = metadata.leadStatus;
       if (metadata.callStatus !== undefined) chat.callStatus = metadata.callStatus;
       if (metadata.followUpDate !== undefined) chat.followUpDate = metadata.followUpDate;
       if (metadata.notes !== undefined) chat.notes = metadata.notes;
       if (metadata.notesList !== undefined) chat.notesList = metadata.notesList;
       if (metadata.tags !== undefined) chat.tags = metadata.tags;
-      this.chats.set(chat.jid, chat);
-      if (cleanNum) this.chats.set(cleanNum, chat);
+      chat.jid = canonicalJid;
+      if (tenDigit) chat.phone = `91${tenDigit}`;
     }
 
-    // Update ALL chats matching this phone number
-    if (cleanNum && cleanNum.length >= 10) {
-      for (const [key, c] of this.chats.entries()) {
-        const num = c.jid.split('@')[0].replace(/\D/g, '');
-        if (num === cleanNum || num.endsWith(cleanNum) || cleanNum.endsWith(num)) {
-          if (incomingNameIsValid) c.name = incomingNameClean;
-          if (metadata.leadStatus !== undefined) c.leadStatus = metadata.leadStatus;
-          if (metadata.callStatus !== undefined) c.callStatus = metadata.callStatus;
-          if (metadata.followUpDate !== undefined) c.followUpDate = metadata.followUpDate;
-          if (metadata.notes !== undefined) c.notes = metadata.notes;
-          if (metadata.notesList !== undefined) c.notesList = metadata.notesList;
-          this.chats.set(key, c);
-        }
-      }
-    }
+    // Store ONLY under canonicalJid
+    this.chats.set(canonicalJid, chat);
 
-    // Only store under the full JID — NOT under cleanNum — to prevent duplicates
-    // (Deduplication in getAllChatsSorted handles the rest)
     this.saveData();
     return chat;
   }

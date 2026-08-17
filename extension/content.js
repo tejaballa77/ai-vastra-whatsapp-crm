@@ -357,9 +357,11 @@ function fetchCrmMetadata(searchKey, displayName, domAvatar) {
 }
 
 function saveCrmMetadata() {
-  // Use phone-based JID always to avoid duplicate entries in CRM
-  const targetJid = activePhoneClean.length >= 10
-    ? `${activePhoneClean}@s.whatsapp.net`
+  // Normalize phone number with 91 prefix for canonical WhatsApp JID
+  let cleanDigits = (activePhoneClean || activeContactKey).replace(/\D/g, '');
+  if (cleanDigits.length === 10) cleanDigits = '91' + cleanDigits;
+  const targetJid = cleanDigits.length >= 10
+    ? `${cleanDigits}@s.whatsapp.net`
     : (activeContactKey.includes('@') ? activeContactKey : `${activeContactKey}@s.whatsapp.net`);
 
   // Use phone number as display name fallback if name is invalid (".", "Contact", empty)

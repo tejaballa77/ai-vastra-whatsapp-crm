@@ -125,19 +125,40 @@ function startChatObserver() {
   });
 }
 
+// Extract real contact name/number specifically excluding status lines ("last seen", "online", etc.)
 function detectActiveContact(force = false) {
   const mainHeader = document.querySelector('#main header');
   if (!mainHeader) return;
 
   ensureHeaderButton();
 
-  // Find contact title in active chat
-  const titleEl = mainHeader.querySelector('span[title]') || 
-                  mainHeader.querySelector('span[dir="auto"]');
-  if (!titleEl) return;
+  // Find all text elements in header
+  const spans = Array.from(mainHeader.querySelectorAll('span[title], span[dir="auto"]'));
+  let targetTitle = '';
 
-  const rawTitle = titleEl.getAttribute('title') || titleEl.textContent || '';
-  if (!rawTitle) return;
+  for (const span of spans) {
+    const txt = (span.getAttribute('title') || span.textContent || '').trim();
+    if (!txt) continue;
+
+    const lower = txt.toLowerCase();
+    // Exclude sub-titles like "last seen today...", "online", "typing...", "click here"
+    if (
+      lower.includes('last seen') ||
+      lower.includes('online') ||
+      lower.includes('typing') ||
+      lower.includes('click here') ||
+      lower.includes('group') ||
+      lower.includes('members') ||
+      txt === '⚡ AI CRM'
+    ) {
+      continue;
+    }
+
+    targetTitle = txt;
+    break;
+  }
+
+  if (!targetTitle) return;
 
   // Extract avatar image from header if available
   const imgEl = mainHeader.querySelector('img');
@@ -146,19 +167,29 @@ function detectActiveContact(force = false) {
     domAvatar = imgEl.src;
   }
 
-  const cleanDigits = rawTitle.replace(/\D/g, '');
-  const contactKey = cleanDigits.length >= 10 ? cleanDigits : rawTitle;
+  const cleanDigits = targetTitle.replace(/\D/g, '');
+  const contactKey = cleanDigits.length >= 10 ? cleanDigits : targetTitle;
 
   if (activeContactKey !== contactKey || force) {
     activeContactKey = contactKey;
-    activeDisplayName = rawTitle;
+    activeDisplayName = targetTitle;
     activePhoneClean = cleanDigits;
     activeAvatarUrl = domAvatar;
-    fetchCrmMetadata(contactKey, rawTitle, domAvatar);
+    fetchCrmMetadata(contactKey, targetTitle, domAvatar);
   }
 }
 
 function fetchCrmMetadata(searchKey, displayName, domAvatar) {
+  // Check local cache first so shifting chats never loses state
+  const cached = chatsMetadataMap[searchKey] || chatsMetadataMap[activePhoneClean] || chatsMetadataMap[displayName];
+  if (cached) {
+    currentLeadStatus = cached.leadStatus || 'UNASSIGNED';
+    currentCallStatus = cached.callStatus || null;
+    currentFollowUp = cached.followUpDate || '';
+    currentNotesList = cached.notesList || [];
+    renderCrmPanel(displayName, activePhoneClean, domAvatar || activeAvatarUrl);
+  }
+
   chrome.runtime.sendMessage({ action: 'FETCH_CRM_METADATA', phoneClean: searchKey }, (response) => {
     let resolvedPhone = activePhoneClean;
     let resolvedAvatar = domAvatar || activeAvatarUrl;
@@ -181,15 +212,19 @@ function fetchCrmMetadata(searchKey, displayName, domAvatar) {
         resolvedAvatar = chat.avatarUrl;
       }
 
-      // Cache metadata map for chat list badges
-      chatsMetadataMap[searchKey] = chat;
-      if (resolvedPhone) chatsMetadataMap[resolvedPhone] = chat;
-      if (displayName) chatsMetadataMap[displayName] = chat;
-    } else {
-      currentLeadStatus = 'UNASSIGNED';
-      currentCallStatus = null;
-      currentFollowUp = '';
-      currentNotesList = [];
+      // Cache metadata map for chat list badges and fast state retention
+      const meta = {
+        leadStatus: currentLeadStatus,
+        callStatus: currentCallStatus,
+        followUpDate: currentFollowUp,
+        notesList: currentNotesList,
+        name: displayName,
+        phone: resolvedPhone
+      };
+
+      chatsMetadataMap[searchKey] = meta;
+      if (resolvedPhone) chatsMetadataMap[resolvedPhone] = meta;
+      if (displayName) chatsMetadataMap[displayName] = meta;
     }
 
     activePhoneClean = resolvedPhone;
@@ -205,7 +240,6 @@ function saveCrmMetadata(showToast = false) {
     ? `${activePhoneClean}@s.whatsapp.net` 
     : (activeContactKey.includes('@') ? activeContactKey : `${activeContactKey}@s.whatsapp.net`);
 
-  // Update local metadata map immediately
   const metaObj = {
     leadStatus: currentLeadStatus,
     callStatus: currentCallStatus,
@@ -215,6 +249,7 @@ function saveCrmMetadata(showToast = false) {
     phone: activePhoneClean
   };
 
+  // Cache in local metadata map immediately
   chatsMetadataMap[activeContactKey] = metaObj;
   if (activePhoneClean) chatsMetadataMap[activePhoneClean] = metaObj;
   if (activeDisplayName) chatsMetadataMap[activeDisplayName] = metaObj;
@@ -239,7 +274,7 @@ function saveCrmMetadata(showToast = false) {
     const toast = document.getElementById('aivastra-save-toast');
     if (toast) {
       toast.style.display = 'block';
-      setTimeout(() => { toast.style.display = 'none'; }, 2000);
+      setTimeout(() => { toast.style.display = 'none'; }, 2500);
     }
   }
 }
@@ -352,12 +387,12 @@ function renderCrmPanel(displayName, cleanPhone, avatarUrl) {
     renderCrmPanel(displayName, cleanPhone, avatarUrl);
   };
 
-  document.getElementById('btn-call-yes').onclick = () => { currentCallStatus = 'YES'; renderCrmPanel(displayName, cleanPhone, avatarUrl); };
-  document.getElementById('btn-call-no').onclick = () => { currentCallStatus = 'NO'; renderCrmPanel(displayName, cleanPhone, avatarUrl); };
+  document.getElementById('btn-call-yes').onclick = () => { currentCallStatus = 'YES'; };
+  document.getElementById('btn-call-no').onclick = () => { currentCallStatus = 'NO'; };
 
-  document.getElementById('btn-interested').onclick = () => { currentLeadStatus = 'INTERESTED'; renderCrmPanel(displayName, cleanPhone, avatarUrl); };
-  document.getElementById('btn-warm').onclick = () => { currentLeadStatus = 'WARM_INTERESTED'; renderCrmPanel(displayName, cleanPhone, avatarUrl); };
-  document.getElementById('btn-not-interested').onclick = () => { currentLeadStatus = 'NOT_INTERESTED'; renderCrmPanel(displayName, cleanPhone, avatarUrl); };
+  document.getElementById('btn-interested').onclick = () => { currentLeadStatus = 'INTERESTED'; };
+  document.getElementById('btn-warm').onclick = () => { currentLeadStatus = 'WARM_INTERESTED'; };
+  document.getElementById('btn-not-interested').onclick = () => { currentLeadStatus = 'NOT_INTERESTED'; };
 
   document.getElementById('aivastra-followup-date').onchange = (e) => { currentFollowUp = e.target.value; };
 

@@ -1,6 +1,39 @@
 // AI Vastra Chrome Extension - Injected Content Script on web.whatsapp.com
 console.log('[AI Vastra Chrome Extension] Script active on WhatsApp Web!');
 
+// Safe chrome.storage wrapper — prevents crash when running in non-extension frames
+function safeStorageGet(keys, callback) {
+  try {
+    if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+      chrome.storage.local.get(keys, callback);
+    } else {
+      callback({});
+    }
+  } catch (e) {
+    callback({});
+  }
+}
+
+function safeStorageSet(obj) {
+  try {
+    if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+      chrome.storage.local.set(obj);
+    }
+  } catch (e) {}
+}
+
+function safeSendMessage(msg, callback) {
+  try {
+    if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.sendMessage) {
+      chrome.runtime.sendMessage(msg, callback || (() => {}));
+    } else {
+      if (callback) callback(null);
+    }
+  } catch (e) {
+    if (callback) callback(null);
+  }
+}
+
 // Active chat identification
 let activeContactKey = '';
 let activeDisplayName = '';
@@ -35,7 +68,6 @@ function ensureCrmPanel() {
 function ensureHeaderButton() {
   const mainHeader = document.querySelector('#main header');
   if (!mainHeader) return;
-
   if (document.getElementById('aivastra-toggle-btn')) return;
 
   const btnContainer = document.createElement('div');
@@ -74,14 +106,13 @@ function ensureHeaderButton() {
   };
 }
 
-// Inject "⚡ CRM Info" Filter Pill into WhatsApp Web's Native Chat Filter Bar (All, Unread, Favorites)
+// Inject "⚡ CRM Info" Filter Pill
 function injectCrmFilterPill() {
   const filterBar = document.querySelector('div[role="tablist"]') ||
                     document.querySelector('#side button[role="tab"]')?.parentElement ||
                     document.querySelector('#pane-side')?.previousElementSibling;
 
   if (!filterBar) return;
-
   if (document.getElementById('aivastra-crm-filter-pill')) return;
 
   const pill = document.createElement('button');
@@ -99,7 +130,6 @@ function injectCrmFilterPill() {
 
   filterBar.appendChild(pill);
 
-  // Listen to native WhatsApp filter pill clicks to un-toggle CRM filter
   filterBar.querySelectorAll('button:not(#aivastra-crm-filter-pill)').forEach(btn => {
     btn.addEventListener('click', () => {
       isCrmFilterActive = false;
@@ -112,7 +142,6 @@ function injectCrmFilterPill() {
 function updateCrmFilterPillUI() {
   const pill = document.getElementById('aivastra-crm-filter-pill');
   if (!pill) return;
-
   if (isCrmFilterActive) {
     pill.classList.add('active-crm-filter');
   } else {
@@ -124,8 +153,52 @@ function filterChatListByCrmInfo() {
   const chatItems = document.querySelectorAll('#pane-side [role="listitem"]');
   if (!chatItems || chatItems.length === 0) return;
 
-  chrome.storage.local.get(null, (allStored) => {
+  safeStorageGet(null, (allStored) => {
     chatItems.forEach((item) => {
+      try {
+        const titleEl = item.querySelector('span[title]') || item.querySelector('span[dir="auto"]');
+        if (!titleEl) return;
+
+        const rawTitle = (titleEl.getAttribute('title') || titleEl.textContent || '').trim();
+        const cleanDigits = rawTitle.replace(/\D/g, '');
+        const key = cleanDigits.length >= 10 ? cleanDigits : rawTitle;
+
+        const chatMeta = chatsMetadataMap[key] || chatsMetadataMap[rawTitle] || chatsMetadataMap[cleanDigits];
+        const localMeta = (allStored || {})[`crm_meta_${key}`] || (allStored || {})[`crm_meta_${cleanDigits}`] || (allStored || {})[`crm_meta_${rawTitle}`];
+
+        const hasSavedInfo = Boolean(
+          (chatMeta && (chatMeta.leadStatus !== 'UNASSIGNED' || chatMeta.callStatus === 'YES' || chatMeta.followUpDate || (chatMeta.notesList && chatMeta.notesList.length > 0))) ||
+          (localMeta && (localMeta.leadStatus !== 'UNASSIGNED' || localMeta.callStatus === 'YES' || localMeta.followUpDate || (localMeta.notesList && localMeta.notesList.length > 0)))
+        );
+
+        const targetRow = item.closest('div[style*="height"]') || item.parentElement || item;
+        if (isCrmFilterActive) {
+          targetRow.style.display = hasSavedInfo ? '' : 'none';
+        } else {
+          targetRow.style.display = '';
+        }
+      } catch (e) {}
+    });
+  });
+}
+
+function resetChatListVisibility() {
+  const chatItems = document.querySelectorAll('#pane-side [role="listitem"]');
+  chatItems.forEach((item) => {
+    try {
+      const targetRow = item.closest('div[style*="height"]') || item.parentElement || item;
+      targetRow.style.display = '';
+    } catch (e) {}
+  });
+}
+
+// Inject Lead Status Emoji Badges into left chat list
+function injectChatListBadges() {
+  const chatItems = document.querySelectorAll('#pane-side [role="listitem"]');
+  if (!chatItems || chatItems.length === 0) return;
+
+  chatItems.forEach((item) => {
+    try {
       const titleEl = item.querySelector('span[title]') || item.querySelector('span[dir="auto"]');
       if (!titleEl) return;
 
@@ -134,174 +207,107 @@ function filterChatListByCrmInfo() {
       const key = cleanDigits.length >= 10 ? cleanDigits : rawTitle;
 
       const chatMeta = chatsMetadataMap[key] || chatsMetadataMap[rawTitle] || chatsMetadataMap[cleanDigits];
-      const localMeta = allStored[`crm_meta_${key}`] || allStored[`crm_meta_${cleanDigits}`] || allStored[`crm_meta_${rawTitle}`];
+      const status = chatMeta?.leadStatus || (key === activeContactKey ? activeFormData.leadStatus : null);
 
-      const hasSavedInfo = Boolean(
-        (chatMeta && (chatMeta.leadStatus !== 'UNASSIGNED' || chatMeta.callStatus === 'YES' || chatMeta.followUpDate || (chatMeta.notesList && chatMeta.notesList.length > 0))) ||
-        (localMeta && (localMeta.leadStatus !== 'UNASSIGNED' || localMeta.callStatus === 'YES' || localMeta.followUpDate || (localMeta.notesList && localMeta.notesList.length > 0)))
-      );
+      let existingBadge = item.querySelector('.aivastra-chat-badge');
 
-      const targetRow = item.closest('div[style*="height"]') || item.parentElement || item;
+      if (status && status !== 'UNASSIGNED') {
+        let badgeHtml = '';
+        if (status === 'INTERESTED') {
+          badgeHtml = '<span class="aivastra-chat-badge badge-interested">👍 Interested</span>';
+        } else if (status === 'WARM_INTERESTED' || status === 'WARM') {
+          badgeHtml = '<span class="aivastra-chat-badge badge-warm">🔥 Warm</span>';
+        } else if (status === 'NOT_INTERESTED') {
+          badgeHtml = '<span class="aivastra-chat-badge badge-not-interested">👎 Not Interested</span>';
+        }
 
-      if (isCrmFilterActive) {
-        if (hasSavedInfo) {
-          targetRow.style.display = '';
-          targetRow.style.visibility = 'visible';
+        if (existingBadge) {
+          existingBadge.outerHTML = badgeHtml;
         } else {
-          targetRow.style.display = 'none';
-          targetRow.style.visibility = 'hidden';
+          const titleParent = titleEl ? titleEl.parentElement : null;
+          if (titleParent) {
+            const wrapper = document.createElement('span');
+            wrapper.innerHTML = badgeHtml;
+            if (wrapper.firstChild) titleParent.appendChild(wrapper.firstChild);
+          }
         }
-      } else {
-        targetRow.style.display = '';
-        targetRow.style.visibility = 'visible';
+      } else if (existingBadge) {
+        existingBadge.remove();
       }
-    });
-  });
-}
-
-function resetChatListVisibility() {
-  const chatItems = document.querySelectorAll('#pane-side [role="listitem"]');
-  chatItems.forEach((item) => {
-    const targetRow = item.closest('div[style*="height"]') || item.parentElement || item;
-    targetRow.style.display = '';
-    targetRow.style.visibility = 'visible';
-  });
-}
-
-// Inject Lead Status Emoji Badges into WhatsApp Web Left Chat List (#pane-side)
-function injectChatListBadges() {
-  const chatItems = document.querySelectorAll('#pane-side [role="listitem"]');
-  if (!chatItems || chatItems.length === 0) return;
-
-  chatItems.forEach((item) => {
-    const titleEl = item.querySelector('span[title]') || item.querySelector('span[dir="auto"]');
-    if (!titleEl) return;
-
-    const rawTitle = titleEl.getAttribute('title') || titleEl.textContent || '';
-    const cleanDigits = rawTitle.replace(/\D/g, '');
-    const key = cleanDigits.length >= 10 ? cleanDigits : rawTitle;
-
-    const chatMeta = chatsMetadataMap[key] || chatsMetadataMap[rawTitle] || chatsMetadataMap[cleanDigits];
-    const status = chatMeta?.leadStatus || (key === activeContactKey ? activeFormData.leadStatus : null);
-
-    let existingBadge = item.querySelector('.aivastra-chat-badge');
-
-    if (status && status !== 'UNASSIGNED') {
-      let badgeHtml = '';
-      if (status === 'INTERESTED') {
-        badgeHtml = '<span class="aivastra-chat-badge badge-interested" title="Lead: Interested">👍 Interested</span>';
-      } else if (status === 'WARM_INTERESTED' || status === 'WARM') {
-        badgeHtml = '<span class="aivastra-chat-badge badge-warm" title="Lead: Warm">🔥 Warm</span>';
-      } else if (status === 'NOT_INTERESTED') {
-        badgeHtml = '<span class="aivastra-chat-badge badge-not-interested" title="Lead: Not Interested">👎 Not Interested</span>';
-      }
-
-      if (existingBadge) {
-        existingBadge.outerHTML = badgeHtml;
-      } else {
-        const titleParent = titleEl.parentElement;
-        if (titleParent) {
-          const wrapper = document.createElement('span');
-          wrapper.innerHTML = badgeHtml;
-          titleParent.appendChild(wrapper.firstChild);
-        }
-      }
-    } else if (existingBadge) {
-      existingBadge.remove();
-    }
+    } catch (e) {}
   });
 
-  if (isCrmFilterActive) {
-    filterChatListByCrmInfo();
-  }
+  if (isCrmFilterActive) filterChatListByCrmInfo();
 }
 
 // Observe WhatsApp Web chat header and DOM changes
 function startChatObserver() {
   const observer = new MutationObserver(() => {
-    ensureHeaderButton();
-    injectCrmFilterPill();
-    detectActiveContact();
-    injectChatListBadges();
+    try {
+      ensureHeaderButton();
+      injectCrmFilterPill();
+      detectActiveContact();
+      injectChatListBadges();
+    } catch (e) {}
   });
 
-  observer.observe(document.body, {
-    childList: true,
-    subtree: true
-  });
+  observer.observe(document.body, { childList: true, subtree: true });
 }
 
-// Extract real contact name/number specifically excluding status lines ("last seen", "online", etc.)
 function detectActiveContact(force = false) {
-  const mainHeader = document.querySelector('#main header');
-  if (!mainHeader) return;
+  try {
+    const mainHeader = document.querySelector('#main header');
+    if (!mainHeader) return;
 
-  ensureHeaderButton();
-  injectCrmFilterPill();
+    ensureHeaderButton();
+    injectCrmFilterPill();
 
-  // Find all text elements in header
-  const spans = Array.from(mainHeader.querySelectorAll('span[title], span[dir="auto"]'));
-  let targetTitle = '';
+    const spans = Array.from(mainHeader.querySelectorAll('span[title], span[dir="auto"]'));
+    let targetTitle = '';
 
-  for (const span of spans) {
-    const txt = (span.getAttribute('title') || span.textContent || '').trim();
-    if (!txt) continue;
-
-    const lower = txt.toLowerCase();
-    if (
-      lower.includes('last seen') ||
-      lower.includes('online') ||
-      lower.includes('typing') ||
-      lower.includes('click here') ||
-      lower.includes('group') ||
-      lower.includes('members') ||
-      txt === '⚡ AI CRM'
-    ) {
-      continue;
+    for (const span of spans) {
+      const txt = (span.getAttribute('title') || span.textContent || '').trim();
+      if (!txt) continue;
+      const lower = txt.toLowerCase();
+      if (
+        lower.includes('last seen') || lower.includes('online') ||
+        lower.includes('typing') || lower.includes('click here') ||
+        lower.includes('group') || lower.includes('members') ||
+        txt === '⚡ AI CRM'
+      ) continue;
+      targetTitle = txt;
+      break;
     }
 
-    targetTitle = txt;
-    break;
-  }
+    if (!targetTitle) return;
 
-  if (!targetTitle) return;
+    const imgEl = mainHeader.querySelector('img');
+    let domAvatar = '';
+    if (imgEl && imgEl.src && !imgEl.src.includes('data:image/svg')) {
+      domAvatar = imgEl.src;
+    }
 
-  // Extract avatar image from header if available
-  const imgEl = mainHeader.querySelector('img');
-  let domAvatar = '';
-  if (imgEl && imgEl.src && !imgEl.src.includes('data:image/svg')) {
-    domAvatar = imgEl.src;
-  }
+    const cleanDigits = targetTitle.replace(/\D/g, '');
+    const contactKey = cleanDigits.length >= 10 ? cleanDigits : targetTitle;
 
-  const cleanDigits = targetTitle.replace(/\D/g, '');
-  const contactKey = cleanDigits.length >= 10 ? cleanDigits : targetTitle;
+    if (activeContactKey !== contactKey || force) {
+      activeContactKey = contactKey;
+      activeDisplayName = targetTitle;
+      activePhoneClean = cleanDigits;
+      activeAvatarUrl = domAvatar;
 
-  // STRICT CHAT SWITCHING: When changing active chat, reset form data immediately before loading new chat data
-  if (activeContactKey !== contactKey || force) {
-    activeContactKey = contactKey;
-    activeDisplayName = targetTitle;
-    activePhoneClean = cleanDigits;
-    activeAvatarUrl = domAvatar;
-
-    // Reset current form data for clean chat isolation
-    activeFormData = {
-      leadStatus: 'UNASSIGNED',
-      callStatus: null,
-      followUpDate: '',
-      notesList: []
-    };
-
-    fetchCrmMetadata(contactKey, targetTitle, domAvatar);
-  }
+      activeFormData = { leadStatus: 'UNASSIGNED', callStatus: null, followUpDate: '', notesList: [] };
+      fetchCrmMetadata(contactKey, targetTitle, domAvatar);
+    }
+  } catch (e) {}
 }
 
 function fetchCrmMetadata(searchKey, displayName, domAvatar) {
   const storageKeys = [`crm_meta_${searchKey}`, `crm_meta_${activePhoneClean}`, `crm_meta_${displayName}`];
 
-  // 1. Load from Chrome Storage Local FIRST for instant chat isolation
-  chrome.storage.local.get(storageKeys, (stored) => {
-    const localData = stored[`crm_meta_${searchKey}`] || stored[`crm_meta_${activePhoneClean}`] || stored[`crm_meta_${displayName}`];
-    
+  safeStorageGet(storageKeys, (stored) => {
+    const localData = (stored || {})[`crm_meta_${searchKey}`] || (stored || {})[`crm_meta_${activePhoneClean}`] || (stored || {})[`crm_meta_${displayName}`];
+
     if (localData) {
       activeFormData = {
         leadStatus: localData.leadStatus || 'UNASSIGNED',
@@ -310,18 +316,12 @@ function fetchCrmMetadata(searchKey, displayName, domAvatar) {
         notesList: localData.notesList || []
       };
     } else {
-      activeFormData = {
-        leadStatus: 'UNASSIGNED',
-        callStatus: null,
-        followUpDate: '',
-        notesList: []
-      };
+      activeFormData = { leadStatus: 'UNASSIGNED', callStatus: null, followUpDate: '', notesList: [] };
     }
 
     renderCrmPanel(displayName, activePhoneClean, domAvatar || activeAvatarUrl);
 
-    // 2. Delegate ALL network fetching strictly to background service worker (Bypasses page CSP)
-    chrome.runtime.sendMessage({ action: 'FETCH_CRM_METADATA', phoneClean: searchKey }, (response) => {
+    safeSendMessage({ action: 'FETCH_CRM_METADATA', phoneClean: searchKey }, (response) => {
       let resolvedPhone = activePhoneClean;
       let resolvedAvatar = domAvatar || activeAvatarUrl;
 
@@ -335,24 +335,14 @@ function fetchCrmMetadata(searchKey, displayName, domAvatar) {
             notesList: chat.notesList || (chat.notes ? [chat.notes] : [])
           };
         }
-
-        if (chat.phone) {
-          resolvedPhone = chat.phone.replace(/\D/g, '');
-        } else if (chat.jid) {
+        if (chat.phone) resolvedPhone = chat.phone.replace(/\D/g, '');
+        else if (chat.jid) {
           const jidNum = chat.jid.split('@')[0].replace(/\D/g, '');
           if (jidNum.length >= 10) resolvedPhone = jidNum;
         }
+        if (!resolvedAvatar && chat.avatarUrl) resolvedAvatar = chat.avatarUrl;
 
-        if (!resolvedAvatar && chat.avatarUrl) {
-          resolvedAvatar = chat.avatarUrl;
-        }
-
-        const meta = {
-          ...activeFormData,
-          name: displayName,
-          phone: resolvedPhone
-        };
-
+        const meta = { ...activeFormData, name: displayName, phone: resolvedPhone };
         chatsMetadataMap[searchKey] = meta;
         if (resolvedPhone) chatsMetadataMap[resolvedPhone] = meta;
         if (displayName) chatsMetadataMap[displayName] = meta;
@@ -360,7 +350,6 @@ function fetchCrmMetadata(searchKey, displayName, domAvatar) {
 
       activePhoneClean = resolvedPhone;
       activeAvatarUrl = resolvedAvatar;
-
       renderCrmPanel(displayName, resolvedPhone, resolvedAvatar);
       injectChatListBadges();
     });
@@ -368,25 +357,19 @@ function fetchCrmMetadata(searchKey, displayName, domAvatar) {
 }
 
 function saveCrmMetadata() {
-  const targetJid = activePhoneClean.length >= 10 
-    ? `${activePhoneClean}@s.whatsapp.net` 
+  const targetJid = activePhoneClean.length >= 10
+    ? `${activePhoneClean}@s.whatsapp.net`
     : (activeContactKey.includes('@') ? activeContactKey : `${activeContactKey}@s.whatsapp.net`);
 
-  const metaObj = {
-    ...activeFormData,
-    name: activeDisplayName,
-    phone: activePhoneClean
-  };
+  const metaObj = { ...activeFormData, name: activeDisplayName, phone: activePhoneClean };
 
-  // 1. Save to Chrome Storage Local permanently for this exact contact
   const saveKeys = {};
   saveKeys[`crm_meta_${activeContactKey}`] = metaObj;
   if (activePhoneClean) saveKeys[`crm_meta_${activePhoneClean}`] = metaObj;
   if (activeDisplayName) saveKeys[`crm_meta_${activeDisplayName}`] = metaObj;
 
-  chrome.storage.local.set(saveKeys);
+  safeStorageSet(saveKeys);
 
-  // 2. Save in memory map
   chatsMetadataMap[activeContactKey] = metaObj;
   if (activePhoneClean) chatsMetadataMap[activePhoneClean] = metaObj;
   if (activeDisplayName) chatsMetadataMap[activeDisplayName] = metaObj;
@@ -401,19 +384,13 @@ function saveCrmMetadata() {
     notesList: activeFormData.notesList
   };
 
-  // 3. Delegate REST update strictly to Background Service Worker (Immune to CSP restrictions)
-  chrome.runtime.sendMessage({
-    action: 'UPDATE_CRM_METADATA',
-    jid: targetJid,
-    data: payload
-  }, (response) => {
-    console.log('[AI Vastra Extension] Background save response:', response);
+  safeSendMessage({ action: 'UPDATE_CRM_METADATA', jid: targetJid, data: payload }, (response) => {
+    console.log('[AI Vastra Extension] Save response:', response);
   });
 
   injectChatListBadges();
 }
 
-// Render Contact Info Panel with CALL on top, LEAD STATUS below, extended CRM NOTES, and explicit SAVE button
 function renderCrmPanel(displayName, cleanPhone, avatarUrl, showSaveToast = false) {
   const panel = ensureCrmPanel();
   panel.style.display = isPanelVisible ? 'flex' : 'none';
@@ -431,21 +408,20 @@ function renderCrmPanel(displayName, cleanPhone, avatarUrl, showSaveToast = fals
 
   const avatarHtml = avatarUrl
     ? `<img src="${avatarUrl}" alt="${displayName}" class="aivastra-avatar-img" />`
-    : `<div class="aivastra-avatar-circle">${displayName.charAt(0).toUpperCase()}</div>`;
+    : `<div class="aivastra-avatar-circle">${(displayName || '?').charAt(0).toUpperCase()}</div>`;
 
   panel.innerHTML = `
     <div class="aivastra-header">
-      <div style="display: flex; align-items: center; gap: 6px;">
-        <span style="color: #00a884; font-size: 16px;">⚡</span>
+      <div style="display:flex;align-items:center;gap:6px;">
+        <span style="color:#00a884;font-size:16px;">⚡</span>
         <span>Contact Info</span>
       </div>
-      <div style="display: flex; align-items: center;">
+      <div style="display:flex;align-items:center;">
         <button id="aivastra-clear-btn" class="aivastra-clear-btn">Clear</button>
         <button id="aivastra-close-btn" class="aivastra-close-btn">✕</button>
       </div>
     </div>
 
-    <!-- PROMINENT 2-SECOND GREEN TOAST NOTIFICATION -->
     <div id="aivastra-save-toast" class="aivastra-toast" style="display:${showSaveToast ? 'block' : 'none'};">
       ✓ Contact info saved successfully!
     </div>
@@ -457,7 +433,6 @@ function renderCrmPanel(displayName, cleanPhone, avatarUrl, showSaveToast = fals
         <div class="aivastra-contact-phone">📞 ${formattedPhone}</div>
       </div>
 
-      <!-- 1. CALL ON TOP -->
       <div>
         <div class="aivastra-section-title">CALL</div>
         <div class="aivastra-btn-group-2">
@@ -466,7 +441,6 @@ function renderCrmPanel(displayName, cleanPhone, avatarUrl, showSaveToast = fals
         </div>
       </div>
 
-      <!-- 2. LEAD STATUS BELOW CALL -->
       <div>
         <div class="aivastra-section-title">LEAD STATUS</div>
         <div class="aivastra-btn-group">
@@ -476,33 +450,27 @@ function renderCrmPanel(displayName, cleanPhone, avatarUrl, showSaveToast = fals
         </div>
       </div>
 
-      <!-- 3. FOLLOW-UP SCHEDULE -->
       <div>
         <div class="aivastra-section-title">FOLLOW-UP SCHEDULE</div>
         <input type="date" id="aivastra-followup-date" class="aivastra-date-input" value="${activeFormData.followUpDate}" />
       </div>
 
-      <!-- 4. EXTENDED CRM NOTES DOWNWARDS -->
-      <div style="display: flex; flex-direction: column; flex: 1;">
+      <div style="display:flex;flex-direction:column;flex:1;">
         <div class="aivastra-section-title">CRM NOTES</div>
-        <textarea id="aivastra-note-text" class="aivastra-notes-area" rows="3" style="min-height: 80px;" placeholder="Add key note about customer requirements..."></textarea>
+        <textarea id="aivastra-note-text" class="aivastra-notes-area" rows="3" style="min-height:80px;" placeholder="Add key note about customer requirements..."></textarea>
         <button id="aivastra-add-note-btn" class="aivastra-add-note-btn">+ Add Note</button>
-
-        <div id="aivastra-notes-list" style="margin-top: 10px; max-height: 140px; overflow-y: auto;">
+        <div id="aivastra-notes-list" style="margin-top:10px;max-height:140px;overflow-y:auto;">
           ${activeFormData.notesList.map((n, i) => `
             <div class="aivastra-note-item">
-              <span style="flex:1; word-break: break-word;">${n}</span>
+              <span style="flex:1;word-break:break-word;">${n}</span>
               <span class="aivastra-note-delete" data-index="${i}" title="Delete Note">🗑</span>
             </div>
           `).join('')}
         </div>
       </div>
 
-      <!-- 5. EXPLICIT SAVE BUTTON -->
-      <div style="margin-top: auto; padding-top: 8px;">
-        <button id="aivastra-save-main-btn" class="aivastra-save-btn">
-          💾 Save Contact Info
-        </button>
+      <div style="margin-top:auto;padding-top:8px;">
+        <button id="aivastra-save-main-btn" class="aivastra-save-btn">💾 Save Contact Info</button>
       </div>
     </div>
   `;
@@ -514,69 +482,31 @@ function renderCrmPanel(displayName, cleanPhone, avatarUrl, showSaveToast = fals
     }, 2000);
   }
 
-  // Attach event listeners with instant visual state toggling
   document.getElementById('aivastra-close-btn').onclick = () => {
     isPanelVisible = false;
     panel.style.display = 'none';
   };
-
   document.getElementById('aivastra-clear-btn').onclick = () => {
-    activeFormData = {
-      leadStatus: 'UNASSIGNED',
-      callStatus: null,
-      followUpDate: '',
-      notesList: []
-    };
+    activeFormData = { leadStatus: 'UNASSIGNED', callStatus: null, followUpDate: '', notesList: [] };
     saveCrmMetadata();
     renderCrmPanel(displayName, cleanPhone, avatarUrl);
   };
-
-  document.getElementById('btn-call-yes').onclick = () => { 
-    activeFormData.callStatus = 'YES';
-    renderCrmPanel(displayName, cleanPhone, avatarUrl);
-  };
-  document.getElementById('btn-call-no').onclick = () => { 
-    activeFormData.callStatus = 'NO';
-    renderCrmPanel(displayName, cleanPhone, avatarUrl);
-  };
-
-  document.getElementById('btn-interested').onclick = () => { 
-    activeFormData.leadStatus = 'INTERESTED';
-    renderCrmPanel(displayName, cleanPhone, avatarUrl);
-  };
-  document.getElementById('btn-warm').onclick = () => { 
-    activeFormData.leadStatus = 'WARM_INTERESTED';
-    renderCrmPanel(displayName, cleanPhone, avatarUrl);
-  };
-  document.getElementById('btn-not-interested').onclick = () => { 
-    activeFormData.leadStatus = 'NOT_INTERESTED';
-    renderCrmPanel(displayName, cleanPhone, avatarUrl);
-  };
-
-  document.getElementById('aivastra-followup-date').onchange = (e) => { 
-    activeFormData.followUpDate = e.target.value; 
-  };
-
+  document.getElementById('btn-call-yes').onclick = () => { activeFormData.callStatus = 'YES'; renderCrmPanel(displayName, cleanPhone, avatarUrl); };
+  document.getElementById('btn-call-no').onclick = () => { activeFormData.callStatus = 'NO'; renderCrmPanel(displayName, cleanPhone, avatarUrl); };
+  document.getElementById('btn-interested').onclick = () => { activeFormData.leadStatus = 'INTERESTED'; renderCrmPanel(displayName, cleanPhone, avatarUrl); };
+  document.getElementById('btn-warm').onclick = () => { activeFormData.leadStatus = 'WARM_INTERESTED'; renderCrmPanel(displayName, cleanPhone, avatarUrl); };
+  document.getElementById('btn-not-interested').onclick = () => { activeFormData.leadStatus = 'NOT_INTERESTED'; renderCrmPanel(displayName, cleanPhone, avatarUrl); };
+  document.getElementById('aivastra-followup-date').onchange = (e) => { activeFormData.followUpDate = e.target.value; };
   document.getElementById('aivastra-add-note-btn').onclick = () => {
     const txt = document.getElementById('aivastra-note-text').value.trim();
-    if (txt) {
-      activeFormData.notesList.unshift(txt);
-      document.getElementById('aivastra-note-text').value = '';
-      renderCrmPanel(displayName, cleanPhone, avatarUrl);
-    }
+    if (txt) { activeFormData.notesList.unshift(txt); document.getElementById('aivastra-note-text').value = ''; renderCrmPanel(displayName, cleanPhone, avatarUrl); }
   };
-
-  // Main Save Button Click Handler (PASS showSaveToast = true to renderCrmPanel!)
   document.getElementById('aivastra-save-main-btn').onclick = () => {
     const txt = document.getElementById('aivastra-note-text').value.trim();
-    if (txt) {
-      activeFormData.notesList.unshift(txt);
-      document.getElementById('aivastra-note-text').value = '';
-    }
+    if (txt) { activeFormData.notesList.unshift(txt); document.getElementById('aivastra-note-text').value = ''; }
     saveCrmMetadata();
     renderCrmPanel(displayName, cleanPhone, avatarUrl, true);
   };
-
   panel.querySelectorAll('.aivastra-note-delete').forEach(el => {
     el.onclick = (e) => {
       const idx = parseInt(e.target.getAttribute('data-index'));
@@ -586,11 +516,13 @@ function renderCrmPanel(displayName, cleanPhone, avatarUrl, showSaveToast = fals
   });
 }
 
-// Start observing active chat changes
+// Start
 setTimeout(() => {
-  ensureHeaderButton();
-  injectCrmFilterPill();
-  detectActiveContact();
-  injectChatListBadges();
-  startChatObserver();
+  try {
+    ensureHeaderButton();
+    injectCrmFilterPill();
+    detectActiveContact();
+    injectChatListBadges();
+    startChatObserver();
+  } catch (e) {}
 }, 1000);

@@ -141,7 +141,6 @@ function detectActiveContact(force = false) {
     if (!txt) continue;
 
     const lower = txt.toLowerCase();
-    // Exclude sub-titles like "last seen today...", "online", "typing...", "click here"
     if (
       lower.includes('last seen') ||
       lower.includes('online') ||
@@ -180,58 +179,66 @@ function detectActiveContact(force = false) {
 }
 
 function fetchCrmMetadata(searchKey, displayName, domAvatar) {
-  // Check local cache first so shifting chats never loses state
-  const cached = chatsMetadataMap[searchKey] || chatsMetadataMap[activePhoneClean] || chatsMetadataMap[displayName];
-  if (cached) {
-    currentLeadStatus = cached.leadStatus || 'UNASSIGNED';
-    currentCallStatus = cached.callStatus || null;
-    currentFollowUp = cached.followUpDate || '';
-    currentNotesList = cached.notesList || [];
-    renderCrmPanel(displayName, activePhoneClean, domAvatar || activeAvatarUrl);
-  }
+  const storageKeys = [`crm_meta_${searchKey}`, `crm_meta_${activePhoneClean}`, `crm_meta_${displayName}`];
 
-  chrome.runtime.sendMessage({ action: 'FETCH_CRM_METADATA', phoneClean: searchKey }, (response) => {
-    let resolvedPhone = activePhoneClean;
-    let resolvedAvatar = domAvatar || activeAvatarUrl;
-
-    if (response && response.success && response.chat) {
-      const chat = response.chat;
-      currentLeadStatus = chat.leadStatus || 'UNASSIGNED';
-      currentCallStatus = chat.callStatus || null;
-      currentFollowUp = chat.followUpDate || '';
-      currentNotesList = chat.notesList || (chat.notes ? [chat.notes] : []);
-
-      if (chat.phone) {
-        resolvedPhone = chat.phone.replace(/\D/g, '');
-      } else if (chat.jid) {
-        const jidNum = chat.jid.split('@')[0].replace(/\D/g, '');
-        if (jidNum.length >= 10) resolvedPhone = jidNum;
-      }
-
-      if (!resolvedAvatar && chat.avatarUrl) {
-        resolvedAvatar = chat.avatarUrl;
-      }
-
-      // Cache metadata map for chat list badges and fast state retention
-      const meta = {
-        leadStatus: currentLeadStatus,
-        callStatus: currentCallStatus,
-        followUpDate: currentFollowUp,
-        notesList: currentNotesList,
-        name: displayName,
-        phone: resolvedPhone
-      };
-
-      chatsMetadataMap[searchKey] = meta;
-      if (resolvedPhone) chatsMetadataMap[resolvedPhone] = meta;
-      if (displayName) chatsMetadataMap[displayName] = meta;
+  // 1. Load from Chrome Storage Local FIRST so shifting chats NEVER wipes data
+  chrome.storage.local.get(storageKeys, (stored) => {
+    const localData = stored[`crm_meta_${searchKey}`] || stored[`crm_meta_${activePhoneClean}`] || stored[`crm_meta_${displayName}`];
+    
+    if (localData) {
+      currentLeadStatus = localData.leadStatus || 'UNASSIGNED';
+      currentCallStatus = localData.callStatus || null;
+      currentFollowUp = localData.followUpDate || '';
+      currentNotesList = localData.notesList || [];
+      renderCrmPanel(displayName, activePhoneClean, domAvatar || activeAvatarUrl);
     }
 
-    activePhoneClean = resolvedPhone;
-    activeAvatarUrl = resolvedAvatar;
+    // 2. Sync with backend API
+    chrome.runtime.sendMessage({ action: 'FETCH_CRM_METADATA', phoneClean: searchKey }, (response) => {
+      let resolvedPhone = activePhoneClean;
+      let resolvedAvatar = domAvatar || activeAvatarUrl;
 
-    renderCrmPanel(displayName, resolvedPhone, resolvedAvatar);
-    injectChatListBadges();
+      if (response && response.success && response.chat) {
+        const chat = response.chat;
+        // Only update if not already set locally
+        if (!localData) {
+          currentLeadStatus = chat.leadStatus || 'UNASSIGNED';
+          currentCallStatus = chat.callStatus || null;
+          currentFollowUp = chat.followUpDate || '';
+          currentNotesList = chat.notesList || (chat.notes ? [chat.notes] : []);
+        }
+
+        if (chat.phone) {
+          resolvedPhone = chat.phone.replace(/\D/g, '');
+        } else if (chat.jid) {
+          const jidNum = chat.jid.split('@')[0].replace(/\D/g, '');
+          if (jidNum.length >= 10) resolvedPhone = jidNum;
+        }
+
+        if (!resolvedAvatar && chat.avatarUrl) {
+          resolvedAvatar = chat.avatarUrl;
+        }
+
+        const meta = {
+          leadStatus: currentLeadStatus,
+          callStatus: currentCallStatus,
+          followUpDate: currentFollowUp,
+          notesList: currentNotesList,
+          name: displayName,
+          phone: resolvedPhone
+        };
+
+        chatsMetadataMap[searchKey] = meta;
+        if (resolvedPhone) chatsMetadataMap[resolvedPhone] = meta;
+        if (displayName) chatsMetadataMap[displayName] = meta;
+      }
+
+      activePhoneClean = resolvedPhone;
+      activeAvatarUrl = resolvedAvatar;
+
+      renderCrmPanel(displayName, resolvedPhone, resolvedAvatar);
+      injectChatListBadges();
+    });
   });
 }
 
@@ -249,11 +256,20 @@ function saveCrmMetadata(showToast = false) {
     phone: activePhoneClean
   };
 
-  // Cache in local metadata map immediately
+  // 1. Save to Chrome Storage Local permanently
+  const saveKeys = {};
+  saveKeys[`crm_meta_${activeContactKey}`] = metaObj;
+  if (activePhoneClean) saveKeys[`crm_meta_${activePhoneClean}`] = metaObj;
+  if (activeDisplayName) saveKeys[`crm_meta_${activeDisplayName}`] = metaObj;
+
+  chrome.storage.local.set(saveKeys);
+
+  // 2. Save in memory map
   chatsMetadataMap[activeContactKey] = metaObj;
   if (activePhoneClean) chatsMetadataMap[activePhoneClean] = metaObj;
   if (activeDisplayName) chatsMetadataMap[activeDisplayName] = metaObj;
 
+  // 3. Send REST payload to backend API
   chrome.runtime.sendMessage({
     action: 'UPDATE_CRM_METADATA',
     jid: targetJid,
@@ -372,7 +388,7 @@ function renderCrmPanel(displayName, cleanPhone, avatarUrl) {
     </div>
   `;
 
-  // Attach event listeners
+  // Attach event listeners with instant visual state toggling
   document.getElementById('aivastra-close-btn').onclick = () => {
     isPanelVisible = false;
     panel.style.display = 'none';
@@ -387,14 +403,31 @@ function renderCrmPanel(displayName, cleanPhone, avatarUrl) {
     renderCrmPanel(displayName, cleanPhone, avatarUrl);
   };
 
-  document.getElementById('btn-call-yes').onclick = () => { currentCallStatus = 'YES'; };
-  document.getElementById('btn-call-no').onclick = () => { currentCallStatus = 'NO'; };
+  document.getElementById('btn-call-yes').onclick = () => { 
+    currentCallStatus = 'YES';
+    renderCrmPanel(displayName, cleanPhone, avatarUrl);
+  };
+  document.getElementById('btn-call-no').onclick = () => { 
+    currentCallStatus = 'NO';
+    renderCrmPanel(displayName, cleanPhone, avatarUrl);
+  };
 
-  document.getElementById('btn-interested').onclick = () => { currentLeadStatus = 'INTERESTED'; };
-  document.getElementById('btn-warm').onclick = () => { currentLeadStatus = 'WARM_INTERESTED'; };
-  document.getElementById('btn-not-interested').onclick = () => { currentLeadStatus = 'NOT_INTERESTED'; };
+  document.getElementById('btn-interested').onclick = () => { 
+    currentLeadStatus = 'INTERESTED';
+    renderCrmPanel(displayName, cleanPhone, avatarUrl);
+  };
+  document.getElementById('btn-warm').onclick = () => { 
+    currentLeadStatus = 'WARM_INTERESTED';
+    renderCrmPanel(displayName, cleanPhone, avatarUrl);
+  };
+  document.getElementById('btn-not-interested').onclick = () => { 
+    currentLeadStatus = 'NOT_INTERESTED';
+    renderCrmPanel(displayName, cleanPhone, avatarUrl);
+  };
 
-  document.getElementById('aivastra-followup-date').onchange = (e) => { currentFollowUp = e.target.value; };
+  document.getElementById('aivastra-followup-date').onchange = (e) => { 
+    currentFollowUp = e.target.value; 
+  };
 
   document.getElementById('aivastra-add-note-btn').onclick = () => {
     const txt = document.getElementById('aivastra-note-text').value.trim();

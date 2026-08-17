@@ -586,17 +586,23 @@ class StorageEngine {
     const jid = this.resolveJid(rawJid);
     const cleanNum = (metadata.phone || rawJid).replace(/\D/g, '') || jid.split('@')[0].replace(/\D/g, '');
 
+    const BAD_NAMES = new Set(['.', 'contact', 'unsaved contact', 'unknown contact']);
+    // Always use name from extension — it reads directly from WhatsApp UI header (most accurate source)
+    const incomingNameClean = (metadata.name || '').trim();
+    const incomingNameIsValid = incomingNameClean.length > 1 && !BAD_NAMES.has(incomingNameClean.toLowerCase());
+
     // 1. Update Contact
     let contact = this.contacts.get(jid) || (cleanNum ? this.contacts.get(cleanNum) : undefined);
     if (!contact) {
       contact = this.upsertContact(jid, {
         phone: cleanNum,
-        name: metadata.name || this.getContactName(rawJid) || this.formatPhoneFallback(cleanNum),
+        name: incomingNameIsValid ? incomingNameClean : (this.getContactName(rawJid) || this.formatPhoneFallback(cleanNum)),
         ...metadata
       });
     } else {
-      if (metadata.name && (!contact.name || contact.name === 'Unsaved Contact' || contact.name.includes('@'))) {
-        contact.name = metadata.name;
+      // Always update name if extension provides a valid one (extension reads from WA UI directly)
+      if (incomingNameIsValid) {
+        contact.name = incomingNameClean;
       }
       if (metadata.phone) contact.phone = metadata.phone;
       if (metadata.leadStatus !== undefined) contact.leadStatus = metadata.leadStatus;
@@ -614,7 +620,7 @@ class StorageEngine {
     if (!chat) {
       chat = {
         jid: jid.includes('@') ? jid : `${jid}@s.whatsapp.net`,
-        name: metadata.name || contact?.name || this.formatPhoneFallback(cleanNum),
+        name: incomingNameIsValid ? incomingNameClean : (contact?.name || this.formatPhoneFallback(cleanNum)),
         unreadCount: 0,
         lastMessageAt: Date.now(),
         isGroup: false,
@@ -628,8 +634,9 @@ class StorageEngine {
       this.chats.set(chat.jid, chat);
       if (cleanNum) this.chats.set(cleanNum, chat);
     } else {
-      if (metadata.name && (!chat.name || chat.name === 'Unsaved Contact' || chat.name.includes('@'))) {
-        chat.name = metadata.name;
+      // Always update name if extension provides a valid one
+      if (incomingNameIsValid) {
+        chat.name = incomingNameClean;
       }
       if (metadata.leadStatus !== undefined) chat.leadStatus = metadata.leadStatus;
       if (metadata.callStatus !== undefined) chat.callStatus = metadata.callStatus;
@@ -641,14 +648,12 @@ class StorageEngine {
       if (cleanNum) this.chats.set(cleanNum, chat);
     }
 
-    // Update any chat matching clean number in chats map
+    // Update ALL chats matching this phone number
     if (cleanNum && cleanNum.length >= 10) {
       for (const [key, c] of this.chats.entries()) {
         const num = c.jid.split('@')[0].replace(/\D/g, '');
         if (num === cleanNum || num.endsWith(cleanNum) || cleanNum.endsWith(num)) {
-          if (metadata.name && (!c.name || c.name === 'Unsaved Contact' || c.name.includes('@'))) {
-            c.name = metadata.name;
-          }
+          if (incomingNameIsValid) c.name = incomingNameClean;
           if (metadata.leadStatus !== undefined) c.leadStatus = metadata.leadStatus;
           if (metadata.callStatus !== undefined) c.callStatus = metadata.callStatus;
           if (metadata.followUpDate !== undefined) c.followUpDate = metadata.followUpDate;

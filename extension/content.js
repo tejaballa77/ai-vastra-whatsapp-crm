@@ -385,7 +385,7 @@ function saveCrmMetadata() {
   if (effectiveName !== primaryKey) chatsMetadataMap[effectiveName] = metaObj;
 
   const payload = {
-    name: activeDisplayName,
+    name: effectiveName,
     phone: activePhoneClean,
     leadStatus: activeFormData.leadStatus,
     callStatus: activeFormData.callStatus,

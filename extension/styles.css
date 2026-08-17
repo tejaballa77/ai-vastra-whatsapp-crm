@@ -204,6 +204,7 @@
   color: #111b21;
   resize: none;
   box-sizing: border-box;
+  min-height: 100px;
 }
 
 .aivastra-add-note-btn {
@@ -243,4 +244,35 @@
 }
 .aivastra-note-delete:hover {
   color: #e53935;
+}
+
+/* Injected Chat List Badges on web.whatsapp.com */
+.aivastra-chat-badge {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 6px;
+  padding: 2px 6px;
+  border-radius: 12px;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.aivastra-chat-badge.badge-interested {
+  background-color: #e8f5e9;
+  color: #2e7d32;
+  border: 1px solid #a5d6a7;
+}
+
+.aivastra-chat-badge.badge-warm {
+  background-color: #fff8e1;
+  color: #f57f17;
+  border: 1px solid #ffe082;
+}
+
+.aivastra-chat-badge.badge-not-interested {
+  background-color: #ffebee;
+  color: #c62828;
+  border: 1px solid #ef9a9a;
 }

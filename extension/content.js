@@ -10,6 +10,7 @@ let currentCallStatus = null;
 let currentFollowUp = '';
 let currentNotesList = [];
 let isPanelVisible = true;
+let chatsMetadataMap = {};
 
 // Create or get the injected CRM sidepanel container
 function ensureCrmPanel() {
@@ -66,11 +67,56 @@ function ensureHeaderButton() {
   };
 }
 
+// Inject Lead Status Emoji Badges into WhatsApp Web Left Chat List (#pane-side)
+function injectChatListBadges() {
+  const chatItems = document.querySelectorAll('#pane-side [role="listitem"]');
+  if (!chatItems || chatItems.length === 0) return;
+
+  chatItems.forEach((item) => {
+    const titleEl = item.querySelector('span[title]') || item.querySelector('span[dir="auto"]');
+    if (!titleEl) return;
+
+    const rawTitle = titleEl.getAttribute('title') || titleEl.textContent || '';
+    const cleanDigits = rawTitle.replace(/\D/g, '');
+    const key = cleanDigits.length >= 10 ? cleanDigits : rawTitle;
+
+    const chatMeta = chatsMetadataMap[key] || chatsMetadataMap[rawTitle] || chatsMetadataMap[cleanDigits];
+    const status = chatMeta?.leadStatus || (key === activeContactKey ? currentLeadStatus : null);
+
+    let existingBadge = item.querySelector('.aivastra-chat-badge');
+
+    if (status && status !== 'UNASSIGNED') {
+      let badgeHtml = '';
+      if (status === 'INTERESTED') {
+        badgeHtml = '<span class="aivastra-chat-badge badge-interested" title="Lead: Interested">👍 Interested</span>';
+      } else if (status === 'WARM_INTERESTED') {
+        badgeHtml = '<span class="aivastra-chat-badge badge-warm" title="Lead: Warm">🔥 Warm</span>';
+      } else if (status === 'NOT_INTERESTED') {
+        badgeHtml = '<span class="aivastra-chat-badge badge-not-interested" title="Lead: Not Interested">👎 Not Interested</span>';
+      }
+
+      if (existingBadge) {
+        existingBadge.outerHTML = badgeHtml;
+      } else {
+        const titleParent = titleEl.parentElement;
+        if (titleParent) {
+          const wrapper = document.createElement('span');
+          wrapper.innerHTML = badgeHtml;
+          titleParent.appendChild(wrapper.firstChild);
+        }
+      }
+    } else if (existingBadge) {
+      existingBadge.remove();
+    }
+  });
+}
+
 // Observe WhatsApp Web chat header and DOM changes
 function startChatObserver() {
   const observer = new MutationObserver(() => {
     ensureHeaderButton();
     detectActiveContact();
+    injectChatListBadges();
   });
 
   observer.observe(document.body, {
@@ -134,6 +180,11 @@ function fetchCrmMetadata(searchKey, displayName, domAvatar) {
       if (!resolvedAvatar && chat.avatarUrl) {
         resolvedAvatar = chat.avatarUrl;
       }
+
+      // Cache metadata map for chat list badges
+      chatsMetadataMap[searchKey] = chat;
+      if (resolvedPhone) chatsMetadataMap[resolvedPhone] = chat;
+      if (displayName) chatsMetadataMap[displayName] = chat;
     } else {
       currentLeadStatus = 'UNASSIGNED';
       currentCallStatus = null;
@@ -145,6 +196,7 @@ function fetchCrmMetadata(searchKey, displayName, domAvatar) {
     activeAvatarUrl = resolvedAvatar;
 
     renderCrmPanel(displayName, resolvedPhone, resolvedAvatar);
+    injectChatListBadges();
   });
 }
 
@@ -152,6 +204,14 @@ function saveCrmMetadata() {
   const targetJid = activePhoneClean.length >= 10 
     ? `${activePhoneClean}@s.whatsapp.net` 
     : (activeContactKey.includes('@') ? activeContactKey : `${activeContactKey}@s.whatsapp.net`);
+
+  // Update local metadata map immediately
+  chatsMetadataMap[activeContactKey] = {
+    leadStatus: currentLeadStatus,
+    callStatus: currentCallStatus,
+    followUpDate: currentFollowUp,
+    notesList: currentNotesList
+  };
 
   chrome.runtime.sendMessage({
     action: 'UPDATE_CRM_METADATA',
@@ -164,8 +224,11 @@ function saveCrmMetadata() {
       notesList: currentNotesList
     }
   });
+
+  injectChatListBadges();
 }
 
+// Render Contact Info Panel with CALL on top, LEAD STATUS below, and extended CRM NOTES
 function renderCrmPanel(displayName, cleanPhone, avatarUrl) {
   const panel = ensureCrmPanel();
   panel.style.display = isPanelVisible ? 'flex' : 'none';
@@ -204,8 +267,18 @@ function renderCrmPanel(displayName, cleanPhone, avatarUrl) {
         <div class="aivastra-contact-phone">📞 ${formattedPhone}</div>
       </div>
 
+      <!-- 1. CALL ON TOP -->
       <div>
-        <div class="aivastra-section-title">Lead Status</div>
+        <div class="aivastra-section-title">CALL</div>
+        <div class="aivastra-btn-group-2">
+          <button id="btn-call-yes" class="aivastra-btn ${currentCallStatus === 'YES' ? 'active-call-yes' : ''}">Yes</button>
+          <button id="btn-call-no" class="aivastra-btn ${currentCallStatus === 'NO' ? 'active-call-no' : ''}">No</button>
+        </div>
+      </div>
+
+      <!-- 2. LEAD STATUS BELOW CALL -->
+      <div>
+        <div class="aivastra-section-title">LEAD STATUS</div>
         <div class="aivastra-btn-group">
           <button id="btn-interested" class="aivastra-btn ${currentLeadStatus === 'INTERESTED' ? 'active-interested' : ''}">👍 Interested</button>
           <button id="btn-warm" class="aivastra-btn ${currentLeadStatus === 'WARM_INTERESTED' ? 'active-warm' : ''}">🔥 Warm</button>
@@ -213,25 +286,19 @@ function renderCrmPanel(displayName, cleanPhone, avatarUrl) {
         </div>
       </div>
 
+      <!-- 3. FOLLOW-UP SCHEDULE -->
       <div>
-        <div class="aivastra-section-title">Call</div>
-        <div class="aivastra-btn-group-2">
-          <button id="btn-call-yes" class="aivastra-btn ${currentCallStatus === 'YES' ? 'active-call-yes' : ''}">Yes</button>
-          <button id="btn-call-no" class="aivastra-btn ${currentCallStatus === 'NO' ? 'active-call-no' : ''}">No</button>
-        </div>
-      </div>
-
-      <div>
-        <div class="aivastra-section-title">Follow-up Schedule</div>
+        <div class="aivastra-section-title">FOLLOW-UP SCHEDULE</div>
         <input type="date" id="aivastra-followup-date" class="aivastra-date-input" value="${currentFollowUp}" />
       </div>
 
-      <div>
-        <div class="aivastra-section-title">CRM Notes</div>
-        <textarea id="aivastra-note-text" class="aivastra-notes-area" rows="2" placeholder="Add key note about customer requirements..."></textarea>
+      <!-- 4. EXTENDED CRM NOTES DOWNWARDS -->
+      <div style="display: flex; flex-direction: column; flex: 1;">
+        <div class="aivastra-section-title">CRM NOTES</div>
+        <textarea id="aivastra-note-text" class="aivastra-notes-area" rows="4" style="min-height: 100px;" placeholder="Add key note about customer requirements..."></textarea>
         <button id="aivastra-add-note-btn" class="aivastra-add-note-btn">+ Add Note</button>
 
-        <div id="aivastra-notes-list" style="margin-top: 10px;">
+        <div id="aivastra-notes-list" style="margin-top: 10px; max-height: 180px; overflow-y: auto;">
           ${currentNotesList.map((n, i) => `
             <div class="aivastra-note-item">
               <span style="flex:1; word-break: break-word;">${n}</span>
@@ -258,12 +325,12 @@ function renderCrmPanel(displayName, cleanPhone, avatarUrl) {
     renderCrmPanel(displayName, cleanPhone, avatarUrl);
   };
 
+  document.getElementById('btn-call-yes').onclick = () => { currentCallStatus = 'YES'; saveCrmMetadata(); renderCrmPanel(displayName, cleanPhone, avatarUrl); };
+  document.getElementById('btn-call-no').onclick = () => { currentCallStatus = 'NO'; saveCrmMetadata(); renderCrmPanel(displayName, cleanPhone, avatarUrl); };
+
   document.getElementById('btn-interested').onclick = () => { currentLeadStatus = 'INTERESTED'; saveCrmMetadata(); renderCrmPanel(displayName, cleanPhone, avatarUrl); };
   document.getElementById('btn-warm').onclick = () => { currentLeadStatus = 'WARM_INTERESTED'; saveCrmMetadata(); renderCrmPanel(displayName, cleanPhone, avatarUrl); };
   document.getElementById('btn-not-interested').onclick = () => { currentLeadStatus = 'NOT_INTERESTED'; saveCrmMetadata(); renderCrmPanel(displayName, cleanPhone, avatarUrl); };
-
-  document.getElementById('btn-call-yes').onclick = () => { currentCallStatus = 'YES'; saveCrmMetadata(); renderCrmPanel(displayName, cleanPhone, avatarUrl); };
-  document.getElementById('btn-call-no').onclick = () => { currentCallStatus = 'NO'; saveCrmMetadata(); renderCrmPanel(displayName, cleanPhone, avatarUrl); };
 
   document.getElementById('aivastra-followup-date').onchange = (e) => { currentFollowUp = e.target.value; saveCrmMetadata(); };
 
@@ -291,5 +358,6 @@ function renderCrmPanel(displayName, cleanPhone, avatarUrl) {
 setTimeout(() => {
   ensureHeaderButton();
   detectActiveContact();
+  injectChatListBadges();
   startChatObserver();
 }, 1000);

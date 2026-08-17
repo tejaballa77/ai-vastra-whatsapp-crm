@@ -96,21 +96,31 @@ export function WhatsAppCrmModule() {
   const unassignedCount = unassignedChats.length;
 
   const callsYesChats = chats.filter((c) => c.callStatus === 'YES');
-  const followUpChats = chats.filter((c) => Boolean(c.followUpDate));
+  const followUpChats = chats.filter((c) => Boolean(c.followUpDate && c.followUpDate.trim().length > 0 && c.leadStatus !== 'UNASSIGNED'));
 
   const callsYesCount = callsYesChats.length;
   const followUpsCount = followUpChats.length;
-  const unreadChatsCount = chats.filter((c) => (c.unreadCount || 0) > 0).length;
 
-  // Filtered chats where ANY contact info settings have been entered by user
+  // Filtered chats where user has actively entered CRM info (Lead Status, Call:Yes, or Notes)
+  // If cleared (leadStatus = UNASSIGNED and no notes and callStatus != YES), excluded completely!
   const savedLeads = chats.filter(
     (c) =>
       (c.leadStatus && c.leadStatus !== 'UNASSIGNED') ||
       c.callStatus === 'YES' ||
-      Boolean(c.followUpDate) ||
       (c.notesList && c.notesList.length > 0) ||
-      Boolean(c.notes)
+      Boolean(c.notes && c.notes.trim().length > 0)
   );
+
+  // Filter for TODAY's WhatsApp Activity Feed only (messages sent or received today)
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+  const todayStartMs = todayStart.getTime();
+
+  const todayActivityChats = chats.filter((c) => {
+    const msgTime = c.lastMessageAt || 0;
+    const timeMs = msgTime < 10000000000 ? msgTime * 1000 : msgTime;
+    return timeMs >= todayStartMs;
+  });
 
   // Filter table leads based on selected sub-filter and search
   const filteredTableLeads = savedLeads.filter((c) => {
@@ -121,7 +131,7 @@ export function WhatsAppCrmModule() {
     if (!matchesSearch) return false;
 
     if (tableFilter === 'INTERESTED') return c.leadStatus === 'INTERESTED';
-    if (tableFilter === 'WARM') return c.leadStatus === 'WARM_INTERESTED';
+    if (tableFilter === 'WARM') return c.leadStatus === 'WARM_INTERESTED' || c.leadStatus === 'WARM';
     if (tableFilter === 'NOT_INTERESTED') return c.leadStatus === 'NOT_INTERESTED';
     if (tableFilter === 'CALLS') return c.callStatus === 'YES';
     if (tableFilter === 'FOLLOWUPS') return Boolean(c.followUpDate);
@@ -241,11 +251,6 @@ export function WhatsAppCrmModule() {
             >
               <MessageSquare className="w-4 h-4" />
               <span className="flex-1 text-left font-semibold">WhatsApp</span>
-              {unreadChatsCount > 0 && (
-                <span className="px-2 py-0.5 text-[11px] font-bold bg-[#25d366] text-white rounded-full">
-                  {unreadChatsCount}
-                </span>
-              )}
             </button>
 
             {/* 2. Cold Calls */}
@@ -303,16 +308,6 @@ export function WhatsAppCrmModule() {
           </div>
 
           <div className="flex items-center gap-3">
-            {/* Export CSV Button for Telecallers */}
-            <button
-              onClick={handleExportCsv}
-              className="inline-flex items-center gap-2 px-3.5 py-2 bg-gray-100 text-gray-700 font-semibold text-xs rounded-xl hover:bg-gray-200 transition-all border border-gray-300"
-              title="Export Saved Leads to CSV"
-            >
-              <Download className="w-3.5 h-3.5" />
-              <span>Export Leads ({savedLeads.length})</span>
-            </button>
-
             {/* Direct Launch WhatsApp Web Primary Button */}
             <button
               onClick={() => handleOpenSpecificChat()}
@@ -578,20 +573,28 @@ export function WhatsAppCrmModule() {
               </div>
             </div>
 
-            {/* Block 3: Dynamic Live Lead Activity Feed */}
+            {/* Block 3: Dynamic Live Lead Activity Feed for TODAY */}
             <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm space-y-4">
               <div className="flex items-center justify-between">
-                <h3 className="text-base font-bold text-[#111b21]">Latest WhatsApp Activity Feed</h3>
-                <span className="text-xs text-gray-500 font-medium">{chats.length} active chats</span>
+                <div className="flex items-center gap-2.5">
+                  <h3 className="text-base font-bold text-[#111b21]">Today's Live WhatsApp Activity Feed</h3>
+                  <span className="text-[11px] px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 font-bold border border-emerald-200">
+                    Live Today
+                  </span>
+                </div>
+                <span className="text-xs text-gray-500 font-medium">
+                  {todayActivityChats.length} conversation{todayActivityChats.length === 1 ? '' : 's'} today
+                </span>
               </div>
 
               <div className="divide-y divide-gray-100 border border-gray-100 rounded-xl overflow-hidden">
-                {chats.length === 0 ? (
-                  <div className="w-full p-8 text-center text-xs text-gray-400">
-                    No active WhatsApp chats synced yet.
+                {todayActivityChats.length === 0 ? (
+                  <div className="w-full p-8 text-center text-xs text-gray-400 space-y-1">
+                    <p className="font-semibold text-gray-600 text-sm">No activity recorded today yet</p>
+                    <p className="text-gray-400">Live conversations and messages occurring today will automatically appear here.</p>
                   </div>
                 ) : (
-                  chats.slice(0, 10).map((chat) => (
+                  todayActivityChats.slice(0, 15).map((chat) => (
                     <div 
                       key={chat.jid} 
                       className="p-3.5 hover:bg-gray-50/90 transition-all flex flex-col md:flex-row md:items-center justify-between gap-3 bg-white"

@@ -593,31 +593,25 @@ class StorageEngine {
         uniqueMap.set(dedupeKey, updatedChat);
       } else {
         const existing = uniqueMap.get(dedupeKey)!;
+        // Prioritize the chat that has the most recent update / timestamp
+        const primary = (updatedChat.lastMessageAt || 0) >= (existing.lastMessageAt || 0) ? updatedChat : existing;
+        const secondary = primary === updatedChat ? existing : updatedChat;
 
-        // Merge CRM data — always keep most valuable values
-        const mergedLeadStatus = (c.leadStatus && c.leadStatus !== 'UNASSIGNED') ? c.leadStatus
-          : (existing.leadStatus !== 'UNASSIGNED' ? existing.leadStatus : 'UNASSIGNED');
-        const mergedCallStatus = c.callStatus || existing.callStatus;
-        const mergedFollowUpDate = c.followUpDate || existing.followUpDate;
-        const mergedNotes = c.notes || existing.notes;
-        const mergedNotesList = (c.notesList && c.notesList.length > 0) ? c.notesList : (existing.notesList || []);
-        const newestTime = Math.max(existing.lastMessageAt, lastMessageAt);
-
-        const curNameBad = !name || BAD_NAMES.has(name.toLowerCase().trim()) || name.length <= 1;
-        const existNameBad = !existing.name || BAD_NAMES.has(existing.name.toLowerCase().trim()) || existing.name.length <= 1;
-        const bestName = curNameBad ? existing.name : (existNameBad ? name : (name.length >= existing.name.length ? name : existing.name));
+        const curNameBad = !primary.name || BAD_NAMES.has(primary.name.toLowerCase().trim()) || primary.name.length <= 1;
+        const existNameBad = !secondary.name || BAD_NAMES.has(secondary.name.toLowerCase().trim()) || secondary.name.length <= 1;
+        const bestName = !curNameBad ? primary.name : (!existNameBad ? secondary.name : primary.name);
 
         uniqueMap.set(dedupeKey, {
-          ...existing,
-          ...updatedChat,
+          ...secondary,
+          ...primary,
           name: bestName || this.formatPhoneFallback(rawDigits),
-          leadStatus: mergedLeadStatus,
-          callStatus: mergedCallStatus,
-          followUpDate: mergedFollowUpDate,
-          notes: mergedNotes,
-          notesList: mergedNotesList,
-          lastMessageAt: newestTime,
-          avatarUrl: avatarUrl || existing.avatarUrl,
+          leadStatus: primary.leadStatus !== undefined ? primary.leadStatus : (secondary.leadStatus || 'UNASSIGNED'),
+          callStatus: primary.callStatus !== undefined ? primary.callStatus : secondary.callStatus,
+          followUpDate: primary.followUpDate !== undefined ? primary.followUpDate : secondary.followUpDate,
+          notes: primary.notes !== undefined ? primary.notes : secondary.notes,
+          notesList: primary.notesList !== undefined ? primary.notesList : (secondary.notesList || []),
+          lastMessageAt: Math.max(existing.lastMessageAt || 0, lastMessageAt || 0),
+          avatarUrl: primary.avatarUrl || secondary.avatarUrl,
         });
       }
     }

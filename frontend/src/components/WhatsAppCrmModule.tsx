@@ -51,19 +51,26 @@ export function WhatsAppCrmModule() {
       chatsMap.set(dedupeKey, c);
     } else {
       const existing = chatsMap.get(dedupeKey)!;
-      const mergedLeadStatus = (c.leadStatus && c.leadStatus !== 'UNASSIGNED') ? c.leadStatus : existing.leadStatus;
-      const mergedCallStatus = c.callStatus || existing.callStatus;
-      const mergedFollowUpDate = c.followUpDate || existing.followUpDate;
-      const mergedNotes = c.notes || existing.notes;
-      const mergedNotesList = (c.notesList && c.notesList.length > 0) ? c.notesList : existing.notesList;
+      // Prioritize the chat object that has the most recent activity / explicit data
+      const pickChat = (c.lastMessageAt || 0) >= (existing.lastMessageAt || 0) ? c : existing;
+      const otherChat = pickChat === c ? existing : c;
 
-      const curNameBad = !c.name || BAD_NAMES.has(c.name.toLowerCase().trim()) || c.name.length <= 1;
-      const existNameBad = !existing.name || BAD_NAMES.has(existing.name.toLowerCase().trim()) || existing.name.length <= 1;
-      const bestName = curNameBad ? existing.name : (existNameBad ? c.name : (c.name.length >= existing.name.length ? c.name : existing.name));
+      const mergedLeadStatus = (pickChat.leadStatus && pickChat.leadStatus !== 'UNASSIGNED') 
+        ? pickChat.leadStatus 
+        : (otherChat.leadStatus && otherChat.leadStatus !== 'UNASSIGNED' ? otherChat.leadStatus : 'UNASSIGNED');
+
+      const mergedCallStatus = pickChat.callStatus !== undefined ? pickChat.callStatus : otherChat.callStatus;
+      const mergedFollowUpDate = pickChat.followUpDate !== undefined ? pickChat.followUpDate : otherChat.followUpDate;
+      const mergedNotes = pickChat.notes !== undefined ? pickChat.notes : otherChat.notes;
+      const mergedNotesList = pickChat.notesList !== undefined ? pickChat.notesList : (otherChat.notesList || []);
+
+      const curNameBad = !pickChat.name || BAD_NAMES.has(pickChat.name.toLowerCase().trim()) || pickChat.name.length <= 1;
+      const existNameBad = !otherChat.name || BAD_NAMES.has(otherChat.name.toLowerCase().trim()) || otherChat.name.length <= 1;
+      const bestName = !curNameBad ? pickChat.name : (!existNameBad ? otherChat.name : pickChat.name);
 
       chatsMap.set(dedupeKey, {
-        ...existing,
-        ...c,
+        ...otherChat,
+        ...pickChat,
         name: bestName,
         leadStatus: mergedLeadStatus || 'UNASSIGNED',
         callStatus: mergedCallStatus,

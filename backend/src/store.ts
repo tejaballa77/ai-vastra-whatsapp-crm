@@ -756,16 +756,16 @@ class StorageEngine {
         lastMessageAt: Date.now(),
         isGroup: canonicalJid.endsWith('@g.us'),
         leadStatus: metadata.leadStatus || 'UNASSIGNED',
-        callStatus: metadata.callStatus,
-        followUpDate: metadata.followUpDate,
-        notes: metadata.notes,
+        callStatus: metadata.callStatus || undefined,
+        followUpDate: metadata.followUpDate || '',
+        notes: metadata.notes || '',
         notesList: metadata.notesList || [],
         tags: metadata.tags || [],
       };
     } else {
       if (incomingNameIsValid) chat.name = incomingNameClean;
       if (metadata.leadStatus !== undefined) chat.leadStatus = metadata.leadStatus;
-      if (metadata.callStatus !== undefined) chat.callStatus = metadata.callStatus;
+      if (metadata.callStatus !== undefined) chat.callStatus = metadata.callStatus || undefined;
       if (metadata.followUpDate !== undefined) chat.followUpDate = metadata.followUpDate;
       if (metadata.notes !== undefined) chat.notes = metadata.notes;
       if (metadata.notesList !== undefined) chat.notesList = metadata.notesList;

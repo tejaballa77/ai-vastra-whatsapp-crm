@@ -494,6 +494,14 @@ function renderCrmPanel(displayName, cleanPhone, avatarUrl, showSaveToast = fals
     }, 2000);
   }
 
+function getTodayFormattedDate() {
+  const now = new Date();
+  const dd = String(now.getDate()).padStart(2, '0');
+  const mm = String(now.getMonth() + 1).padStart(2, '0');
+  const yyyy = now.getFullYear();
+  return `${dd}-${mm}-${yyyy}`;
+}
+
   document.getElementById('aivastra-close-btn').onclick = () => {
     isPanelVisible = false;
     panel.style.display = 'none';
@@ -511,11 +519,23 @@ function renderCrmPanel(displayName, cleanPhone, avatarUrl, showSaveToast = fals
   document.getElementById('aivastra-followup-date').onchange = (e) => { activeFormData.followUpDate = e.target.value; };
   document.getElementById('aivastra-add-note-btn').onclick = () => {
     const txt = document.getElementById('aivastra-note-text').value.trim();
-    if (txt) { activeFormData.notesList.unshift(txt); document.getElementById('aivastra-note-text').value = ''; renderCrmPanel(displayName, cleanPhone, avatarUrl); }
+    if (txt) {
+      const dateTag = `(${getTodayFormattedDate()})`;
+      const formatted = txt.includes('(') && txt.includes(')') ? txt : `${txt} ${dateTag}`;
+      activeFormData.notesList.unshift(formatted);
+      document.getElementById('aivastra-note-text').value = '';
+      saveCrmMetadata();
+      renderCrmPanel(displayName, cleanPhone, avatarUrl);
+    }
   };
   document.getElementById('aivastra-save-main-btn').onclick = () => {
     const txt = document.getElementById('aivastra-note-text').value.trim();
-    if (txt) { activeFormData.notesList.unshift(txt); document.getElementById('aivastra-note-text').value = ''; }
+    if (txt) {
+      const dateTag = `(${getTodayFormattedDate()})`;
+      const formatted = txt.includes('(') && txt.includes(')') ? txt : `${txt} ${dateTag}`;
+      activeFormData.notesList.unshift(formatted);
+      document.getElementById('aivastra-note-text').value = '';
+    }
     saveCrmMetadata();
     renderCrmPanel(displayName, cleanPhone, avatarUrl, true);
   };
@@ -523,6 +543,7 @@ function renderCrmPanel(displayName, cleanPhone, avatarUrl, showSaveToast = fals
     el.onclick = (e) => {
       const idx = parseInt(e.target.getAttribute('data-index'));
       activeFormData.notesList.splice(idx, 1);
+      saveCrmMetadata();
       renderCrmPanel(displayName, cleanPhone, avatarUrl);
     };
   });

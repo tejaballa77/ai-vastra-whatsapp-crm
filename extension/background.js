@@ -3,6 +3,16 @@ const DEFAULT_API_URL = 'https://crm.nicedigitalsgroup.com';
 
 // Listen for messages from content script injected on web.whatsapp.com
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  if (request.action === 'FETCH_ALL_CRM_CHATS') {
+    getApiUrl().then((baseUrl) => {
+      fetch(`${baseUrl}/api/chats`)
+        .then((res) => res.json())
+        .then((chats) => sendResponse({ success: true, chats: Array.isArray(chats) ? chats : [] }))
+        .catch((err) => sendResponse({ success: false, error: err.message, chats: [] }));
+    });
+    return true;
+  }
+
   if (request.action === 'FETCH_CRM_METADATA') {
     getApiUrl().then((baseUrl) => {
       fetch(`${baseUrl}/api/chats`)

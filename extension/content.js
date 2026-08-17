@@ -106,6 +106,50 @@ function ensureHeaderButton() {
   };
 }
 
+// Sync all saved CRM chats from backend into chatsMetadataMap
+function syncAllCrmChats(callback) {
+  safeSendMessage({ action: 'FETCH_ALL_CRM_CHATS' }, (response) => {
+    if (response && response.success && Array.isArray(response.chats)) {
+      for (const c of response.chats) {
+        const hasInfo = Boolean(
+          (c.leadStatus && c.leadStatus !== 'UNASSIGNED') ||
+          c.callStatus === 'YES' ||
+          Boolean(c.followUpDate && c.followUpDate.trim().length > 0) ||
+          (c.notesList && c.notesList.length > 0) ||
+          Boolean(c.notes && c.notes.trim().length > 0)
+        );
+
+        const rawNum = (c.phone || c.jid || '').split('@')[0].replace(/\D/g, '');
+        const tenDigit = (rawNum.length === 12 && rawNum.startsWith('91')) ? rawNum.slice(2) : rawNum;
+
+        if (hasInfo) {
+          const meta = {
+            leadStatus: c.leadStatus || 'UNASSIGNED',
+            callStatus: c.callStatus || null,
+            followUpDate: c.followUpDate || '',
+            notesList: c.notesList || (c.notes ? [c.notes] : []),
+            name: c.name,
+            phone: c.phone || tenDigit
+          };
+          if (tenDigit) chatsMetadataMap[tenDigit] = meta;
+          if (rawNum) chatsMetadataMap[rawNum] = meta;
+          if (c.jid) chatsMetadataMap[c.jid] = meta;
+          if (c.name) chatsMetadataMap[c.name.trim()] = meta;
+        } else {
+          // If cleared, remove from metadata map
+          if (tenDigit) delete chatsMetadataMap[tenDigit];
+          if (rawNum) delete chatsMetadataMap[rawNum];
+          if (c.jid) delete chatsMetadataMap[c.jid];
+          if (c.name) delete chatsMetadataMap[c.name.trim()];
+        }
+      }
+    }
+    if (callback) callback();
+    injectChatListBadges();
+    if (isCrmFilterActive) filterChatListByCrmInfo();
+  });
+}
+
 // Inject "⚡ CRM Info" Filter Pill
 function injectCrmFilterPill() {
   const filterBar = document.querySelector('div[role="tablist"]') ||
@@ -125,11 +169,16 @@ function injectCrmFilterPill() {
     e.stopPropagation();
     isCrmFilterActive = !isCrmFilterActive;
     updateCrmFilterPillUI();
-    filterChatListByCrmInfo();
+    if (isCrmFilterActive) {
+      syncAllCrmChats(() => filterChatListByCrmInfo());
+    } else {
+      resetChatListVisibility();
+    }
   };
 
   filterBar.appendChild(pill);
 
+  // When standard WhatsApp filter tabs are clicked, reset our CRM filter
   filterBar.querySelectorAll('button:not(#aivastra-crm-filter-pill)').forEach(btn => {
     btn.addEventListener('click', () => {
       isCrmFilterActive = false;
@@ -150,7 +199,9 @@ function updateCrmFilterPillUI() {
 }
 
 function filterChatListByCrmInfo() {
-  const chatItems = document.querySelectorAll('#pane-side [role="listitem"]');
+  const paneSide = document.getElementById('pane-side');
+  if (!paneSide) return;
+  const chatItems = paneSide.querySelectorAll('[role="listitem"], [data-testid="cell-frame-container"]');
   if (!chatItems || chatItems.length === 0) return;
 
   safeStorageGet(null, (allStored) => {
@@ -160,22 +211,44 @@ function filterChatListByCrmInfo() {
         if (!titleEl) return;
 
         const rawTitle = (titleEl.getAttribute('title') || titleEl.textContent || '').trim();
-        const cleanDigits = rawTitle.replace(/\D/g, '');
-        const key = cleanDigits.length >= 10 ? cleanDigits : rawTitle;
+        const rawDigits = rawTitle.replace(/\D/g, '');
+        const tenDigit = (rawDigits.length === 12 && rawDigits.startsWith('91')) ? rawDigits.slice(2) : rawDigits;
 
-        const chatMeta = chatsMetadataMap[key] || chatsMetadataMap[rawTitle] || chatsMetadataMap[cleanDigits];
-        const localMeta = (allStored || {})[`crm_meta_${key}`] || (allStored || {})[`crm_meta_${cleanDigits}`] || (allStored || {})[`crm_meta_${rawTitle}`];
+        const chatMeta = chatsMetadataMap[tenDigit] || chatsMetadataMap[rawDigits] || chatsMetadataMap[rawTitle];
+        const localMeta = (allStored || {})[`crm_meta_${tenDigit}`] || (allStored || {})[`crm_meta_${rawDigits}`] || (allStored || {})[`crm_meta_${rawTitle}`];
 
         const hasSavedInfo = Boolean(
-          (chatMeta && (chatMeta.leadStatus !== 'UNASSIGNED' || chatMeta.callStatus === 'YES' || chatMeta.followUpDate || (chatMeta.notesList && chatMeta.notesList.length > 0))) ||
-          (localMeta && (localMeta.leadStatus !== 'UNASSIGNED' || localMeta.callStatus === 'YES' || localMeta.followUpDate || (localMeta.notesList && localMeta.notesList.length > 0)))
+          (chatMeta && (
+            (chatMeta.leadStatus && chatMeta.leadStatus !== 'UNASSIGNED') ||
+            chatMeta.callStatus === 'YES' ||
+            Boolean(chatMeta.followUpDate && chatMeta.followUpDate.trim().length > 0) ||
+            (chatMeta.notesList && chatMeta.notesList.length > 0) ||
+            Boolean(chatMeta.notes && chatMeta.notes.trim().length > 0)
+          )) ||
+          (localMeta && (
+            (localMeta.leadStatus && localMeta.leadStatus !== 'UNASSIGNED') ||
+            localMeta.callStatus === 'YES' ||
+            Boolean(localMeta.followUpDate && localMeta.followUpDate.trim().length > 0) ||
+            (localMeta.notesList && localMeta.notesList.length > 0) ||
+            Boolean(localMeta.notes && localMeta.notes.trim().length > 0)
+          ))
         );
 
-        const targetRow = item.closest('div[style*="height"]') || item.parentElement || item;
+        // Find the outer row item to hide/show cleanly
+        const targetRow = item.closest('div[style*="translateY"]') ||
+                          item.closest('div[style*="height: 72px"]') ||
+                          item.closest('div[style*="height:72px"]') ||
+                          item.closest('[role="listitem"]') ||
+                          item;
+
         if (isCrmFilterActive) {
-          targetRow.style.display = hasSavedInfo ? '' : 'none';
+          if (hasSavedInfo) {
+            targetRow.style.removeProperty('display');
+          } else {
+            targetRow.style.setProperty('display', 'none', 'important');
+          }
         } else {
-          targetRow.style.display = '';
+          targetRow.style.removeProperty('display');
         }
       } catch (e) {}
     });
@@ -183,11 +256,17 @@ function filterChatListByCrmInfo() {
 }
 
 function resetChatListVisibility() {
-  const chatItems = document.querySelectorAll('#pane-side [role="listitem"]');
+  const paneSide = document.getElementById('pane-side');
+  if (!paneSide) return;
+  const chatItems = paneSide.querySelectorAll('[role="listitem"], [data-testid="cell-frame-container"]');
   chatItems.forEach((item) => {
     try {
-      const targetRow = item.closest('div[style*="height"]') || item.parentElement || item;
-      targetRow.style.display = '';
+      const targetRow = item.closest('div[style*="translateY"]') ||
+                        item.closest('div[style*="height: 72px"]') ||
+                        item.closest('div[style*="height:72px"]') ||
+                        item.closest('[role="listitem"]') ||
+                        item;
+      targetRow.style.removeProperty('display');
     } catch (e) {}
   });
 }
@@ -554,8 +633,14 @@ setTimeout(() => {
   try {
     ensureHeaderButton();
     injectCrmFilterPill();
+    syncAllCrmChats();
     detectActiveContact();
     injectChatListBadges();
     startChatObserver();
+
+    // Periodically refresh metadata in background every 20s
+    setInterval(() => {
+      syncAllCrmChats();
+    }, 20000);
   } catch (e) {}
 }, 1000);

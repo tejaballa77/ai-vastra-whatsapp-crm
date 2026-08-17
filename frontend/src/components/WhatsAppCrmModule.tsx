@@ -32,7 +32,50 @@ export function WhatsAppCrmModule() {
   const [copiedPhone, setCopiedPhone] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState<string>('');
 
-  const { chats } = useSocket();
+  const { chats: rawChats } = useSocket();
+
+  // Deduplicate chats strictly by canonical 10-digit phone number
+  const BAD_NAMES = new Set(['.', 'contact', 'unsaved contact', 'unknown contact', '']);
+  const canonicalPhone = (raw: string) => {
+    const digits = (raw || '').replace(/\D/g, '');
+    if (digits.length === 12 && digits.startsWith('91')) return digits.slice(2);
+    if (digits.length === 13 && digits.startsWith('091')) return digits.slice(3);
+    return digits;
+  };
+
+  const chatsMap = new Map<string, (typeof rawChats)[0]>();
+  for (const c of rawChats) {
+    const cleanNum = (c.phone || c.jid.split('@')[0] || '').replace(/\D/g, '');
+    const dedupeKey = canonicalPhone(cleanNum) || c.jid;
+    if (!chatsMap.has(dedupeKey)) {
+      chatsMap.set(dedupeKey, c);
+    } else {
+      const existing = chatsMap.get(dedupeKey)!;
+      const mergedLeadStatus = (c.leadStatus && c.leadStatus !== 'UNASSIGNED') ? c.leadStatus : existing.leadStatus;
+      const mergedCallStatus = c.callStatus || existing.callStatus;
+      const mergedFollowUpDate = c.followUpDate || existing.followUpDate;
+      const mergedNotes = c.notes || existing.notes;
+      const mergedNotesList = (c.notesList && c.notesList.length > 0) ? c.notesList : existing.notesList;
+
+      const curNameBad = !c.name || BAD_NAMES.has(c.name.toLowerCase().trim()) || c.name.length <= 1;
+      const existNameBad = !existing.name || BAD_NAMES.has(existing.name.toLowerCase().trim()) || existing.name.length <= 1;
+      const bestName = curNameBad ? existing.name : (existNameBad ? c.name : (c.name.length >= existing.name.length ? c.name : existing.name));
+
+      chatsMap.set(dedupeKey, {
+        ...existing,
+        ...c,
+        name: bestName,
+        leadStatus: mergedLeadStatus || 'UNASSIGNED',
+        callStatus: mergedCallStatus,
+        followUpDate: mergedFollowUpDate,
+        notes: mergedNotes,
+        notesList: mergedNotesList,
+        lastMessageAt: Math.max(existing.lastMessageAt || 0, c.lastMessageAt || 0),
+      });
+    }
+  }
+
+  const chats = Array.from(chatsMap.values());
 
   // Compute 100% DYNAMIC real stats from database chats (Default 0)
   const interestedChats = chats.filter((c) => c.leadStatus === 'INTERESTED');

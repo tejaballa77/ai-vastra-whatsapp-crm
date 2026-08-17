@@ -8,7 +8,26 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       fetch(`${baseUrl}/api/chats`)
         .then((res) => res.json())
         .then((chats) => {
-          const activeChat = chats.find(c => c.jid.includes(request.phoneClean) || request.phoneClean.includes(c.jid.split('@')[0]));
+          const search = (request.phoneClean || '').toLowerCase().trim();
+          const cleanSearchDigits = search.replace(/\D/g, '');
+
+          const activeChat = chats.find(c => {
+            const cleanJidNum = c.jid.split('@')[0].replace(/\D/g, '');
+            const cleanPhone = (c.phone || '').replace(/\D/g, '');
+            const name = (c.name || '').toLowerCase().trim();
+
+            if (cleanSearchDigits.length >= 10) {
+              if (cleanJidNum.includes(cleanSearchDigits) || cleanSearchDigits.includes(cleanJidNum)) return true;
+              if (cleanPhone && (cleanPhone.includes(cleanSearchDigits) || cleanSearchDigits.includes(cleanPhone))) return true;
+            }
+
+            if (name && search.length > 1) {
+              if (name === search || name.includes(search) || search.includes(name)) return true;
+            }
+
+            return false;
+          });
+
           sendResponse({ success: true, chat: activeChat || null });
         })
         .catch((err) => sendResponse({ success: false, error: err.message }));

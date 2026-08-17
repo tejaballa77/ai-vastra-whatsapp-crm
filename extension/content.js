@@ -4,6 +4,7 @@ console.log('[AI Vastra Chrome Extension] Script active on WhatsApp Web!');
 let activeContactKey = '';
 let activeDisplayName = '';
 let activePhoneClean = '';
+let activeAvatarUrl = '';
 let currentLeadStatus = 'UNASSIGNED';
 let currentCallStatus = null;
 let currentFollowUp = '';
@@ -55,7 +56,6 @@ function ensureHeaderButton() {
     </button>
   `;
 
-  // Insert before the last actions container in header
   mainHeader.appendChild(btnContainer);
 
   document.getElementById('aivastra-toggle-btn').onclick = () => {
@@ -93,40 +93,65 @@ function detectActiveContact(force = false) {
   const rawTitle = titleEl.getAttribute('title') || titleEl.textContent || '';
   if (!rawTitle) return;
 
-  const cleanDigits = rawTitle.replace(/\D/g, '');
+  // Extract avatar image from header if available
+  const imgEl = mainHeader.querySelector('img');
+  let domAvatar = '';
+  if (imgEl && imgEl.src && !imgEl.src.includes('data:image/svg')) {
+    domAvatar = imgEl.src;
+  }
 
+  const cleanDigits = rawTitle.replace(/\D/g, '');
   const contactKey = cleanDigits.length >= 10 ? cleanDigits : rawTitle;
 
   if (activeContactKey !== contactKey || force) {
     activeContactKey = contactKey;
     activeDisplayName = rawTitle;
     activePhoneClean = cleanDigits;
-    fetchCrmMetadata(contactKey, rawTitle);
+    activeAvatarUrl = domAvatar;
+    fetchCrmMetadata(contactKey, rawTitle, domAvatar);
   }
 }
 
-function fetchCrmMetadata(searchKey, displayName) {
+function fetchCrmMetadata(searchKey, displayName, domAvatar) {
   chrome.runtime.sendMessage({ action: 'FETCH_CRM_METADATA', phoneClean: searchKey }, (response) => {
+    let resolvedPhone = activePhoneClean;
+    let resolvedAvatar = domAvatar || activeAvatarUrl;
+
     if (response && response.success && response.chat) {
       const chat = response.chat;
       currentLeadStatus = chat.leadStatus || 'UNASSIGNED';
       currentCallStatus = chat.callStatus || null;
       currentFollowUp = chat.followUpDate || '';
       currentNotesList = chat.notesList || (chat.notes ? [chat.notes] : []);
+
+      if (chat.phone) {
+        resolvedPhone = chat.phone.replace(/\D/g, '');
+      } else if (chat.jid) {
+        const jidNum = chat.jid.split('@')[0].replace(/\D/g, '');
+        if (jidNum.length >= 10) resolvedPhone = jidNum;
+      }
+
+      if (!resolvedAvatar && chat.avatarUrl) {
+        resolvedAvatar = chat.avatarUrl;
+      }
     } else {
       currentLeadStatus = 'UNASSIGNED';
       currentCallStatus = null;
       currentFollowUp = '';
       currentNotesList = [];
     }
-    renderCrmPanel(displayName, activePhoneClean);
+
+    activePhoneClean = resolvedPhone;
+    activeAvatarUrl = resolvedAvatar;
+
+    renderCrmPanel(displayName, resolvedPhone, resolvedAvatar);
   });
 }
 
 function saveCrmMetadata() {
   const targetJid = activePhoneClean.length >= 10 
     ? `${activePhoneClean}@s.whatsapp.net` 
-    : activeContactKey;
+    : (activeContactKey.includes('@') ? activeContactKey : `${activeContactKey}@s.whatsapp.net`);
 
   chrome.runtime.sendMessage({
     action: 'UPDATE_CRM_METADATA',
@@ -141,15 +166,24 @@ function saveCrmMetadata() {
   });
 }
 
-function renderCrmPanel(displayName, cleanPhone) {
+function renderCrmPanel(displayName, cleanPhone, avatarUrl) {
   const panel = ensureCrmPanel();
   panel.style.display = isPanelVisible ? 'flex' : 'none';
 
-  const formattedPhone = cleanPhone && cleanPhone.length >= 10
-    ? (cleanPhone.length === 12 && cleanPhone.startsWith('91')
-        ? `+91 ${cleanPhone.slice(2, 7)} ${cleanPhone.slice(7)}`
-        : `+${cleanPhone}`)
-    : 'WhatsApp Contact';
+  let formattedPhone = 'WhatsApp Contact';
+  if (cleanPhone && cleanPhone.length >= 10) {
+    if (cleanPhone.length === 12 && cleanPhone.startsWith('91')) {
+      formattedPhone = `+91 ${cleanPhone.slice(2, 7)} ${cleanPhone.slice(7)}`;
+    } else if (cleanPhone.length === 10) {
+      formattedPhone = `+91 ${cleanPhone.slice(0, 5)} ${cleanPhone.slice(5)}`;
+    } else {
+      formattedPhone = `+${cleanPhone}`;
+    }
+  }
+
+  const avatarHtml = avatarUrl
+    ? `<img src="${avatarUrl}" alt="${displayName}" class="aivastra-avatar-img" />`
+    : `<div class="aivastra-avatar-circle">${displayName.charAt(0).toUpperCase()}</div>`;
 
   panel.innerHTML = `
     <div class="aivastra-header">
@@ -165,9 +199,7 @@ function renderCrmPanel(displayName, cleanPhone) {
 
     <div class="aivastra-body">
       <div class="aivastra-card">
-        <div class="aivastra-avatar-circle">
-          ${displayName.charAt(0).toUpperCase()}
-        </div>
+        ${avatarHtml}
         <div class="aivastra-contact-name">${displayName}</div>
         <div class="aivastra-contact-phone">📞 ${formattedPhone}</div>
       </div>
@@ -223,15 +255,15 @@ function renderCrmPanel(displayName, cleanPhone) {
     currentFollowUp = '';
     currentNotesList = [];
     saveCrmMetadata();
-    renderCrmPanel(displayName, cleanPhone);
+    renderCrmPanel(displayName, cleanPhone, avatarUrl);
   };
 
-  document.getElementById('btn-interested').onclick = () => { currentLeadStatus = 'INTERESTED'; saveCrmMetadata(); renderCrmPanel(displayName, cleanPhone); };
-  document.getElementById('btn-warm').onclick = () => { currentLeadStatus = 'WARM_INTERESTED'; saveCrmMetadata(); renderCrmPanel(displayName, cleanPhone); };
-  document.getElementById('btn-not-interested').onclick = () => { currentLeadStatus = 'NOT_INTERESTED'; saveCrmMetadata(); renderCrmPanel(displayName, cleanPhone); };
+  document.getElementById('btn-interested').onclick = () => { currentLeadStatus = 'INTERESTED'; saveCrmMetadata(); renderCrmPanel(displayName, cleanPhone, avatarUrl); };
+  document.getElementById('btn-warm').onclick = () => { currentLeadStatus = 'WARM_INTERESTED'; saveCrmMetadata(); renderCrmPanel(displayName, cleanPhone, avatarUrl); };
+  document.getElementById('btn-not-interested').onclick = () => { currentLeadStatus = 'NOT_INTERESTED'; saveCrmMetadata(); renderCrmPanel(displayName, cleanPhone, avatarUrl); };
 
-  document.getElementById('btn-call-yes').onclick = () => { currentCallStatus = 'YES'; saveCrmMetadata(); renderCrmPanel(displayName, cleanPhone); };
-  document.getElementById('btn-call-no').onclick = () => { currentCallStatus = 'NO'; saveCrmMetadata(); renderCrmPanel(displayName, cleanPhone); };
+  document.getElementById('btn-call-yes').onclick = () => { currentCallStatus = 'YES'; saveCrmMetadata(); renderCrmPanel(displayName, cleanPhone, avatarUrl); };
+  document.getElementById('btn-call-no').onclick = () => { currentCallStatus = 'NO'; saveCrmMetadata(); renderCrmPanel(displayName, cleanPhone, avatarUrl); };
 
   document.getElementById('aivastra-followup-date').onchange = (e) => { currentFollowUp = e.target.value; saveCrmMetadata(); };
 
@@ -241,7 +273,7 @@ function renderCrmPanel(displayName, cleanPhone) {
       currentNotesList.unshift(txt);
       document.getElementById('aivastra-note-text').value = '';
       saveCrmMetadata();
-      renderCrmPanel(displayName, cleanPhone);
+      renderCrmPanel(displayName, cleanPhone, avatarUrl);
     }
   };
 
@@ -250,7 +282,7 @@ function renderCrmPanel(displayName, cleanPhone) {
       const idx = parseInt(e.target.getAttribute('data-index'));
       currentNotesList.splice(idx, 1);
       saveCrmMetadata();
-      renderCrmPanel(displayName, cleanPhone);
+      renderCrmPanel(displayName, cleanPhone, avatarUrl);
     };
   });
 }

@@ -77,13 +77,23 @@
   align-items: center;
 }
 
+.aivastra-avatar-img {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  object-fit: cover;
+  margin-bottom: 8px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+  border: 2px solid #ffffff;
+}
+
 .aivastra-avatar-circle {
-  width: 56px;
-  height: 56px;
+  width: 64px;
+  height: 64px;
   border-radius: 50%;
   background-color: rgba(0, 168, 132, 0.15);
   color: #00a884;
-  font-size: 22px;
+  font-size: 24px;
   font-weight: 700;
   display: flex;
   align-items: center;
@@ -99,8 +109,9 @@
 }
 
 .aivastra-contact-phone {
-  font-size: 12px;
-  color: #667781;
+  font-size: 13px;
+  font-weight: 500;
+  color: #54656f;
 }
 
 .aivastra-section-title {

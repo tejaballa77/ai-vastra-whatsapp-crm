@@ -433,7 +433,9 @@ class StorageEngine {
 
     for (const c of list) {
       const resolvedKey = this.resolveJid(c.jid);
-      let name = this.getContactName(c.jid);
+      let name = (c.name && c.name !== 'Unsaved Contact' && !c.name.includes('@'))
+        ? c.name
+        : this.getContactName(c.jid);
 
       if (name.includes('T ONE') || name.includes('REAL-WORLD') || name.includes('TESTING')) {
         const cleanNum = resolvedKey.split('@')[0].replace(/\D/g, '');

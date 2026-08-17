@@ -9,7 +9,7 @@ export interface Chat {
   lastMessageStatus?: Message['status'];
   avatarUrl?: string;
   isGroup: boolean;
-  leadStatus: 'INTERESTED' | 'WARM_INTERESTED' | 'NOT_INTERESTED' | 'UNASSIGNED';
+  leadStatus: 'INTERESTED' | 'WARM_INTERESTED' | 'WARM' | 'NOT_INTERESTED' | 'UNASSIGNED';
   callStatus?: 'YES' | 'NO';
   followUpDate?: string;
   notes?: string;

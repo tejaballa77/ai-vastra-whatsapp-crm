@@ -36,7 +36,7 @@ export function WhatsAppCrmModule() {
 
   // Compute 100% DYNAMIC real stats from database chats (Default 0)
   const interestedChats = chats.filter((c) => c.leadStatus === 'INTERESTED');
-  const warmChats = chats.filter((c) => c.leadStatus === 'WARM_INTERESTED');
+  const warmChats = chats.filter((c) => c.leadStatus === 'WARM_INTERESTED' || c.leadStatus === 'WARM');
   const notInterestedChats = chats.filter((c) => c.leadStatus === 'NOT_INTERESTED');
   const unassignedChats = chats.filter((c) => !c.leadStatus || c.leadStatus === 'UNASSIGNED');
 

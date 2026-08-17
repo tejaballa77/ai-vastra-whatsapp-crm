@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 import { useSocket } from '../context/SocketContext';
 import { SettingsAiAgent } from './SettingsAiAgent';
+import { ColdCallsModule } from './ColdCallsModule';
 
 export function WhatsAppCrmModule() {
   const [activeNav, setActiveNav] = useState<'whatsapp' | 'calls' | 'emails' | 'settings'>('whatsapp');
@@ -261,8 +262,7 @@ export function WhatsAppCrmModule() {
               }`}
             >
               <PhoneCall className="w-4 h-4" />
-              <span>Cold Calls</span>
-              <span className="ml-auto text-[10px] bg-gray-800 text-gray-400 px-1.5 py-0.5 rounded">Soon</span>
+              <span className="font-semibold">Cold Calls</span>
             </button>
 
             {/* 3. Emails */}
@@ -658,6 +658,10 @@ export function WhatsAppCrmModule() {
               </div>
             </div>
           </div>
+        )}
+
+        {activeNav === 'calls' && (
+          <ColdCallsModule />
         )}
 
         {activeNav === 'settings' && (

@@ -257,6 +257,46 @@ app.post('/api/chats/import-backup', (req, res) => {
   });
 });
 
+// ==================== COLD CALLS API ENDPOINTS ====================
+// Get all cold call leads
+app.get('/api/cold-calls', (req, res) => {
+  res.json(db.getAllColdCalls());
+});
+
+// Import cold call leads from Excel / CSV
+app.post('/api/cold-calls/import', (req, res) => {
+  const { leads } = req.body;
+  if (!Array.isArray(leads)) {
+    return res.status(400).json({ error: 'leads array is required' });
+  }
+
+  const imported = db.importColdCalls(leads);
+  res.json({ success: true, count: imported.length, leads: imported });
+});
+
+// Update cold call lead (Notes, Follow-up Date, Call Status, etc.)
+app.put('/api/cold-calls/:id', (req, res) => {
+  const { id } = req.params;
+  const updated = db.updateColdCall(id, req.body);
+  if (!updated) {
+    return res.status(404).json({ error: 'Cold call lead not found' });
+  }
+  res.json({ success: true, lead: updated });
+});
+
+// Delete specific cold call lead
+app.delete('/api/cold-calls/:id', (req, res) => {
+  const { id } = req.params;
+  const deleted = db.deleteColdCall(id);
+  res.json({ success: deleted });
+});
+
+// Clear all cold call leads
+app.delete('/api/cold-calls', (req, res) => {
+  db.clearColdCalls();
+  res.json({ success: true, message: 'All cold calls cleared' });
+});
+
 // Start Express HTTP & Socket.IO server
 // 14. AI Agent Knowledge Base Endpoints
 app.get('/api/ai/knowledge-base', (req, res) => {

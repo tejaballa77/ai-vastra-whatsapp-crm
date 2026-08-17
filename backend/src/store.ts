@@ -48,12 +48,27 @@ export interface CRMMessage {
   status: 'PENDING' | 'SENT' | 'DELIVERED' | 'READ';
 }
 
+export interface ColdCallLead {
+  id: string;
+  name: string;
+  phone: string;
+  company?: string;
+  customFields?: Record<string, any>;
+  callStatus?: 'YES' | 'NO' | 'PENDING' | 'INTERESTED' | 'NOT_INTERESTED';
+  followUpDate?: string;
+  notes?: string;
+  notesList?: string[];
+  createdAt: number;
+  updatedAt: number;
+}
+
 class StorageEngine {
   private dataFilePath: string;
   public contacts: Map<string, CRMContact> = new Map();
   public chats: Map<string, CRMChat> = new Map();
   public messages: Map<string, CRMMessage[]> = new Map(); // chatJid -> CRMMessage[]
   public lidToJidMap: Map<string, string> = new Map(); // LID JID -> Phone JID
+  public coldCalls: Map<string, ColdCallLead> = new Map(); // Lead ID -> ColdCallLead
 
   constructor() {
     const dataDir = path.join(__dirname, '../data');
@@ -88,6 +103,9 @@ class StorageEngine {
         }
         if (parsed.lidToJidMap) {
           this.lidToJidMap = new Map(Object.entries(parsed.lidToJidMap));
+        }
+        if (parsed.coldCalls) {
+          this.coldCalls = new Map(Object.entries(parsed.coldCalls));
         }
 
         // ============================================================
@@ -172,6 +190,7 @@ class StorageEngine {
         chats: Object.fromEntries(this.chats),
         messages: Object.fromEntries(this.messages),
         lidToJidMap: Object.fromEntries(this.lidToJidMap),
+        coldCalls: Object.fromEntries(this.coldCalls),
       };
       fs.writeFileSync(this.dataFilePath, JSON.stringify(obj, null, 2), 'utf-8');
     } catch (err) {
@@ -773,6 +792,72 @@ class StorageEngine {
 
     this.saveData();
     return chat;
+  }
+
+  // ==================== COLD CALLS MANAGEMENT ====================
+  public getAllColdCalls(): ColdCallLead[] {
+    return Array.from(this.coldCalls.values()).sort((a, b) => b.updatedAt - a.updatedAt);
+  }
+
+  public importColdCalls(leads: Partial<ColdCallLead>[]): ColdCallLead[] {
+    const imported: ColdCallLead[] = [];
+    const now = Date.now();
+
+    for (const lead of leads) {
+      if (!lead.name && !lead.phone) continue;
+      const phoneDigits = (lead.phone || '').replace(/\D/g, '');
+      const id = lead.id || (phoneDigits.length >= 10 ? phoneDigits : `lead_${now}_${Math.random().toString(36).substring(2, 7)}`);
+
+      const existing = this.coldCalls.get(id);
+      const entry: ColdCallLead = {
+        id,
+        name: lead.name || existing?.name || 'Contact',
+        phone: lead.phone || existing?.phone || '',
+        company: lead.company || existing?.company || '',
+        customFields: { ...(existing?.customFields || {}), ...(lead.customFields || {}) },
+        callStatus: lead.callStatus || existing?.callStatus || 'PENDING',
+        followUpDate: lead.followUpDate !== undefined ? lead.followUpDate : (existing?.followUpDate || ''),
+        notes: lead.notes !== undefined ? lead.notes : (existing?.notes || ''),
+        notesList: lead.notesList || existing?.notesList || [],
+        createdAt: existing?.createdAt || now,
+        updatedAt: now,
+      };
+
+      this.coldCalls.set(id, entry);
+      imported.push(entry);
+    }
+
+    this.saveData();
+    return imported;
+  }
+
+  public updateColdCall(id: string, partial: Partial<ColdCallLead>): ColdCallLead | null {
+    const existing = this.coldCalls.get(id);
+    if (!existing) return null;
+
+    const updated: ColdCallLead = {
+      ...existing,
+      ...partial,
+      notesList: partial.notesList !== undefined ? partial.notesList : existing.notesList,
+      customFields: partial.customFields ? { ...existing.customFields, ...partial.customFields } : existing.customFields,
+      updatedAt: Date.now(),
+    };
+
+    this.coldCalls.set(id, updated);
+    this.saveData();
+    return updated;
+  }
+
+  public deleteColdCall(id: string): boolean {
+    const existed = this.coldCalls.delete(id);
+    if (existed) this.saveData();
+    return existed;
+  }
+
+  public clearColdCalls(): boolean {
+    this.coldCalls.clear();
+    this.saveData();
+    return true;
   }
 }
 

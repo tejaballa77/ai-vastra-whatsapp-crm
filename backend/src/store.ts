@@ -427,19 +427,35 @@ class StorageEngine {
     return null;
   }
 
+  // Normalize any Indian phone number to its canonical 10-digit form for deduplication
+  // e.g. "919714515645" → "9714515645", "9714515645" → "9714515645"
+  private canonicalPhone(digits: string): string {
+    if (!digits) return digits;
+    if (digits.length === 12 && digits.startsWith('91')) return digits.slice(2);
+    if (digits.length === 13 && digits.startsWith('091')) return digits.slice(3);
+    return digits;
+  }
+
   public getAllChatsSorted(): CRMChat[] {
     const list = Array.from(this.chats.values());
     const uniqueMap = new Map<string, CRMChat>();
+    const BAD_NAMES = new Set(['.', 'contact', 'unsaved contact', 'unknown contact']);
 
     for (const c of list) {
       const resolvedKey = this.resolveJid(c.jid);
+      const rawDigits = resolvedKey.split('@')[0].replace(/\D/g, '');
+      // Canonical 10-digit key — merges 919714515645, 9714515645, 09714515645 into ONE entry
+      const dedupeKey = this.canonicalPhone(rawDigits) || resolvedKey;
+
       let name = (c.name && c.name !== 'Unsaved Contact' && !c.name.includes('@'))
         ? c.name
         : this.getContactName(c.jid);
 
+      if (!name || BAD_NAMES.has(name.toLowerCase().trim()) || name.length <= 1) {
+        name = this.formatPhoneFallback(rawDigits);
+      }
       if (name.includes('T ONE') || name.includes('REAL-WORLD') || name.includes('TESTING')) {
-        const cleanNum = resolvedKey.split('@')[0].replace(/\D/g, '');
-        name = this.formatPhoneFallback(cleanNum);
+        name = this.formatPhoneFallback(rawDigits);
       }
 
       const avatarUrl = this.contacts.get(resolvedKey)?.avatarUrl || c.avatarUrl;
@@ -500,43 +516,44 @@ class StorageEngine {
         lastMessageStatus,
       };
 
-      if (!uniqueMap.has(resolvedKey)) {
-        uniqueMap.set(resolvedKey, updatedChat);
+      if (!uniqueMap.has(dedupeKey)) {
+        uniqueMap.set(dedupeKey, updatedChat);
       } else {
-        const existing = uniqueMap.get(resolvedKey)!;
+        const existing = uniqueMap.get(dedupeKey)!;
 
-        // MERGE METADATA ACCURATELY
-        const mergedLeadStatus = (c.leadStatus && c.leadStatus !== 'UNASSIGNED') ? c.leadStatus : existing.leadStatus;
+        // Merge CRM data — always keep most valuable values
+        const mergedLeadStatus = (c.leadStatus && c.leadStatus !== 'UNASSIGNED') ? c.leadStatus
+          : (existing.leadStatus !== 'UNASSIGNED' ? existing.leadStatus : 'UNASSIGNED');
         const mergedCallStatus = c.callStatus || existing.callStatus;
         const mergedFollowUpDate = c.followUpDate || existing.followUpDate;
         const mergedNotes = c.notes || existing.notes;
-        const mergedNotesList = (c.notesList && c.notesList.length > 0) ? c.notesList : existing.notesList;
-
+        const mergedNotesList = (c.notesList && c.notesList.length > 0) ? c.notesList : (existing.notesList || []);
         const newestTime = Math.max(existing.lastMessageAt, lastMessageAt);
 
-        uniqueMap.set(resolvedKey, {
+        const curNameBad = !name || BAD_NAMES.has(name.toLowerCase().trim()) || name.length <= 1;
+        const existNameBad = !existing.name || BAD_NAMES.has(existing.name.toLowerCase().trim()) || existing.name.length <= 1;
+        const bestName = curNameBad ? existing.name : (existNameBad ? name : (name.length >= existing.name.length ? name : existing.name));
+
+        uniqueMap.set(dedupeKey, {
           ...existing,
           ...updatedChat,
-          leadStatus: mergedLeadStatus || 'UNASSIGNED',
+          name: bestName || this.formatPhoneFallback(rawDigits),
+          leadStatus: mergedLeadStatus,
           callStatus: mergedCallStatus,
           followUpDate: mergedFollowUpDate,
           notes: mergedNotes,
-          notesList: mergedNotesList || [],
+          notesList: mergedNotesList,
           lastMessageAt: newestTime,
           avatarUrl: avatarUrl || existing.avatarUrl,
-          name: (name && name !== 'Unsaved Contact' && !name.includes('@')) ? name : existing.name
         });
       }
     }
 
     return Array.from(uniqueMap.values()).sort((a, b) => {
-      // Prioritize saved leads at the top if timestamps are equal
       const aIsSaved = (a.leadStatus && a.leadStatus !== 'UNASSIGNED') || a.callStatus === 'YES' || Boolean(a.followUpDate);
       const bIsSaved = (b.leadStatus && b.leadStatus !== 'UNASSIGNED') || b.callStatus === 'YES' || Boolean(b.followUpDate);
-
       if (aIsSaved && !bIsSaved) return -1;
       if (!aIsSaved && bIsSaved) return 1;
-
       return b.lastMessageAt - a.lastMessageAt;
     });
   }
@@ -664,6 +681,8 @@ class StorageEngine {
       }
     }
 
+    // Only store under the full JID — NOT under cleanNum — to prevent duplicates
+    // (Deduplication in getAllChatsSorted handles the rest)
     this.saveData();
     return chat;
   }

@@ -206,17 +206,25 @@ function saveCrmMetadata(showToast = false) {
     : (activeContactKey.includes('@') ? activeContactKey : `${activeContactKey}@s.whatsapp.net`);
 
   // Update local metadata map immediately
-  chatsMetadataMap[activeContactKey] = {
+  const metaObj = {
     leadStatus: currentLeadStatus,
     callStatus: currentCallStatus,
     followUpDate: currentFollowUp,
-    notesList: currentNotesList
+    notesList: currentNotesList,
+    name: activeDisplayName,
+    phone: activePhoneClean
   };
+
+  chatsMetadataMap[activeContactKey] = metaObj;
+  if (activePhoneClean) chatsMetadataMap[activePhoneClean] = metaObj;
+  if (activeDisplayName) chatsMetadataMap[activeDisplayName] = metaObj;
 
   chrome.runtime.sendMessage({
     action: 'UPDATE_CRM_METADATA',
     jid: targetJid,
     data: {
+      name: activeDisplayName,
+      phone: activePhoneClean,
       leadStatus: currentLeadStatus,
       callStatus: currentCallStatus,
       followUpDate: currentFollowUp || undefined,

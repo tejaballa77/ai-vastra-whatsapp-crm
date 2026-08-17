@@ -547,19 +547,17 @@ class StorageEngine {
     tags?: string[];
   }) {
     const jid = this.resolveJid(rawJid);
-    const chat = this.chats.get(jid);
-    if (chat) {
-      if (metadata.leadStatus !== undefined) chat.leadStatus = metadata.leadStatus;
-      if (metadata.callStatus !== undefined) chat.callStatus = metadata.callStatus;
-      if (metadata.followUpDate !== undefined) chat.followUpDate = metadata.followUpDate;
-      if (metadata.notes !== undefined) chat.notes = metadata.notes;
-      if (metadata.notesList !== undefined) chat.notesList = metadata.notesList;
-      if (metadata.tags !== undefined) chat.tags = metadata.tags;
-      this.chats.set(jid, chat);
-    }
+    const cleanNum = rawJid.replace(/\D/g, '') || jid.split('@')[0].replace(/\D/g, '');
 
-    const contact = this.contacts.get(jid);
-    if (contact) {
+    // 1. Update Contact
+    let contact = this.contacts.get(jid) || (cleanNum ? this.contacts.get(cleanNum) : undefined);
+    if (!contact) {
+      contact = this.upsertContact(jid, {
+        phone: cleanNum,
+        name: this.getContactName(rawJid) || this.formatPhoneFallback(cleanNum),
+        ...metadata
+      });
+    } else {
       if (metadata.leadStatus !== undefined) contact.leadStatus = metadata.leadStatus;
       if (metadata.callStatus !== undefined) contact.callStatus = metadata.callStatus;
       if (metadata.followUpDate !== undefined) contact.followUpDate = metadata.followUpDate;
@@ -567,12 +565,55 @@ class StorageEngine {
       if (metadata.notesList !== undefined) contact.notesList = metadata.notesList;
       if (metadata.tags !== undefined) contact.tags = metadata.tags;
       this.contacts.set(jid, contact);
+      if (cleanNum) this.contacts.set(cleanNum, contact);
+    }
+
+    // 2. Update or Create Chat in DB
+    let chat = this.chats.get(jid) || (cleanNum ? this.chats.get(cleanNum) : undefined);
+    if (!chat) {
+      chat = {
+        jid: jid.includes('@') ? jid : `${jid}@s.whatsapp.net`,
+        name: contact?.name || this.formatPhoneFallback(cleanNum),
+        unreadCount: 0,
+        lastMessageAt: Date.now(),
+        isGroup: false,
+        leadStatus: metadata.leadStatus || 'UNASSIGNED',
+        callStatus: metadata.callStatus,
+        followUpDate: metadata.followUpDate,
+        notes: metadata.notes,
+        notesList: metadata.notesList || [],
+        tags: metadata.tags || [],
+      };
+      this.chats.set(chat.jid, chat);
+      if (cleanNum) this.chats.set(cleanNum, chat);
     } else {
-      this.upsertContact(jid, metadata);
+      if (metadata.leadStatus !== undefined) chat.leadStatus = metadata.leadStatus;
+      if (metadata.callStatus !== undefined) chat.callStatus = metadata.callStatus;
+      if (metadata.followUpDate !== undefined) chat.followUpDate = metadata.followUpDate;
+      if (metadata.notes !== undefined) chat.notes = metadata.notes;
+      if (metadata.notesList !== undefined) chat.notesList = metadata.notesList;
+      if (metadata.tags !== undefined) chat.tags = metadata.tags;
+      this.chats.set(chat.jid, chat);
+      if (cleanNum) this.chats.set(cleanNum, chat);
+    }
+
+    // Update any chat matching clean number in chats map
+    if (cleanNum && cleanNum.length >= 10) {
+      for (const [key, c] of this.chats.entries()) {
+        const num = c.jid.split('@')[0].replace(/\D/g, '');
+        if (num === cleanNum || num.endsWith(cleanNum) || cleanNum.endsWith(num)) {
+          if (metadata.leadStatus !== undefined) c.leadStatus = metadata.leadStatus;
+          if (metadata.callStatus !== undefined) c.callStatus = metadata.callStatus;
+          if (metadata.followUpDate !== undefined) c.followUpDate = metadata.followUpDate;
+          if (metadata.notes !== undefined) c.notes = metadata.notes;
+          if (metadata.notesList !== undefined) c.notesList = metadata.notesList;
+          this.chats.set(key, c);
+        }
+      }
     }
 
     this.saveData();
-    return this.chats.get(jid);
+    return chat;
   }
 }
 

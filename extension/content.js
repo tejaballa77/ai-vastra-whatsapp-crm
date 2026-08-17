@@ -309,7 +309,7 @@ function fetchCrmMetadata(searchKey, displayName, domAvatar) {
 
     renderCrmPanel(displayName, activePhoneClean, domAvatar || activeAvatarUrl);
 
-    // 2. Route fetch request via Background Service Worker to bypass WhatsApp CSP
+    // 2. Delegate ALL network fetching strictly to background service worker (Bypasses page CSP)
     chrome.runtime.sendMessage({ action: 'FETCH_CRM_METADATA', phoneClean: searchKey }, (response) => {
       let resolvedPhone = activePhoneClean;
       let resolvedAvatar = domAvatar || activeAvatarUrl;
@@ -390,7 +390,7 @@ function saveCrmMetadata() {
     notesList: activeFormData.notesList
   };
 
-  // 3. Delegate REST update to Background Service Worker (Immune to CSP restrictions)
+  // 3. Delegate REST update strictly to Background Service Worker (Immune to CSP restrictions)
   chrome.runtime.sendMessage({
     action: 'UPDATE_CRM_METADATA',
     jid: targetJid,

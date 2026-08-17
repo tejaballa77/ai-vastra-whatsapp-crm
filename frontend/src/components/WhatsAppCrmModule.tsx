@@ -578,46 +578,70 @@ export function WhatsAppCrmModule() {
                 <span className="text-xs text-gray-500 font-medium">{chats.length} active chats</span>
               </div>
 
-              <div className="flex gap-4 overflow-x-auto pb-3 pt-1 scrollbar-thin scrollbar-thumb-gray-200">
+              <div className="divide-y divide-gray-100 border border-gray-100 rounded-xl overflow-hidden">
                 {chats.length === 0 ? (
                   <div className="w-full p-8 text-center text-xs text-gray-400">
                     No active WhatsApp chats synced yet.
                   </div>
                 ) : (
-                  chats.slice(0, 12).map((chat) => (
+                  chats.slice(0, 10).map((chat) => (
                     <div 
                       key={chat.jid} 
-                      className="min-w-[280px] max-w-[320px] flex-shrink-0 p-4 rounded-xl bg-gray-50 border border-gray-200 hover:bg-gray-100/80 transition-all space-y-2 flex flex-col justify-between"
+                      className="p-3.5 hover:bg-gray-50/90 transition-all flex flex-col md:flex-row md:items-center justify-between gap-3 bg-white"
                     >
-                      <div className="space-y-2">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2.5 min-w-0">
-                            <div className="w-8 h-8 rounded-full bg-[#00a884]/15 text-[#00a884] font-bold flex items-center justify-center text-xs flex-shrink-0">
-                              {(chat.name || 'W').charAt(0).toUpperCase()}
-                            </div>
-                            <h4 className="text-xs font-bold truncate text-[#111b21] max-w-[170px]" title={chat.name || chat.phone || ''}>
-                              {chat.name || chat.phone || 'WhatsApp Contact'}
-                            </h4>
-                          </div>
-
-                          <button
-                            onClick={() => handleOpenSpecificChat(chat.phone || chat.jid)}
-                            className="text-xs text-[#00a884] font-semibold hover:underline flex items-center gap-1 flex-shrink-0"
-                          >
-                            Chat <ExternalLink className="w-3 h-3" />
-                          </button>
+                      {/* Left: Avatar & Contact Details */}
+                      <div className="flex items-center gap-3 min-w-[240px]">
+                        <div className="w-9 h-9 rounded-full bg-[#00a884]/15 text-[#00a884] font-bold flex items-center justify-center text-xs flex-shrink-0">
+                          {(chat.name || 'W').charAt(0).toUpperCase()}
                         </div>
-
-                        <p className="text-xs text-gray-600 line-clamp-2 bg-white p-2.5 rounded-lg border border-gray-100 italic min-h-[44px]">
-                          "{chat.lastMessagePreview || 'New inquiry received'}"
-                        </p>
+                        <div className="min-w-0">
+                          <h4 className="text-xs font-bold truncate text-[#111b21]" title={chat.name || chat.phone || ''}>
+                            {chat.name || chat.phone || 'WhatsApp Contact'}
+                          </h4>
+                          <p className="text-[11px] text-gray-500 font-medium">
+                            📞 {chat.phone ? `+${chat.phone}` : chat.jid.split('@')[0]}
+                          </p>
+                        </div>
                       </div>
 
-                      {chat.notesList && chat.notesList.length > 0 && (
-                        <p className="text-[11px] text-purple-700 font-medium truncate pt-1 border-t border-gray-200/50">
-                          📝 Note: {chat.notesList[0]}
-                        </p>
-                      )}
+                      {/* Middle: Message Preview & Notes */}
+                      <div className="flex-1 min-w-0 flex items-center gap-2.5">
+                        <div className="bg-gray-50 px-3 py-1.5 rounded-lg border border-gray-200/60 text-xs text-gray-700 italic truncate flex-1">
+                          "{chat.lastMessagePreview || 'New inquiry received'}"
+                        </div>
+                        {chat.notesList && chat.notesList.length > 0 && (
+                          <span className="text-[11px] bg-purple-50 text-purple-700 px-2.5 py-1 rounded-md font-medium border border-purple-200 flex-shrink-0 truncate max-w-[200px]">
+                            📝 {chat.notesList[0]}
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Right: Status Badge & Action */}
+                      <div className="flex items-center gap-2.5 flex-shrink-0 justify-end">
+                        {chat.leadStatus === 'INTERESTED' && (
+                          <span className="px-2.5 py-1 text-[11px] font-bold rounded-md bg-emerald-50 text-emerald-700 border border-emerald-200">
+                            👍 Interested
+                          </span>
+                        )}
+                        {chat.leadStatus === 'WARM_INTERESTED' && (
+                          <span className="px-2.5 py-1 text-[11px] font-bold rounded-md bg-amber-50 text-amber-700 border border-amber-200">
+                            🔥 Warm
+                          </span>
+                        )}
+                        {chat.leadStatus === 'NOT_INTERESTED' && (
+                          <span className="px-2.5 py-1 text-[11px] font-bold rounded-md bg-rose-50 text-rose-700 border border-rose-200">
+                            👎 Not Interested
+                          </span>
+                        )}
+
+                        <button
+                          onClick={() => handleOpenSpecificChat(chat.phone || chat.jid)}
+                          className="px-3 py-1.5 text-xs font-semibold text-[#00a884] bg-[#00a884]/10 hover:bg-[#00a884]/20 rounded-lg flex items-center gap-1.5 transition-all"
+                        >
+                          <span>Open Chat</span>
+                          <ExternalLink className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                     </div>
                   ))
                 )}

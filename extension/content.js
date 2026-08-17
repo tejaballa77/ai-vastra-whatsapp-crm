@@ -17,6 +17,7 @@ let activeFormData = {
 
 let isPanelVisible = true;
 let chatsMetadataMap = {};
+const BACKEND_URL = 'https://crm.nicedigitalsgroup.com';
 
 // Create or get the injected CRM sidepanel container
 function ensureCrmPanel() {
@@ -219,50 +220,57 @@ function fetchCrmMetadata(searchKey, displayName, domAvatar) {
 
     renderCrmPanel(displayName, activePhoneClean, domAvatar || activeAvatarUrl);
 
-    // 2. Sync with backend API
-    chrome.runtime.sendMessage({ action: 'FETCH_CRM_METADATA', phoneClean: searchKey }, (response) => {
-      let resolvedPhone = activePhoneClean;
-      let resolvedAvatar = domAvatar || activeAvatarUrl;
+    // 2. Direct HTTPS fetch to CRM backend
+    fetch(`${BACKEND_URL}/api/chats`)
+      .then((res) => res.json())
+      .then((chats) => {
+        if (Array.isArray(chats)) {
+          const cleanSearchDigits = (searchKey || '').replace(/\D/g, '');
+          const searchName = (displayName || '').toLowerCase().trim();
 
-      if (response && response.success && response.chat) {
-        const chat = response.chat;
-        if (!localData) {
-          activeFormData = {
-            leadStatus: chat.leadStatus || 'UNASSIGNED',
-            callStatus: chat.callStatus || null,
-            followUpDate: chat.followUpDate || '',
-            notesList: chat.notesList || (chat.notes ? [chat.notes] : [])
-          };
+          const activeChat = chats.find((c) => {
+            const cleanJidNum = c.jid.split('@')[0].replace(/\D/g, '');
+            const cleanPhone = (c.phone || '').replace(/\D/g, '');
+            const name = (c.name || '').toLowerCase().trim();
+
+            if (cleanSearchDigits.length >= 10) {
+              if (cleanJidNum.includes(cleanSearchDigits) || cleanSearchDigits.includes(cleanJidNum)) return true;
+              if (cleanPhone && (cleanPhone.includes(cleanSearchDigits) || cleanSearchDigits.includes(cleanPhone))) return true;
+            }
+
+            if (name && searchName.length > 1) {
+              if (name === searchName || name.includes(searchName) || searchName.includes(name)) return true;
+            }
+
+            return false;
+          });
+
+          if (activeChat) {
+            if (!localData) {
+              activeFormData = {
+                leadStatus: activeChat.leadStatus || 'UNASSIGNED',
+                callStatus: activeChat.callStatus || null,
+                followUpDate: activeChat.followUpDate || '',
+                notesList: activeChat.notesList || (activeChat.notes ? [activeChat.notes] : [])
+              };
+            }
+
+            const meta = {
+              ...activeFormData,
+              name: displayName,
+              phone: activeChat.phone || activePhoneClean
+            };
+
+            chatsMetadataMap[searchKey] = meta;
+            if (activePhoneClean) chatsMetadataMap[activePhoneClean] = meta;
+            if (displayName) chatsMetadataMap[displayName] = meta;
+          }
         }
 
-        if (chat.phone) {
-          resolvedPhone = chat.phone.replace(/\D/g, '');
-        } else if (chat.jid) {
-          const jidNum = chat.jid.split('@')[0].replace(/\D/g, '');
-          if (jidNum.length >= 10) resolvedPhone = jidNum;
-        }
-
-        if (!resolvedAvatar && chat.avatarUrl) {
-          resolvedAvatar = chat.avatarUrl;
-        }
-
-        const meta = {
-          ...activeFormData,
-          name: displayName,
-          phone: resolvedPhone
-        };
-
-        chatsMetadataMap[searchKey] = meta;
-        if (resolvedPhone) chatsMetadataMap[resolvedPhone] = meta;
-        if (displayName) chatsMetadataMap[displayName] = meta;
-      }
-
-      activePhoneClean = resolvedPhone;
-      activeAvatarUrl = resolvedAvatar;
-
-      renderCrmPanel(displayName, resolvedPhone, resolvedAvatar);
-      injectChatListBadges();
-    });
+        renderCrmPanel(displayName, activePhoneClean, domAvatar || activeAvatarUrl);
+        injectChatListBadges();
+      })
+      .catch((err) => console.error('Error syncing CRM metadata:', err));
   });
 }
 
@@ -290,19 +298,33 @@ function saveCrmMetadata() {
   if (activePhoneClean) chatsMetadataMap[activePhoneClean] = metaObj;
   if (activeDisplayName) chatsMetadataMap[activeDisplayName] = metaObj;
 
-  // 3. Send REST payload to backend API
+  const payload = {
+    name: activeDisplayName,
+    phone: activePhoneClean,
+    leadStatus: activeFormData.leadStatus,
+    callStatus: activeFormData.callStatus,
+    followUpDate: activeFormData.followUpDate || undefined,
+    notes: activeFormData.notesList.join('\n\n'),
+    notesList: activeFormData.notesList
+  };
+
+  // 3. Direct HTTPS PUT Request from Content Script to Backend API
+  fetch(`${BACKEND_URL}/api/crm/contact/${encodeURIComponent(targetJid)}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  })
+    .then((res) => res.json())
+    .then((resData) => {
+      console.log('[AI Vastra Extension] Saved CRM metadata successfully:', resData);
+    })
+    .catch((err) => console.error('[AI Vastra Extension] Error saving to CRM:', err));
+
+  // 4. Also notify background service worker
   chrome.runtime.sendMessage({
     action: 'UPDATE_CRM_METADATA',
     jid: targetJid,
-    data: {
-      name: activeDisplayName,
-      phone: activePhoneClean,
-      leadStatus: activeFormData.leadStatus,
-      callStatus: activeFormData.callStatus,
-      followUpDate: activeFormData.followUpDate || undefined,
-      notes: activeFormData.notesList.join('\n\n'),
-      notesList: activeFormData.notesList
-    }
+    data: payload
   });
 
   injectChatListBadges();

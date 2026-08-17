@@ -1,8 +1,15 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { Bot, Save, Sparkles, Check, Send, Key, FileText, Upload, Trash2, Database, ShieldCheck } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Bot, Save, Sparkles, Check, Send, Key, FileText, Upload, Trash2, Database, RefreshCw, User, MessageSquare } from 'lucide-react';
 import { getBackendUrl } from '../config';
+
+interface TestChatMessage {
+  sender: 'user' | 'ai';
+  text: string;
+  timestamp: string;
+  autoTagStatus?: string;
+}
 
 export function SettingsAiAgent() {
   const [kb, setKb] = useState<any>({
@@ -22,9 +29,18 @@ export function SettingsAiAgent() {
   const [isUploading, setIsUploading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
-  const [testMessage, setTestMessage] = useState('');
-  const [testResult, setTestResult] = useState<any>(null);
-  const [isTesting, setIsTesting] = useState(false);
+
+  // ChatGPT-Style Conversational Sandbox State
+  const [chatMessages, setChatMessages] = useState<TestChatMessage[]>([
+    {
+      sender: 'ai',
+      text: 'Hello! I am your AI Sales Employee simulator. Ask me any client questions or test scenarios based on your uploaded documents & pricing!',
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    }
+  ]);
+  const [testInput, setTestInput] = useState('');
+  const [isThinking, setIsThinking] = useState(false);
+  const chatEndRef = useRef<HTMLDivElement>(null);
 
   const fetchDocuments = () => {
     fetch(`${getBackendUrl()}/api/ai/documents`)
@@ -49,6 +65,10 @@ export function SettingsAiAgent() {
 
     fetchDocuments();
   }, []);
+
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [chatMessages, isThinking]);
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files || e.target.files.length === 0) return;
@@ -112,28 +132,60 @@ export function SettingsAiAgent() {
     }
   };
 
-  const handleTestAi = async (e: React.FormEvent) => {
+  const handleSendTestMessage = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!testMessage.trim()) return;
+    if (!testInput.trim() || isThinking) return;
 
-    setIsTesting(true);
-    setTestResult(null);
+    const userText = testInput.trim();
+    const userMsg: TestChatMessage = {
+      sender: 'user',
+      text: userText,
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    };
+
+    setChatMessages((prev) => [...prev, userMsg]);
+    setTestInput('');
+    setIsThinking(true);
 
     try {
       const res = await fetch(`${getBackendUrl()}/api/ai/test-reply`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: testMessage.trim() }),
+        body: JSON.stringify({ message: userText }),
       });
       const data = await res.json();
       if (data.success && data.response) {
-        setTestResult(data.response);
+        const aiMsg: TestChatMessage = {
+          sender: 'ai',
+          text: data.response.text || 'No response generated.',
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          autoTagStatus: data.response.autoTagStatus
+        };
+        setChatMessages((prev) => [...prev, aiMsg]);
       }
     } catch (err) {
       console.error('Error testing AI:', err);
+      setChatMessages((prev) => [
+        ...prev,
+        {
+          sender: 'ai',
+          text: 'Error generating response. Please check server logs or OpenAI API key.',
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        }
+      ]);
     } finally {
-      setIsTesting(false);
+      setIsThinking(false);
     }
+  };
+
+  const handleClearChat = () => {
+    setChatMessages([
+      {
+        sender: 'ai',
+        text: 'Conversation cleared. Start a new client test dialogue!',
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      }
+    ]);
   };
 
   return (
@@ -145,8 +197,8 @@ export function SettingsAiAgent() {
             <Bot className="w-6 h-6" />
           </div>
           <div>
-            <h2 className="text-xl font-bold text-[#111b21]">RAG Document Engine & Human Employee AI Agent</h2>
-            <p className="text-xs text-gray-500">Upload multiple FAQ & product policy documents. GPT-4o acts as a company employee to answer client messages.</p>
+            <h2 className="text-xl font-bold text-[#111b21]">RAG Document Engine & ChatGPT-Style Simulator</h2>
+            <p className="text-xs text-gray-500">Upload documents and test back-and-forth client dialogues with your GPT-4o employee AI in real time.</p>
           </div>
         </div>
 
@@ -291,9 +343,9 @@ export function SettingsAiAgent() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Left Column: Knowledge Base Forms (2 cols) */}
-        <div className="lg:col-span-2 space-y-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Left Column: Knowledge Base Forms */}
+        <div className="space-y-6">
           {/* Company Profile & Employee Tone */}
           <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm space-y-4">
             <h3 className="text-sm font-bold text-[#111b21] uppercase tracking-wider text-gray-500">Employee Persona & Company Overview</h3>
@@ -358,57 +410,106 @@ export function SettingsAiAgent() {
           </div>
         </div>
 
-        {/* Right Column: AI Sandbox Test Tool */}
-        <div className="space-y-6">
-          <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm space-y-4">
-            <div className="flex items-center gap-2 text-[#00a884] font-bold text-sm">
-              <Sparkles className="w-4 h-4" />
-              <span>Interactive RAG & GPT-4o Sandbox</span>
+        {/* Right Column: CHATGPT-STYLE INTERACTIVE TEST SIMULATOR */}
+        <div className="bg-white rounded-2xl border border-gray-200 shadow-sm flex flex-col overflow-hidden h-[680px]">
+          {/* Chat Simulator Header */}
+          <div className="p-4 bg-[#f0f2f5] border-b border-gray-200 flex items-center justify-between">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-xl bg-[#00a884] text-white flex items-center justify-center font-bold">
+                🤖
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-[#111b21]">ChatGPT-Style AI Test Simulator</h3>
+                <p className="text-[11px] text-gray-500">Test client queries against your uploaded documents & pricing</p>
+              </div>
             </div>
-            <p className="text-xs text-gray-500">Type any customer question below to test how RAG retrieves relevant document knowledge and GPT-4o frames the reply!</p>
 
-            <form onSubmit={handleTestAi} className="space-y-3">
-              <textarea
-                rows={3}
-                value={testMessage}
-                onChange={(e) => setTestMessage(e.target.value)}
-                placeholder="e.g., What happens if I want to cancel my subscription?"
-                className="w-full p-3 text-xs bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:border-[#00a884]"
-              />
+            <button
+              onClick={handleClearChat}
+              className="px-2.5 py-1 bg-white border border-gray-300 text-gray-600 rounded-lg text-xs font-semibold hover:bg-gray-100 transition-all flex items-center gap-1"
+              title="Clear Conversation"
+            >
+              <RefreshCw className="w-3 h-3" />
+              <span>Reset Chat</span>
+            </button>
+          </div>
 
-              <button
-                type="submit"
-                disabled={isTesting || !testMessage.trim()}
-                className="w-full py-2.5 bg-[#00a884] text-white font-bold text-xs rounded-xl hover:bg-[#008f70] transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+          {/* Chat Messages Body */}
+          <div className="flex-1 overflow-y-auto p-4 space-y-3.5 bg-[#e5ddd5]/30">
+            {chatMessages.map((msg, idx) => (
+              <div
+                key={idx}
+                className={`flex gap-2.5 ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}
               >
-                <Send className="w-3.5 h-3.5" />
-                <span>{isTesting ? 'RAG & GPT-4o Thinking...' : 'Test AI Auto-Reply'}</span>
-              </button>
-            </form>
+                {msg.sender === 'ai' && (
+                  <div className="w-7 h-7 rounded-full bg-[#00a884] text-white font-bold flex items-center justify-center text-xs flex-shrink-0 mt-0.5">
+                    🤖
+                  </div>
+                )}
 
-            {testResult && (
-              <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200 space-y-2 mt-4">
-                <div className="flex items-center justify-between text-xs font-bold text-emerald-800">
-                  <span>🤖 GPT-4o Employee Auto-Reply:</span>
-                  {testResult.autoTagStatus && (
-                    <span className="px-2 py-0.5 bg-emerald-200 text-emerald-900 rounded-full text-[10px]">
-                      Auto-Tag: {testResult.autoTagStatus}
-                    </span>
+                <div
+                  className={`max-w-[80%] rounded-2xl px-4 py-2.5 text-xs shadow-sm space-y-1 ${
+                    msg.sender === 'user'
+                      ? 'bg-[#d9fdd3] text-[#111b21] rounded-tr-none'
+                      : 'bg-white text-[#111b21] rounded-tl-none border border-gray-200'
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-3 text-[10px] text-gray-400 mb-0.5">
+                    <span className="font-bold">{msg.sender === 'user' ? '👤 Client (You)' : '🤖 AI Employee'}</span>
+                    <span>{msg.timestamp}</span>
+                  </div>
+
+                  <p className="whitespace-pre-wrap leading-relaxed">{msg.text}</p>
+
+                  {msg.autoTagStatus && (
+                    <div className="pt-1">
+                      <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 rounded-full text-[10px] font-bold">
+                        Auto-Tag: {msg.autoTagStatus}
+                      </span>
+                    </div>
                   )}
                 </div>
-                <p className="text-xs text-gray-800 whitespace-pre-wrap italic bg-white p-3 rounded-lg border border-emerald-100">
-                  {testResult.text || 'No reply generated.'}
-                </p>
+
+                {msg.sender === 'user' && (
+                  <div className="w-7 h-7 rounded-full bg-blue-600 text-white font-bold flex items-center justify-center text-xs flex-shrink-0 mt-0.5">
+                    👤
+                  </div>
+                )}
+              </div>
+            ))}
+
+            {isThinking && (
+              <div className="flex gap-2.5 justify-start">
+                <div className="w-7 h-7 rounded-full bg-[#00a884] text-white font-bold flex items-center justify-center text-xs flex-shrink-0">
+                  🤖
+                </div>
+                <div className="bg-white border border-gray-200 rounded-2xl rounded-tl-none px-4 py-2 text-xs text-gray-500 italic shadow-sm flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-[#00a884] animate-ping"></span>
+                  RAG Searching documents & GPT-4o thinking...
+                </div>
               </div>
             )}
+            <div ref={chatEndRef} />
           </div>
 
-          <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm space-y-3">
-            <h4 className="text-xs font-bold text-gray-700 uppercase tracking-wider">Human Employee Safety Rule</h4>
-            <p className="text-xs text-gray-500 leading-relaxed">
-              If a human sales rep types a message manually to a client on WhatsApp, the AI Agent automatically **pauses for 10 minutes** for that customer so it never interrupts human conversations.
-            </p>
-          </div>
+          {/* Chat Input Form */}
+          <form onSubmit={handleSendTestMessage} className="p-3 bg-white border-t border-gray-200 flex items-center gap-2">
+            <input
+              type="text"
+              value={testInput}
+              onChange={(e) => setTestInput(e.target.value)}
+              placeholder="Ask a question like a customer (e.g. What are your pricing plans?)..."
+              className="flex-1 px-4 py-2.5 text-xs bg-gray-100 border border-gray-200 rounded-xl focus:outline-none focus:border-[#00a884]"
+            />
+            <button
+              type="submit"
+              disabled={isThinking || !testInput.trim()}
+              className="px-4 py-2.5 bg-[#00a884] text-white font-bold text-xs rounded-xl hover:bg-[#008f70] transition-all flex items-center gap-1.5 disabled:opacity-50"
+            >
+              <span>Send</span>
+              <Send className="w-3.5 h-3.5" />
+            </button>
+          </form>
         </div>
       </div>
     </div>

@@ -500,12 +500,45 @@ class StorageEngine {
         lastMessageStatus,
       };
 
-      if (!uniqueMap.has(resolvedKey) || lastMessageAt > uniqueMap.get(resolvedKey)!.lastMessageAt) {
+      if (!uniqueMap.has(resolvedKey)) {
         uniqueMap.set(resolvedKey, updatedChat);
+      } else {
+        const existing = uniqueMap.get(resolvedKey)!;
+
+        // MERGE METADATA ACCURATELY
+        const mergedLeadStatus = (c.leadStatus && c.leadStatus !== 'UNASSIGNED') ? c.leadStatus : existing.leadStatus;
+        const mergedCallStatus = c.callStatus || existing.callStatus;
+        const mergedFollowUpDate = c.followUpDate || existing.followUpDate;
+        const mergedNotes = c.notes || existing.notes;
+        const mergedNotesList = (c.notesList && c.notesList.length > 0) ? c.notesList : existing.notesList;
+
+        const newestTime = Math.max(existing.lastMessageAt, lastMessageAt);
+
+        uniqueMap.set(resolvedKey, {
+          ...existing,
+          ...updatedChat,
+          leadStatus: mergedLeadStatus || 'UNASSIGNED',
+          callStatus: mergedCallStatus,
+          followUpDate: mergedFollowUpDate,
+          notes: mergedNotes,
+          notesList: mergedNotesList || [],
+          lastMessageAt: newestTime,
+          avatarUrl: avatarUrl || existing.avatarUrl,
+          name: (name && name !== 'Unsaved Contact' && !name.includes('@')) ? name : existing.name
+        });
       }
     }
 
-    return Array.from(uniqueMap.values()).sort((a, b) => b.lastMessageAt - a.lastMessageAt);
+    return Array.from(uniqueMap.values()).sort((a, b) => {
+      // Prioritize saved leads at the top if timestamps are equal
+      const aIsSaved = (a.leadStatus && a.leadStatus !== 'UNASSIGNED') || a.callStatus === 'YES' || Boolean(a.followUpDate);
+      const bIsSaved = (b.leadStatus && b.leadStatus !== 'UNASSIGNED') || b.callStatus === 'YES' || Boolean(b.followUpDate);
+
+      if (aIsSaved && !bIsSaved) return -1;
+      if (!aIsSaved && bIsSaved) return 1;
+
+      return b.lastMessageAt - a.lastMessageAt;
+    });
   }
 
   public getMessagesForChat(rawChatJid: string): CRMMessage[] {

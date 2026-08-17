@@ -16,17 +16,24 @@ import {
   Download,
   ListTodo,
   X,
-  UserCheck,
-  ChevronRight
+  ChevronRight,
+  Copy,
+  Check,
+  Search,
+  FileText
 } from 'lucide-react';
 import { useSocket } from '../context/SocketContext';
 
 export function WhatsAppCrmModule() {
   const [activeNav, setActiveNav] = useState<'whatsapp' | 'calls' | 'emails' | 'settings'>('whatsapp');
+  const [tableFilter, setTableFilter] = useState<'ALL' | 'INTERESTED' | 'WARM' | 'NOT_INTERESTED' | 'CALLS' | 'FOLLOWUPS'>('ALL');
   const [modalCategory, setModalCategory] = useState<'INTERESTED' | 'WARM' | 'NOT_INTERESTED' | 'CALLS' | 'FOLLOWUPS' | null>(null);
+  const [copiedPhone, setCopiedPhone] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState<string>('');
+
   const { chats } = useSocket();
 
-  // Compute 100% DYNAMIC real stats from database chats
+  // Compute 100% DYNAMIC real stats from database chats (Default 0)
   const interestedChats = chats.filter((c) => c.leadStatus === 'INTERESTED');
   const warmChats = chats.filter((c) => c.leadStatus === 'WARM_INTERESTED');
   const notInterestedChats = chats.filter((c) => c.leadStatus === 'NOT_INTERESTED');
@@ -36,7 +43,6 @@ export function WhatsAppCrmModule() {
   const warmCount = warmChats.length;
   const notInterestedCount = notInterestedChats.length;
   const unassignedCount = unassignedChats.length;
-  const activeLeadsCount = interestedCount + warmCount;
 
   const callsYesChats = chats.filter((c) => c.callStatus === 'YES');
   const followUpChats = chats.filter((c) => Boolean(c.followUpDate));
@@ -45,25 +51,57 @@ export function WhatsAppCrmModule() {
   const followUpsCount = followUpChats.length;
   const unreadChatsCount = chats.filter((c) => (c.unreadCount || 0) > 0).length;
 
-  // Compute New Leads Today dynamically
-  const todayStart = new Date().setHours(0, 0, 0, 0);
-  const newLeadsTodayCount = chats.filter((c) => (c.lastMessageAt || 0) >= todayStart).length || unreadChatsCount;
+  // Filtered chats where ANY contact info settings have been entered by user
+  const savedLeads = chats.filter(
+    (c) =>
+      (c.leadStatus && c.leadStatus !== 'UNASSIGNED') ||
+      c.callStatus === 'YES' ||
+      Boolean(c.followUpDate) ||
+      (c.notesList && c.notesList.length > 0) ||
+      Boolean(c.notes)
+  );
+
+  // Filter table leads based on selected sub-filter and search
+  const filteredTableLeads = savedLeads.filter((c) => {
+    const matchesSearch =
+      (c.name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (c.phone || c.jid || '').toLowerCase().includes(searchQuery.toLowerCase());
+
+    if (!matchesSearch) return false;
+
+    if (tableFilter === 'INTERESTED') return c.leadStatus === 'INTERESTED';
+    if (tableFilter === 'WARM') return c.leadStatus === 'WARM_INTERESTED';
+    if (tableFilter === 'NOT_INTERESTED') return c.leadStatus === 'NOT_INTERESTED';
+    if (tableFilter === 'CALLS') return c.callStatus === 'YES';
+    if (tableFilter === 'FOLLOWUPS') return Boolean(c.followUpDate);
+
+    return true;
+  });
+
+  const handleCopyPhone = (phoneNum: string) => {
+    const clean = phoneNum.replace(/\D/g, '');
+    navigator.clipboard.writeText(clean);
+    setCopiedPhone(clean);
+    setTimeout(() => setCopiedPhone(null), 2000);
+  };
+
+  const handleLaunchWhatsApp = () => {
+    window.open('https://web.whatsapp.com', '_blank');
+  };
 
   // Export Leads to CSV for telecallers
   const handleExportCsv = () => {
-    const exportData = chats
-      .filter((c) => c.leadStatus === 'INTERESTED' || c.leadStatus === 'WARM_INTERESTED')
-      .map((c) => ({
-        Name: c.name || 'Unsaved Contact',
-        Phone: c.phone || c.jid.split('@')[0],
-        LeadStatus: c.leadStatus === 'INTERESTED' ? 'Interested' : 'Warm',
-        CallStatus: c.callStatus || 'No Selection',
-        FollowUpDate: c.followUpDate || 'None',
-        Notes: (c.notesList || [c.notes || '']).join(' | '),
-      }));
+    const exportData = savedLeads.map((c) => ({
+      Name: c.name || 'Unsaved Contact',
+      Phone: c.phone || c.jid.split('@')[0],
+      LeadStatus: c.leadStatus === 'INTERESTED' ? 'Interested' : c.leadStatus === 'WARM_INTERESTED' ? 'Warm' : c.leadStatus === 'NOT_INTERESTED' ? 'Not Interested' : 'Unassigned',
+      CallStatus: c.callStatus || 'No Selection',
+      FollowUpDate: c.followUpDate || 'None',
+      Notes: (c.notesList || [c.notes || '']).join(' | '),
+    }));
 
     if (exportData.length === 0) {
-      alert('No Interested or Warm leads available to export yet.');
+      alert('No saved leads available to export yet.');
       return;
     }
 
@@ -79,13 +117,9 @@ export function WhatsAppCrmModule() {
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `AIVastra_Interested_Leads_${new Date().toISOString().slice(0, 10)}.csv`;
+    a.download = `AIVastra_Saved_Leads_${new Date().toISOString().slice(0, 10)}.csv`;
     a.click();
     window.URL.revokeObjectURL(url);
-  };
-
-  const handleLaunchWhatsApp = () => {
-    window.open('https://web.whatsapp.com', '_blank');
   };
 
   // Helper to get modal contacts
@@ -214,10 +248,10 @@ export function WhatsAppCrmModule() {
             <button
               onClick={handleExportCsv}
               className="inline-flex items-center gap-2 px-3.5 py-2 bg-gray-100 text-gray-700 font-semibold text-xs rounded-xl hover:bg-gray-200 transition-all border border-gray-300"
-              title="Export Interested & Warm Leads to CSV"
+              title="Export Saved Leads to CSV"
             >
               <Download className="w-3.5 h-3.5" />
-              <span>Export Leads</span>
+              <span>Export Leads ({savedLeads.length})</span>
             </button>
 
             {/* Direct Launch WhatsApp Web Primary Button */}
@@ -233,18 +267,18 @@ export function WhatsAppCrmModule() {
 
         {/* Dynamic Dashboard Content */}
         <div className="flex-1 overflow-y-auto p-6 space-y-6">
-          {/* Block 1: Top Executive Stat Cards (CLICKABLE POPUP) */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-5">
+          {/* Block 1: Executive Stat Cards (INTERESTED, WARM, NOT INTERESTED - DEFAULT 0) */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-5">
             {/* Interested Card */}
             <div 
               onClick={() => setModalCategory('INTERESTED')}
               className="bg-white p-5 rounded-2xl border border-gray-200 shadow-sm flex items-center justify-between cursor-pointer hover:border-emerald-500 hover:shadow-md transition-all group"
             >
               <div>
-                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Interested Leads</p>
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Interested</p>
                 <h3 className="text-2xl font-bold text-emerald-600">{interestedCount}</h3>
                 <p className="text-[11px] text-emerald-600 font-medium mt-1 flex items-center gap-1 group-hover:underline">
-                  Click to view details <ChevronRight className="w-3 h-3" />
+                  Click to view leads <ChevronRight className="w-3 h-3" />
                 </p>
               </div>
               <div className="w-12 h-12 rounded-xl bg-emerald-50 text-[#00a884] flex items-center justify-center">
@@ -258,10 +292,10 @@ export function WhatsAppCrmModule() {
               className="bg-white p-5 rounded-2xl border border-gray-200 shadow-sm flex items-center justify-between cursor-pointer hover:border-amber-500 hover:shadow-md transition-all group"
             >
               <div>
-                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Warm Leads</p>
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Warm</p>
                 <h3 className="text-2xl font-bold text-amber-600">{warmCount}</h3>
                 <p className="text-[11px] text-amber-600 font-medium mt-1 flex items-center gap-1 group-hover:underline">
-                  Click to view details <ChevronRight className="w-3 h-3" />
+                  Click to view leads <ChevronRight className="w-3 h-3" />
                 </p>
               </div>
               <div className="w-12 h-12 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center">
@@ -269,177 +303,225 @@ export function WhatsAppCrmModule() {
               </div>
             </div>
 
-            {/* Calls Requested Card */}
+            {/* Not Interested Card */}
             <div 
-              onClick={() => setModalCategory('CALLS')}
-              className="bg-white p-5 rounded-2xl border border-gray-200 shadow-sm flex items-center justify-between cursor-pointer hover:border-purple-500 hover:shadow-md transition-all group"
+              onClick={() => setModalCategory('NOT_INTERESTED')}
+              className="bg-white p-5 rounded-2xl border border-gray-200 shadow-sm flex items-center justify-between cursor-pointer hover:border-rose-500 hover:shadow-md transition-all group"
             >
               <div>
-                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Calls Requested</p>
-                <h3 className="text-2xl font-bold text-purple-600">{callsYesCount}</h3>
-                <p className="text-[11px] text-purple-600 font-medium mt-1 flex items-center gap-1 group-hover:underline">
-                  Click to view details <ChevronRight className="w-3 h-3" />
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Not Interested</p>
+                <h3 className="text-2xl font-bold text-rose-600">{notInterestedCount}</h3>
+                <p className="text-[11px] text-rose-600 font-medium mt-1 flex items-center gap-1 group-hover:underline">
+                  Click to view leads <ChevronRight className="w-3 h-3" />
                 </p>
               </div>
-              <div className="w-12 h-12 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center">
-                <Phone className="w-6 h-6" />
+              <div className="w-12 h-12 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center">
+                <ThumbsDown className="w-6 h-6" />
               </div>
             </div>
 
-            {/* Follow-ups Scheduled Card */}
+            {/* Calls & Follow-ups Card */}
             <div 
               onClick={() => setModalCategory('FOLLOWUPS')}
-              className="bg-white p-5 rounded-2xl border border-gray-200 shadow-sm flex items-center justify-between cursor-pointer hover:border-amber-500 hover:shadow-md transition-all group"
+              className="bg-white p-5 rounded-2xl border border-gray-200 shadow-sm flex items-center justify-between cursor-pointer hover:border-purple-500 hover:shadow-md transition-all group"
             >
               <div>
-                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Follow-ups Due</p>
-                <h3 className="text-2xl font-bold text-[#111b21]">{followUpsCount}</h3>
-                <p className="text-[11px] text-amber-600 font-medium mt-1 flex items-center gap-1 group-hover:underline">
-                  Click to view details <ChevronRight className="w-3 h-3" />
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Calls & Follow-ups</p>
+                <h3 className="text-2xl font-bold text-purple-600">{callsYesCount + followUpsCount}</h3>
+                <p className="text-[11px] text-purple-600 font-medium mt-1 flex items-center gap-1 group-hover:underline">
+                  Calls ({callsYesCount}) • Dates ({followUpsCount})
                 </p>
               </div>
-              <div className="w-12 h-12 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center">
+              <div className="w-12 h-12 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center">
                 <Calendar className="w-6 h-6" />
               </div>
             </div>
           </div>
 
-          {/* Block 2: Lead Pipeline Funnel & Today's Actions */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Pipeline Breakdown */}
-            <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm space-y-4">
-              <h3 className="text-base font-bold text-[#111b21]">Lead Pipeline Breakdown</h3>
-              
-              <div className="space-y-4">
-                <div onClick={() => setModalCategory('INTERESTED')} className="cursor-pointer group">
-                  <div className="flex justify-between text-xs font-semibold mb-1.5">
-                    <span className="flex items-center gap-1.5 text-emerald-700 group-hover:underline">
-                      <ThumbsUp className="w-3.5 h-3.5" /> Interested
-                    </span>
-                    <span>{interestedCount} leads</span>
-                  </div>
-                  <div className="w-full h-2.5 bg-gray-100 rounded-full overflow-hidden">
-                    <div 
-                      className="h-full bg-[#00a884] rounded-full transition-all duration-500" 
-                      style={{ width: `${chats.length > 0 ? (interestedCount / chats.length) * 100 : 0}%` }}
-                    ></div>
-                  </div>
+          {/* Block 2: SAVED LEAD REGISTRY & FOLLOW-UP TABLE (Solves "Which chats have contact info entered?") */}
+          <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm space-y-4">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div>
+                <h3 className="text-base font-bold text-[#111b21] flex items-center gap-2">
+                  <FileText className="w-4 h-4 text-[#00a884]" />
+                  <span>Saved Lead Registry & Contact Settings</span>
+                </h3>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  Shows all chats where contact info (Status, Call Yes/No, Follow-up date, Notes) was entered on WhatsApp Web.
+                </p>
+              </div>
+
+              {/* Sub-Filters & Search */}
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="relative">
+                  <Search className="w-3.5 h-3.5 text-gray-400 absolute left-3 top-2.5" />
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="Search name or number..."
+                    className="pl-8 pr-3 py-1.5 text-xs bg-gray-100 border border-gray-200 rounded-lg focus:outline-none focus:border-[#00a884]"
+                  />
                 </div>
 
-                <div onClick={() => setModalCategory('WARM')} className="cursor-pointer group">
-                  <div className="flex justify-between text-xs font-semibold mb-1.5">
-                    <span className="flex items-center gap-1.5 text-amber-600 group-hover:underline">
-                      <Flame className="w-3.5 h-3.5" /> Warm
-                    </span>
-                    <span>{warmCount} leads</span>
-                  </div>
-                  <div className="w-full h-2.5 bg-gray-100 rounded-full overflow-hidden">
-                    <div 
-                      className="h-full bg-amber-500 rounded-full transition-all duration-500" 
-                      style={{ width: `${chats.length > 0 ? (warmCount / chats.length) * 100 : 0}%` }}
-                    ></div>
-                  </div>
-                </div>
-
-                <div onClick={() => setModalCategory('NOT_INTERESTED')} className="cursor-pointer group">
-                  <div className="flex justify-between text-xs font-semibold mb-1.5">
-                    <span className="flex items-center gap-1.5 text-rose-600 group-hover:underline">
-                      <ThumbsDown className="w-3.5 h-3.5" /> Not Interested
-                    </span>
-                    <span>{notInterestedCount} leads</span>
-                  </div>
-                  <div className="w-full h-2.5 bg-gray-100 rounded-full overflow-hidden">
-                    <div 
-                      className="h-full bg-rose-500 rounded-full transition-all duration-500" 
-                      style={{ width: `${chats.length > 0 ? (notInterestedCount / chats.length) * 100 : 0}%` }}
-                    ></div>
-                  </div>
-                </div>
-
-                <div>
-                  <div className="flex justify-between text-xs font-semibold mb-1.5 text-gray-500">
-                    <span>Unassigned / New</span>
-                    <span>{unassignedCount} leads</span>
-                  </div>
-                  <div className="w-full h-2.5 bg-gray-100 rounded-full overflow-hidden">
-                    <div 
-                      className="h-full bg-gray-400 rounded-full transition-all duration-500" 
-                      style={{ width: `${chats.length > 0 ? (unassignedCount / chats.length) * 100 : 0}%` }}
-                    ></div>
-                  </div>
+                <div className="flex items-center bg-gray-100 p-1 rounded-lg border border-gray-200">
+                  <button
+                    onClick={() => setTableFilter('ALL')}
+                    className={`px-3 py-1 text-xs font-semibold rounded-md transition-all ${
+                      tableFilter === 'ALL' ? 'bg-white text-[#111b21] shadow-sm' : 'text-gray-600'
+                    }`}
+                  >
+                    All ({savedLeads.length})
+                  </button>
+                  <button
+                    onClick={() => setTableFilter('INTERESTED')}
+                    className={`px-3 py-1 text-xs font-semibold rounded-md transition-all ${
+                      tableFilter === 'INTERESTED' ? 'bg-emerald-600 text-white shadow-sm' : 'text-gray-600'
+                    }`}
+                  >
+                    Interested ({interestedCount})
+                  </button>
+                  <button
+                    onClick={() => setTableFilter('WARM')}
+                    className={`px-3 py-1 text-xs font-semibold rounded-md transition-all ${
+                      tableFilter === 'WARM' ? 'bg-amber-500 text-white shadow-sm' : 'text-gray-600'
+                    }`}
+                  >
+                    Warm ({warmCount})
+                  </button>
+                  <button
+                    onClick={() => setTableFilter('CALLS')}
+                    className={`px-3 py-1 text-xs font-semibold rounded-md transition-all ${
+                      tableFilter === 'CALLS' ? 'bg-purple-600 text-white shadow-sm' : 'text-gray-600'
+                    }`}
+                  >
+                    Calls ({callsYesCount})
+                  </button>
                 </div>
               </div>
             </div>
 
-            {/* Today's Action Reminders (Calls & Follow-ups) */}
-            <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm space-y-4">
-              <div className="flex items-center justify-between">
-                <h3 className="text-base font-bold text-[#111b21] flex items-center gap-2">
-                  <ListTodo className="w-4 h-4 text-[#00a884]" />
-                  <span>Today's Actions & Reminders</span>
-                </h3>
-                <span className="text-xs text-gray-500 font-medium">
-                  {callsYesChats.length + followUpChats.length} tasks
-                </span>
-              </div>
+            {/* Table */}
+            <div className="overflow-x-auto border border-gray-200 rounded-xl">
+              <table className="w-full text-left border-collapse text-xs">
+                <thead>
+                  <tr className="bg-[#f0f2f5] text-gray-600 font-bold border-b border-gray-200">
+                    <th className="p-3">Contact Name / Phone</th>
+                    <th className="p-3">Lead Status</th>
+                    <th className="p-3">Call Status</th>
+                    <th className="p-3">Follow-up Date</th>
+                    <th className="p-3">Latest CRM Notes</th>
+                    <th className="p-3 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-200 bg-white">
+                  {filteredTableLeads.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="p-8 text-center text-gray-400 italic">
+                        No saved contact settings found matching filter. Enter contact info on WhatsApp Web via Extension!
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredTableLeads.map((chat) => {
+                      const cleanPhone = (chat.phone || chat.jid.split('@')[0]).replace(/\D/g, '');
+                      const formattedPhone = cleanPhone.length === 12 && cleanPhone.startsWith('91')
+                        ? `+91 ${cleanPhone.slice(2, 7)} ${cleanPhone.slice(7)}`
+                        : `+${cleanPhone}`;
 
-              <div className="space-y-3 max-h-[300px] overflow-y-auto pr-1">
-                {callsYesChats.length === 0 && followUpChats.length === 0 ? (
-                  <div className="p-8 text-center text-xs text-gray-400">
-                    No pending call or follow-up reminders scheduled.
-                  </div>
-                ) : (
-                  <>
-                    {callsYesChats.map((chat) => (
-                      <div key={`call-${chat.jid}`} className="flex items-center justify-between p-3 rounded-xl bg-purple-50/60 border border-purple-100">
-                        <div className="flex items-center gap-3 min-w-0">
-                          <div className="w-8 h-8 rounded-full bg-purple-600 text-white font-bold flex items-center justify-center text-xs flex-shrink-0">
-                            📞
-                          </div>
-                          <div className="min-w-0">
-                            <h4 className="text-xs font-semibold truncate text-[#111b21]">{chat.name || chat.phone}</h4>
-                            <p className="text-[11px] text-purple-700 truncate font-medium">Call Requested (Yes)</p>
-                          </div>
-                        </div>
-                        <button
-                          onClick={handleLaunchWhatsApp}
-                          className="px-2.5 py-1 text-[11px] font-semibold bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-all flex-shrink-0"
-                        >
-                          Call / Chat
-                        </button>
-                      </div>
-                    ))}
+                      return (
+                        <tr key={chat.jid} className="hover:bg-gray-50 transition-colors">
+                          <td className="p-3">
+                            <div className="font-bold text-[#111b21]">{chat.name || 'Unsaved Contact'}</div>
+                            <div className="text-gray-500 font-medium text-[11px] flex items-center gap-1.5 mt-0.5">
+                              <span>📞 {formattedPhone}</span>
+                              <button
+                                onClick={() => handleCopyPhone(cleanPhone)}
+                                className="text-gray-400 hover:text-gray-700"
+                                title="Copy Phone Number to Search in WhatsApp Web"
+                              >
+                                {copiedPhone === cleanPhone ? (
+                                  <Check className="w-3 h-3 text-emerald-600" />
+                                ) : (
+                                  <Copy className="w-3 h-3" />
+                                )}
+                              </button>
+                            </div>
+                          </td>
 
-                    {followUpChats.map((chat) => (
-                      <div key={`followup-${chat.jid}`} className="flex items-center justify-between p-3 rounded-xl bg-amber-50/60 border border-amber-100">
-                        <div className="flex items-center gap-3 min-w-0">
-                          <div className="w-8 h-8 rounded-full bg-amber-500 text-white font-bold flex items-center justify-center text-xs flex-shrink-0">
-                            📅
-                          </div>
-                          <div className="min-w-0">
-                            <h4 className="text-xs font-semibold truncate text-[#111b21]">{chat.name || chat.phone}</h4>
-                            <p className="text-[11px] text-amber-700 truncate font-medium">Follow-up: {chat.followUpDate}</p>
-                          </div>
-                        </div>
-                        <button
-                          onClick={handleLaunchWhatsApp}
-                          className="px-2.5 py-1 text-[11px] font-semibold bg-amber-500 text-white rounded-lg hover:bg-amber-600 transition-all flex-shrink-0"
-                        >
-                          Open Chat
-                        </button>
-                      </div>
-                    ))}
-                  </>
-                )}
-              </div>
+                          <td className="p-3">
+                            {chat.leadStatus === 'INTERESTED' && (
+                              <span className="px-2.5 py-1 text-[11px] font-bold bg-emerald-100 text-emerald-800 rounded-full border border-emerald-200">
+                                👍 Interested
+                              </span>
+                            )}
+                            {chat.leadStatus === 'WARM_INTERESTED' && (
+                              <span className="px-2.5 py-1 text-[11px] font-bold bg-amber-100 text-amber-800 rounded-full border border-amber-200">
+                                🔥 Warm
+                              </span>
+                            )}
+                            {chat.leadStatus === 'NOT_INTERESTED' && (
+                              <span className="px-2.5 py-1 text-[11px] font-bold bg-rose-100 text-rose-800 rounded-full border border-rose-200">
+                                👎 Not Interested
+                              </span>
+                            )}
+                            {(!chat.leadStatus || chat.leadStatus === 'UNASSIGNED') && (
+                              <span className="px-2 py-0.5 text-[10px] text-gray-400 italic">Unassigned</span>
+                            )}
+                          </td>
+
+                          <td className="p-3">
+                            {chat.callStatus === 'YES' ? (
+                              <span className="px-2 py-0.5 text-[11px] font-bold bg-purple-100 text-purple-700 rounded-full">
+                                Call: Yes
+                              </span>
+                            ) : (
+                              <span className="text-gray-400 text-[11px]">No</span>
+                            )}
+                          </td>
+
+                          <td className="p-3">
+                            {chat.followUpDate ? (
+                              <span className="px-2 py-0.5 text-[11px] font-bold bg-amber-100 text-amber-800 rounded-full flex items-center gap-1 w-max">
+                                📅 {chat.followUpDate}
+                              </span>
+                            ) : (
+                              <span className="text-gray-400 text-[11px]">None</span>
+                            )}
+                          </td>
+
+                          <td className="p-3 max-w-xs">
+                            {chat.notesList && chat.notesList.length > 0 ? (
+                              <p className="truncate text-gray-700 italic" title={chat.notesList[0]}>
+                                "{chat.notesList[0]}"
+                              </p>
+                            ) : (
+                              <span className="text-gray-400 text-[11px]">No notes</span>
+                            )}
+                          </td>
+
+                          <td className="p-3 text-right">
+                            <button
+                              onClick={handleLaunchWhatsApp}
+                              className="px-3 py-1 bg-[#00a884] text-white font-semibold text-[11px] rounded-lg hover:bg-[#008f70] transition-all inline-flex items-center gap-1"
+                            >
+                              <span>Open Chat</span>
+                              <ExternalLink className="w-3 h-3" />
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
             </div>
           </div>
 
-          {/* Block 3: Dynamic Live Lead Activity Feed & CRM Notes Stream */}
+          {/* Block 3: Dynamic Live Lead Activity Feed (LATEST CHATS ONLY) */}
           <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm space-y-4">
             <div className="flex items-center justify-between">
-              <h3 className="text-base font-bold text-[#111b21]">Live WhatsApp Activity Stream</h3>
-              <span className="text-xs text-gray-500 font-medium">{chats.length} active chats synced</span>
+              <h3 className="text-base font-bold text-[#111b21]">Latest WhatsApp Activity Feed</h3>
+              <span className="text-xs text-gray-500 font-medium">{chats.length} active chats</span>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -522,7 +604,16 @@ export function WhatsAppCrmModule() {
                       </div>
                       <div>
                         <h4 className="text-sm font-bold text-[#111b21]">{chat.name || 'Unsaved Contact'}</h4>
-                        <p className="text-xs text-gray-500 font-medium">📞 +{chat.phone || chat.jid.split('@')[0]}</p>
+                        <p className="text-xs text-gray-500 font-medium flex items-center gap-1">
+                          <span>📞 +{chat.phone || chat.jid.split('@')[0]}</span>
+                          <button
+                            onClick={() => handleCopyPhone(chat.phone || chat.jid.split('@')[0])}
+                            className="text-gray-400 hover:text-gray-700 ml-1"
+                            title="Copy Phone Number"
+                          >
+                            <Copy className="w-3 h-3" />
+                          </button>
+                        </p>
                         {chat.notesList && chat.notesList.length > 0 && (
                           <p className="text-xs text-purple-700 mt-1 italic">📝 "{chat.notesList[0]}"</p>
                         )}

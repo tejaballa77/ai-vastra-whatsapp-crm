@@ -1,5 +1,7 @@
 import express from 'express';
 import http from 'http';
+import fs from 'fs';
+import path from 'path';
 import { Server as SocketIOServer } from 'socket.io';
 import cors from 'cors';
 import dotenv from 'dotenv';
@@ -267,6 +269,65 @@ app.post('/api/ai/test-reply', async (req, res) => {
     const { message } = req.body;
     const response = await aiAgent.generateResponse('test_chat@s.whatsapp.net', message || 'Hi');
     res.json({ success: true, response });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// 15. RAG Document Upload & Management Endpoints
+const multer = require('multer');
+const storage = multer.diskStorage({
+  destination: (req: any, file: any, cb: any) => {
+    const dir = path.join(__dirname, '../uploads/documents');
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    cb(null, dir);
+  },
+  filename: (req: any, file: any, cb: any) => {
+    cb(null, `${Date.now()}_${file.originalname}`);
+  }
+});
+const upload = multer({ storage, limits: { fileSize: 25 * 1024 * 1024 } });
+
+app.get('/api/ai/documents', (req, res) => {
+  try {
+    const { ragEngine } = require('./ragEngine');
+    res.json({ success: true, documents: ragEngine.getDocuments() });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.post('/api/ai/documents/upload', upload.single('file'), (req: any, res: any) => {
+  try {
+    const { ragEngine } = require('./ragEngine');
+    if (!req.file && !req.body.text) {
+      return res.status(400).json({ success: false, error: 'No file or text provided' });
+    }
+
+    let originalName = req.file ? req.file.originalname : (req.body.title || 'Text Document.txt');
+    let filename = req.file ? req.file.filename : `text_${Date.now()}.txt`;
+    let mimeType = req.file ? req.file.mimetype : 'text/plain';
+    let size = req.file ? req.file.size : (req.body.text || '').length;
+    let content = '';
+
+    if (req.file) {
+      content = fs.readFileSync(req.file.path, 'utf-8');
+    } else {
+      content = req.body.text || '';
+    }
+
+    const doc = ragEngine.addDocument(filename, originalName, mimeType, size, content);
+    res.json({ success: true, doc });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.delete('/api/ai/documents/:id', (req, res) => {
+  try {
+    const { ragEngine } = require('./ragEngine');
+    const success = ragEngine.deleteDocument(req.params.id);
+    res.json({ success });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });
   }

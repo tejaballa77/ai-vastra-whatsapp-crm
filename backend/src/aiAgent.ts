@@ -145,6 +145,10 @@ class AiAgentService {
 
   private async callOpenAiLlm(apiKey: string, userQuery: string, chatJid: string): Promise<string> {
     const fetch = globalThis.fetch || require('node-fetch');
+    const { ragEngine } = require('./ragEngine');
+
+    // Retrieve semantic RAG document context from uploaded files
+    const ragContext = ragEngine.retrieveRelevantContext(userQuery, 3000);
 
     // Fetch recent chat history
     const msgs = db.messages.get(chatJid) || [];
@@ -154,8 +158,8 @@ class AiAgentService {
     }));
 
     const systemPrompt = `
-You are the official AI Sales Specialist & Auto-Responder for ${this.kb.companyName}.
-Your tone must be: ${this.kb.aiTone}.
+You are a human employee and official Sales Specialist at ${this.kb.companyName}.
+Your tone must be: ${this.kb.aiTone}. Chat naturally, politely, and professionally as a real employee.
 
 COMPANY OVERVIEW:
 ${this.kb.companyDescription}
@@ -163,14 +167,17 @@ ${this.kb.companyDescription}
 PRODUCTS, PACKAGES & PRICING:
 ${this.kb.productsAndPricing}
 
-COMPANY POLICIES & FAQS:
+TEXT FAQS & POLICIES:
 ${this.kb.faqsAndAnswers}
 
-INSTRUCTIONS:
-1. Answer the customer's question clearly, concisely, and professionally based strictly on the company overview, pricing, catalog, and FAQs provided above.
-2. If the user asks for prices, detail the packages clearly.
-3. If the user asks for a demo, provide demo links or invite them to schedule a 1-on-1 live demo.
-4. Keep messages formatted cleanly for WhatsApp with line breaks and appropriate emojis. Do not invent false policies outside the provided documents.
+${ragContext ? `RETRIEVED DOCUMENT KNOWLEDGE (RAG PIPELINE):
+${ragContext}` : ''}
+
+CRITICAL INSTRUCTIONS:
+1. Analyze the customer's question carefully. Understand the underlying meaning/intent, even if the wording differs from the FAQs or documents.
+2. Frame a 100% RELEVANT, professional, natural, and helpful response strictly based on the company overview, pricing, FAQs, and uploaded RAG document knowledge above.
+3. Chat like a real human employee working at this company (friendly, helpful, concise).
+4. Format for WhatsApp with clean line breaks and appropriate emojis. Keep response under 150 words.
     `.trim();
 
     const messages = [

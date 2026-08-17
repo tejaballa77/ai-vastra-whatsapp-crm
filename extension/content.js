@@ -306,17 +306,10 @@ function saveCrmMetadata() {
   });
 
   injectChatListBadges();
-
-  // 4. SHOW PROMINENT 2-SECOND GREEN TOAST NOTIFICATION
-  const toast = document.getElementById('aivastra-save-toast');
-  if (toast) {
-    toast.style.display = 'block';
-    setTimeout(() => { toast.style.display = 'none'; }, 2000);
-  }
 }
 
 // Render Contact Info Panel with CALL on top, LEAD STATUS below, extended CRM NOTES, and explicit SAVE button
-function renderCrmPanel(displayName, cleanPhone, avatarUrl) {
+function renderCrmPanel(displayName, cleanPhone, avatarUrl, showSaveToast = false) {
   const panel = ensureCrmPanel();
   panel.style.display = isPanelVisible ? 'flex' : 'none';
 
@@ -348,7 +341,7 @@ function renderCrmPanel(displayName, cleanPhone, avatarUrl) {
     </div>
 
     <!-- PROMINENT 2-SECOND GREEN TOAST NOTIFICATION -->
-    <div id="aivastra-save-toast" class="aivastra-toast" style="display:none;">
+    <div id="aivastra-save-toast" class="aivastra-toast" style="display:${showSaveToast ? 'block' : 'none'};">
       ✓ Contact info saved successfully!
     </div>
 
@@ -409,6 +402,13 @@ function renderCrmPanel(displayName, cleanPhone, avatarUrl) {
     </div>
   `;
 
+  if (showSaveToast) {
+    setTimeout(() => {
+      const toast = document.getElementById('aivastra-save-toast');
+      if (toast) toast.style.display = 'none';
+    }, 2000);
+  }
+
   // Attach event listeners with instant visual state toggling
   document.getElementById('aivastra-close-btn').onclick = () => {
     isPanelVisible = false;
@@ -461,7 +461,7 @@ function renderCrmPanel(displayName, cleanPhone, avatarUrl) {
     }
   };
 
-  // Main Save Button Click Handler
+  // Main Save Button Click Handler (PASS showSaveToast = true to renderCrmPanel!)
   document.getElementById('aivastra-save-main-btn').onclick = () => {
     const txt = document.getElementById('aivastra-note-text').value.trim();
     if (txt) {
@@ -469,7 +469,7 @@ function renderCrmPanel(displayName, cleanPhone, avatarUrl) {
       document.getElementById('aivastra-note-text').value = '';
     }
     saveCrmMetadata();
-    renderCrmPanel(displayName, cleanPhone, avatarUrl);
+    renderCrmPanel(displayName, cleanPhone, avatarUrl, true);
   };
 
   panel.querySelectorAll('.aivastra-note-delete').forEach(el => {

@@ -578,38 +578,43 @@ export function WhatsAppCrmModule() {
                 <span className="text-xs text-gray-500 font-medium">{chats.length} active chats</span>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              <div className="flex gap-4 overflow-x-auto pb-3 pt-1 scrollbar-thin scrollbar-thumb-gray-200">
                 {chats.length === 0 ? (
-                  <div className="col-span-full p-8 text-center text-xs text-gray-400">
+                  <div className="w-full p-8 text-center text-xs text-gray-400">
                     No active WhatsApp chats synced yet.
                   </div>
                 ) : (
-                  chats.slice(0, 6).map((chat) => (
-                    <div key={chat.jid} className="p-4 rounded-xl bg-gray-50 border border-gray-200 hover:bg-gray-100/80 transition-all space-y-2">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2.5 min-w-0">
-                          <div className="w-8 h-8 rounded-full bg-[#00a884]/15 text-[#00a884] font-bold flex items-center justify-center text-xs flex-shrink-0">
-                            {(chat.name || 'W').charAt(0).toUpperCase()}
+                  chats.slice(0, 12).map((chat) => (
+                    <div 
+                      key={chat.jid} 
+                      className="min-w-[280px] max-w-[320px] flex-shrink-0 p-4 rounded-xl bg-gray-50 border border-gray-200 hover:bg-gray-100/80 transition-all space-y-2 flex flex-col justify-between"
+                    >
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            <div className="w-8 h-8 rounded-full bg-[#00a884]/15 text-[#00a884] font-bold flex items-center justify-center text-xs flex-shrink-0">
+                              {(chat.name || 'W').charAt(0).toUpperCase()}
+                            </div>
+                            <h4 className="text-xs font-bold truncate text-[#111b21] max-w-[170px]" title={chat.name || chat.phone || ''}>
+                              {chat.name || chat.phone || 'WhatsApp Contact'}
+                            </h4>
                           </div>
-                          <h4 className="text-xs font-bold truncate text-[#111b21]">
-                            {chat.name || chat.phone || 'WhatsApp Contact'}
-                          </h4>
+
+                          <button
+                            onClick={() => handleOpenSpecificChat(chat.phone || chat.jid)}
+                            className="text-xs text-[#00a884] font-semibold hover:underline flex items-center gap-1 flex-shrink-0"
+                          >
+                            Chat <ExternalLink className="w-3 h-3" />
+                          </button>
                         </div>
 
-                        <button
-                          onClick={() => handleOpenSpecificChat(chat.phone || chat.jid)}
-                          className="text-xs text-[#00a884] font-semibold hover:underline flex items-center gap-1"
-                        >
-                          Chat <ExternalLink className="w-3 h-3" />
-                        </button>
+                        <p className="text-xs text-gray-600 line-clamp-2 bg-white p-2.5 rounded-lg border border-gray-100 italic min-h-[44px]">
+                          "{chat.lastMessagePreview || 'New inquiry received'}"
+                        </p>
                       </div>
 
-                      <p className="text-xs text-gray-600 line-clamp-2 bg-white p-2 rounded-lg border border-gray-100 italic">
-                        "{chat.lastMessagePreview || 'New inquiry received'}"
-                      </p>
-
                       {chat.notesList && chat.notesList.length > 0 && (
-                        <p className="text-[11px] text-purple-700 font-medium truncate">
+                        <p className="text-[11px] text-purple-700 font-medium truncate pt-1 border-t border-gray-200/50">
                           📝 Note: {chat.notesList[0]}
                         </p>
                       )}

@@ -3,13 +3,13 @@
   position: fixed;
   top: 0;
   right: 0;
-  width: 340px;
+  width: 350px;
   height: 100vh;
   background-color: #ffffff;
   border-left: 1px solid #e9edef;
-  z-index: 99999;
+  z-index: 9999999;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-  box-shadow: -2px 0 10px rgba(0, 0, 0, 0.08);
+  box-shadow: -4px 0 16px rgba(0, 0, 0, 0.1);
   display: flex;
   flex-direction: column;
   color: #111b21;
@@ -25,6 +25,7 @@
   padding: 0 16px;
   font-weight: 600;
   font-size: 15px;
+  flex-shrink: 0;
 }
 
 .aivastra-close-btn {
@@ -61,7 +62,7 @@
   overflow-y: auto;
   padding: 16px;
   display: flex;
-  flex-direction: flex-col;
+  flex-direction: column;
   gap: 16px;
 }
 
@@ -69,8 +70,25 @@
   background-color: #f0f2f5;
   border: 1px solid #e9edef;
   border-radius: 12px;
-  padding: 14px;
+  padding: 16px 14px;
   text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.aivastra-avatar-circle {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background-color: rgba(0, 168, 132, 0.15);
+  color: #00a884;
+  font-size: 22px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 8px;
 }
 
 .aivastra-contact-name {
@@ -162,6 +180,7 @@
   font-size: 12px;
   color: #111b21;
   box-sizing: border-box;
+  cursor: pointer;
 }
 
 .aivastra-notes-area {
@@ -187,6 +206,7 @@
   font-size: 12px;
   font-weight: 600;
   cursor: pointer;
+  transition: background 0.2s;
 }
 .aivastra-add-note-btn:hover {
   background-color: #008f70;

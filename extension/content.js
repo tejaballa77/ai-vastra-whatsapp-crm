@@ -1,12 +1,14 @@
 // AI Vastra Chrome Extension - Injected Content Script on web.whatsapp.com
-console.log('[AI Vastra Chrome Extension] Injected on WhatsApp Web!');
+console.log('[AI Vastra Chrome Extension] Script active on WhatsApp Web!');
 
-let activeJid = '';
+let activeContactKey = '';
+let activeDisplayName = '';
 let activePhoneClean = '';
 let currentLeadStatus = 'UNASSIGNED';
 let currentCallStatus = null;
 let currentFollowUp = '';
 let currentNotesList = [];
+let isPanelVisible = true;
 
 // Create or get the injected CRM sidepanel container
 function ensureCrmPanel() {
@@ -16,12 +18,58 @@ function ensureCrmPanel() {
     panel.id = 'aivastra-crm-panel';
     document.body.appendChild(panel);
   }
+  panel.style.display = isPanelVisible ? 'flex' : 'none';
   return panel;
 }
 
-// Observe WhatsApp Web chat header changes to detect active contact
+// Injected Header Button inside WhatsApp Web
+function ensureHeaderButton() {
+  const mainHeader = document.querySelector('#main header');
+  if (!mainHeader) return;
+
+  if (document.getElementById('aivastra-toggle-btn')) return;
+
+  const btnContainer = document.createElement('div');
+  btnContainer.id = 'aivastra-toggle-btn-wrapper';
+  btnContainer.style.display = 'inline-flex';
+  btnContainer.style.alignItems = 'center';
+  btnContainer.style.marginLeft = '8px';
+
+  btnContainer.innerHTML = `
+    <button id="aivastra-toggle-btn" style="
+      background-color: #00a884;
+      color: #ffffff;
+      border: none;
+      border-radius: 20px;
+      padding: 6px 14px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.15);
+      transition: background 0.2s;
+    " title="Toggle AI Vastra CRM Info">
+      <span>⚡ AI CRM</span>
+    </button>
+  `;
+
+  // Insert before the last actions container in header
+  mainHeader.appendChild(btnContainer);
+
+  document.getElementById('aivastra-toggle-btn').onclick = () => {
+    isPanelVisible = !isPanelVisible;
+    const panel = document.getElementById('aivastra-crm-panel');
+    if (panel) panel.style.display = isPanelVisible ? 'flex' : 'none';
+    if (isPanelVisible) detectActiveContact(true);
+  };
+}
+
+// Observe WhatsApp Web chat header and DOM changes
 function startChatObserver() {
   const observer = new MutationObserver(() => {
+    ensureHeaderButton();
     detectActiveContact();
   });
 
@@ -31,28 +79,34 @@ function startChatObserver() {
   });
 }
 
-function detectActiveContact() {
-  // Extract active chat header title and phone number from WhatsApp Web DOM
-  const headerEl = document.querySelector('header');
-  if (!headerEl) return;
+function detectActiveContact(force = false) {
+  const mainHeader = document.querySelector('#main header');
+  if (!mainHeader) return;
 
-  const titleEl = headerEl.querySelector('span[title]') || headerEl.querySelector('span[dir="auto"]');
+  ensureHeaderButton();
+
+  // Find contact title in active chat
+  const titleEl = mainHeader.querySelector('span[title]') || 
+                  mainHeader.querySelector('span[dir="auto"]');
   if (!titleEl) return;
 
   const rawTitle = titleEl.getAttribute('title') || titleEl.textContent || '';
+  if (!rawTitle) return;
+
   const cleanDigits = rawTitle.replace(/\D/g, '');
 
-  if (cleanDigits.length >= 10 && cleanDigits.length <= 15) {
-    if (activePhoneClean !== cleanDigits) {
-      activePhoneClean = cleanDigits;
-      activeJid = `${cleanDigits}@s.whatsapp.net`;
-      fetchCrmMetadata(cleanDigits, rawTitle);
-    }
+  const contactKey = cleanDigits.length >= 10 ? cleanDigits : rawTitle;
+
+  if (activeContactKey !== contactKey || force) {
+    activeContactKey = contactKey;
+    activeDisplayName = rawTitle;
+    activePhoneClean = cleanDigits;
+    fetchCrmMetadata(contactKey, rawTitle);
   }
 }
 
-function fetchCrmMetadata(cleanPhone, displayName) {
-  chrome.runtime.sendMessage({ action: 'FETCH_CRM_METADATA', phoneClean: cleanPhone }, (response) => {
+function fetchCrmMetadata(searchKey, displayName) {
+  chrome.runtime.sendMessage({ action: 'FETCH_CRM_METADATA', phoneClean: searchKey }, (response) => {
     if (response && response.success && response.chat) {
       const chat = response.chat;
       currentLeadStatus = chat.leadStatus || 'UNASSIGNED';
@@ -65,15 +119,18 @@ function fetchCrmMetadata(cleanPhone, displayName) {
       currentFollowUp = '';
       currentNotesList = [];
     }
-    renderCrmPanel(displayName, cleanPhone);
+    renderCrmPanel(displayName, activePhoneClean);
   });
 }
 
 function saveCrmMetadata() {
-  if (!activeJid) return;
+  const targetJid = activePhoneClean.length >= 10 
+    ? `${activePhoneClean}@s.whatsapp.net` 
+    : activeContactKey;
+
   chrome.runtime.sendMessage({
     action: 'UPDATE_CRM_METADATA',
-    jid: activeJid,
+    jid: targetJid,
     data: {
       leadStatus: currentLeadStatus,
       callStatus: currentCallStatus,
@@ -86,21 +143,31 @@ function saveCrmMetadata() {
 
 function renderCrmPanel(displayName, cleanPhone) {
   const panel = ensureCrmPanel();
-  const formattedPhone = cleanPhone.length === 12 && cleanPhone.startsWith('91')
-    ? `+91 ${cleanPhone.slice(2, 7)} ${cleanPhone.slice(7)}`
-    : `+${cleanPhone}`;
+  panel.style.display = isPanelVisible ? 'flex' : 'none';
+
+  const formattedPhone = cleanPhone && cleanPhone.length >= 10
+    ? (cleanPhone.length === 12 && cleanPhone.startsWith('91')
+        ? `+91 ${cleanPhone.slice(2, 7)} ${cleanPhone.slice(7)}`
+        : `+${cleanPhone}`)
+    : 'WhatsApp Contact';
 
   panel.innerHTML = `
-    <div className="aivastra-header" style="height: 60px; background: #f0f2f5; border-bottom: 1px solid #e9edef; display: flex; align-items: center; justify-content: space-between; padding: 0 16px; font-weight: 600;">
-      <span>Contact Info</span>
-      <div>
+    <div class="aivastra-header">
+      <div style="display: flex; align-items: center; gap: 6px;">
+        <span style="color: #00a884; font-size: 16px;">⚡</span>
+        <span>Contact Info</span>
+      </div>
+      <div style="display: flex; align-items: center;">
         <button id="aivastra-clear-btn" class="aivastra-clear-btn">Clear</button>
         <button id="aivastra-close-btn" class="aivastra-close-btn">✕</button>
       </div>
     </div>
 
-    <div class="aivastra-body" style="padding: 16px; overflow-y: auto; display: flex; flex-direction: column; gap: 16px;">
+    <div class="aivastra-body">
       <div class="aivastra-card">
+        <div class="aivastra-avatar-circle">
+          ${displayName.charAt(0).toUpperCase()}
+        </div>
         <div class="aivastra-contact-name">${displayName}</div>
         <div class="aivastra-contact-phone">📞 ${formattedPhone}</div>
       </div>
@@ -135,8 +202,8 @@ function renderCrmPanel(displayName, cleanPhone) {
         <div id="aivastra-notes-list" style="margin-top: 10px;">
           ${currentNotesList.map((n, i) => `
             <div class="aivastra-note-item">
-              <span style="flex:1;">${n}</span>
-              <span class="aivastra-note-delete" data-index="${i}">🗑</span>
+              <span style="flex:1; word-break: break-word;">${n}</span>
+              <span class="aivastra-note-delete" data-index="${i}" title="Delete Note">🗑</span>
             </div>
           `).join('')}
         </div>
@@ -145,7 +212,11 @@ function renderCrmPanel(displayName, cleanPhone) {
   `;
 
   // Attach event listeners
-  document.getElementById('aivastra-close-btn').onclick = () => panel.style.display = 'none';
+  document.getElementById('aivastra-close-btn').onclick = () => {
+    isPanelVisible = false;
+    panel.style.display = 'none';
+  };
+
   document.getElementById('aivastra-clear-btn').onclick = () => {
     currentLeadStatus = 'UNASSIGNED';
     currentCallStatus = null;
@@ -168,6 +239,7 @@ function renderCrmPanel(displayName, cleanPhone) {
     const txt = document.getElementById('aivastra-note-text').value.trim();
     if (txt) {
       currentNotesList.unshift(txt);
+      document.getElementById('aivastra-note-text').value = '';
       saveCrmMetadata();
       renderCrmPanel(displayName, cleanPhone);
     }
@@ -183,5 +255,9 @@ function renderCrmPanel(displayName, cleanPhone) {
   });
 }
 
-// Start observing active chat changes on page load
-setTimeout(startChatObserver, 2000);
+// Start observing active chat changes
+setTimeout(() => {
+  ensureHeaderButton();
+  detectActiveContact();
+  startChatObserver();
+}, 1000);

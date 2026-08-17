@@ -10,6 +10,19 @@ import { db } from './store';
 
 dotenv.config();
 
+// ============================================================
+// CRASH GUARDS: Prevent ANY unhandled error from killing the
+// CRM API server. Baileys WhatsApp session errors must NEVER
+// take down the Express server or the CRM Dashboard.
+// ============================================================
+process.on('uncaughtException', (err) => {
+  console.error('[AI Vastra CRM] Uncaught Exception (server kept alive):', err?.message || err);
+});
+
+process.on('unhandledRejection', (reason) => {
+  console.error('[AI Vastra CRM] Unhandled Promise Rejection (server kept alive):', reason);
+});
+
 const app = express();
 const PORT = process.env.PORT || 5000;
 
@@ -335,15 +348,17 @@ app.delete('/api/ai/documents/:id', (req, res) => {
   }
 });
 
-server.listen(PORT, async () => {
+server.listen(PORT, () => {
   console.log(`=======================================================`);
   console.log(`[AI Vastra CRM Backend] Server running on port ${PORT}`);
+  console.log(`[AI Vastra CRM Backend] CRM API is ONLINE. WhatsApp session starting in background...`);
   console.log(`=======================================================`);
 
-  try {
-    // Automatically start WhatsApp session engine on server launch
-    await waEngine.initialize();
-  } catch (err: any) {
-    console.error('[AI Vastra CRM Backend] Non-fatal WhatsApp Engine init error:', err?.message || err);
-  }
+  // Fire-and-forget: Start WhatsApp session in background WITHOUT blocking the server
+  // Any crash in Baileys will be caught by process.on('uncaughtException') above
+  setTimeout(() => {
+    waEngine.initialize().catch((err) => {
+      console.error('[AI Vastra CRM Backend] Non-fatal WhatsApp Engine init error:', err?.message || err);
+    });
+  }, 2000);
 });

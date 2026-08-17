@@ -23,6 +23,7 @@ import {
   FileText
 } from 'lucide-react';
 import { useSocket } from '../context/SocketContext';
+import { SettingsAiAgent } from './SettingsAiAgent';
 
 export function WhatsAppCrmModule() {
   const [activeNav, setActiveNav] = useState<'whatsapp' | 'calls' | 'emails' | 'settings'>('whatsapp');
@@ -266,7 +267,8 @@ export function WhatsAppCrmModule() {
         </header>
 
         {/* Dynamic Dashboard Content */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-6">
+        {activeNav === 'whatsapp' && (
+          <div className="flex-1 overflow-y-auto p-6 space-y-6">
           {/* Block 1: Executive Stat Cards (INTERESTED, WARM, NOT INTERESTED - DEFAULT 0) */}
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-5">
             {/* Interested Card */}
@@ -574,7 +576,14 @@ export function WhatsAppCrmModule() {
             </div>
           </div>
         </div>
-      </main>
+      )}
+
+      {activeNav === 'settings' && (
+        <div className="flex-1 overflow-y-auto">
+          <SettingsAiAgent />
+        </div>
+      )}
+    </main>
 
       {/* 3. CLICKABLE LEAD DETAILS MODAL POPUP */}
       {modalCategory && (

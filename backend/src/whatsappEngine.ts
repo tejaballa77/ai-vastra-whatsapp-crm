@@ -212,6 +212,26 @@ export class WhatsAppEngine {
           if (parsed) {
             console.log(`[WhatsApp Engine] Real-time message (${parsed.fromMe ? 'Outbound' : 'Inbound'}):`, parsed.text);
             this.io.emit('new_message', parsed);
+
+            // AI Agent Auto-Responder for Inbound Messages
+            if (!parsed.fromMe && parsed.text && !parsed.chatJid.endsWith('@g.us')) {
+              setTimeout(async () => {
+                try {
+                  const { aiAgent } = await import('./aiAgent');
+                  const aiResult = await aiAgent.generateResponse(parsed.chatJid, parsed.text);
+                  if (aiResult && aiResult.text) {
+                    console.log(`[AI Agent] Auto-replying to ${parsed.chatJid}: "${aiResult.text.slice(0, 50)}..."`);
+                    await this.sendMessage(parsed.chatJid, aiResult.text);
+
+                    if (aiResult.autoTagStatus) {
+                      db.upsertChat(parsed.chatJid, { leadStatus: aiResult.autoTagStatus });
+                    }
+                  }
+                } catch (err) {
+                  console.error('[AI Agent] Error generating auto-reply:', err);
+                }
+              }, 1500);
+            }
           }
         }
         this.io.emit('chats_updated', db.getAllChatsSorted());

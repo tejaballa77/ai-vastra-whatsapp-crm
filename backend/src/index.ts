@@ -241,6 +241,37 @@ app.post('/api/chats/import-backup', (req, res) => {
 });
 
 // Start Express HTTP & Socket.IO server
+// 14. AI Agent Knowledge Base Endpoints
+app.get('/api/ai/knowledge-base', (req, res) => {
+  try {
+    const { aiAgent } = require('./aiAgent');
+    res.json({ success: true, kb: aiAgent.kb });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.put('/api/ai/knowledge-base', (req, res) => {
+  try {
+    const { aiAgent } = require('./aiAgent');
+    aiAgent.saveKb(req.body);
+    res.json({ success: true, kb: aiAgent.kb });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.post('/api/ai/test-reply', async (req, res) => {
+  try {
+    const { aiAgent } = require('./aiAgent');
+    const { message } = req.body;
+    const response = await aiAgent.generateResponse('test_chat@s.whatsapp.net', message || 'Hi');
+    res.json({ success: true, response });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 server.listen(PORT, async () => {
   console.log(`=======================================================`);
   console.log(`[AI Vastra CRM Backend] Server running on port ${PORT}`);

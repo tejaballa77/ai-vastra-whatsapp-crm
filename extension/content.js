@@ -200,7 +200,7 @@ function fetchCrmMetadata(searchKey, displayName, domAvatar) {
   });
 }
 
-function saveCrmMetadata() {
+function saveCrmMetadata(showToast = false) {
   const targetJid = activePhoneClean.length >= 10 
     ? `${activePhoneClean}@s.whatsapp.net` 
     : (activeContactKey.includes('@') ? activeContactKey : `${activeContactKey}@s.whatsapp.net`);
@@ -226,9 +226,17 @@ function saveCrmMetadata() {
   });
 
   injectChatListBadges();
+
+  if (showToast) {
+    const toast = document.getElementById('aivastra-save-toast');
+    if (toast) {
+      toast.style.display = 'block';
+      setTimeout(() => { toast.style.display = 'none'; }, 2000);
+    }
+  }
 }
 
-// Render Contact Info Panel with CALL on top, LEAD STATUS below, and extended CRM NOTES
+// Render Contact Info Panel with CALL on top, LEAD STATUS below, extended CRM NOTES, and explicit SAVE button
 function renderCrmPanel(displayName, cleanPhone, avatarUrl) {
   const panel = ensureCrmPanel();
   panel.style.display = isPanelVisible ? 'flex' : 'none';
@@ -258,6 +266,10 @@ function renderCrmPanel(displayName, cleanPhone, avatarUrl) {
         <button id="aivastra-clear-btn" class="aivastra-clear-btn">Clear</button>
         <button id="aivastra-close-btn" class="aivastra-close-btn">✕</button>
       </div>
+    </div>
+
+    <div id="aivastra-save-toast" class="aivastra-toast" style="display:none;">
+      ✓ Contact info saved & synced to CRM!
     </div>
 
     <div class="aivastra-body">
@@ -295,10 +307,10 @@ function renderCrmPanel(displayName, cleanPhone, avatarUrl) {
       <!-- 4. EXTENDED CRM NOTES DOWNWARDS -->
       <div style="display: flex; flex-direction: column; flex: 1;">
         <div class="aivastra-section-title">CRM NOTES</div>
-        <textarea id="aivastra-note-text" class="aivastra-notes-area" rows="4" style="min-height: 100px;" placeholder="Add key note about customer requirements..."></textarea>
+        <textarea id="aivastra-note-text" class="aivastra-notes-area" rows="3" style="min-height: 80px;" placeholder="Add key note about customer requirements..."></textarea>
         <button id="aivastra-add-note-btn" class="aivastra-add-note-btn">+ Add Note</button>
 
-        <div id="aivastra-notes-list" style="margin-top: 10px; max-height: 180px; overflow-y: auto;">
+        <div id="aivastra-notes-list" style="margin-top: 10px; max-height: 140px; overflow-y: auto;">
           ${currentNotesList.map((n, i) => `
             <div class="aivastra-note-item">
               <span style="flex:1; word-break: break-word;">${n}</span>
@@ -306,6 +318,13 @@ function renderCrmPanel(displayName, cleanPhone, avatarUrl) {
             </div>
           `).join('')}
         </div>
+      </div>
+
+      <!-- 5. EXPLICIT SAVE BUTTON -->
+      <div style="margin-top: auto; padding-top: 8px;">
+        <button id="aivastra-save-main-btn" class="aivastra-save-btn">
+          💾 Save Contact Info
+        </button>
       </div>
     </div>
   `;
@@ -321,34 +340,43 @@ function renderCrmPanel(displayName, cleanPhone, avatarUrl) {
     currentCallStatus = null;
     currentFollowUp = '';
     currentNotesList = [];
-    saveCrmMetadata();
+    saveCrmMetadata(true);
     renderCrmPanel(displayName, cleanPhone, avatarUrl);
   };
 
-  document.getElementById('btn-call-yes').onclick = () => { currentCallStatus = 'YES'; saveCrmMetadata(); renderCrmPanel(displayName, cleanPhone, avatarUrl); };
-  document.getElementById('btn-call-no').onclick = () => { currentCallStatus = 'NO'; saveCrmMetadata(); renderCrmPanel(displayName, cleanPhone, avatarUrl); };
+  document.getElementById('btn-call-yes').onclick = () => { currentCallStatus = 'YES'; renderCrmPanel(displayName, cleanPhone, avatarUrl); };
+  document.getElementById('btn-call-no').onclick = () => { currentCallStatus = 'NO'; renderCrmPanel(displayName, cleanPhone, avatarUrl); };
 
-  document.getElementById('btn-interested').onclick = () => { currentLeadStatus = 'INTERESTED'; saveCrmMetadata(); renderCrmPanel(displayName, cleanPhone, avatarUrl); };
-  document.getElementById('btn-warm').onclick = () => { currentLeadStatus = 'WARM_INTERESTED'; saveCrmMetadata(); renderCrmPanel(displayName, cleanPhone, avatarUrl); };
-  document.getElementById('btn-not-interested').onclick = () => { currentLeadStatus = 'NOT_INTERESTED'; saveCrmMetadata(); renderCrmPanel(displayName, cleanPhone, avatarUrl); };
+  document.getElementById('btn-interested').onclick = () => { currentLeadStatus = 'INTERESTED'; renderCrmPanel(displayName, cleanPhone, avatarUrl); };
+  document.getElementById('btn-warm').onclick = () => { currentLeadStatus = 'WARM_INTERESTED'; renderCrmPanel(displayName, cleanPhone, avatarUrl); };
+  document.getElementById('btn-not-interested').onclick = () => { currentLeadStatus = 'NOT_INTERESTED'; renderCrmPanel(displayName, cleanPhone, avatarUrl); };
 
-  document.getElementById('aivastra-followup-date').onchange = (e) => { currentFollowUp = e.target.value; saveCrmMetadata(); };
+  document.getElementById('aivastra-followup-date').onchange = (e) => { currentFollowUp = e.target.value; };
 
   document.getElementById('aivastra-add-note-btn').onclick = () => {
     const txt = document.getElementById('aivastra-note-text').value.trim();
     if (txt) {
       currentNotesList.unshift(txt);
       document.getElementById('aivastra-note-text').value = '';
-      saveCrmMetadata();
       renderCrmPanel(displayName, cleanPhone, avatarUrl);
     }
+  };
+
+  // Main Save Button Click Handler
+  document.getElementById('aivastra-save-main-btn').onclick = () => {
+    const txt = document.getElementById('aivastra-note-text').value.trim();
+    if (txt) {
+      currentNotesList.unshift(txt);
+      document.getElementById('aivastra-note-text').value = '';
+    }
+    saveCrmMetadata(true);
+    renderCrmPanel(displayName, cleanPhone, avatarUrl);
   };
 
   panel.querySelectorAll('.aivastra-note-delete').forEach(el => {
     el.onclick = (e) => {
       const idx = parseInt(e.target.getAttribute('data-index'));
       currentNotesList.splice(idx, 1);
-      saveCrmMetadata();
       renderCrmPanel(displayName, cleanPhone, avatarUrl);
     };
   });

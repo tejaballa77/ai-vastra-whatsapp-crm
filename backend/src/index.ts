@@ -340,6 +340,10 @@ server.listen(PORT, async () => {
   console.log(`[AI Vastra CRM Backend] Server running on port ${PORT}`);
   console.log(`=======================================================`);
 
-  // Automatically start WhatsApp session engine on server launch
-  await waEngine.initialize();
+  try {
+    // Automatically start WhatsApp session engine on server launch
+    await waEngine.initialize();
+  } catch (err: any) {
+    console.error('[AI Vastra CRM Backend] Non-fatal WhatsApp Engine init error:', err?.message || err);
+  }
 });

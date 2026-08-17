@@ -141,10 +141,19 @@ function filterChatListByCrmInfo() {
         (localMeta && (localMeta.leadStatus !== 'UNASSIGNED' || localMeta.callStatus === 'YES' || localMeta.followUpDate || (localMeta.notesList && localMeta.notesList.length > 0)))
       );
 
+      const targetRow = item.closest('div[style*="height"]') || item.parentElement || item;
+
       if (isCrmFilterActive) {
-        item.style.display = hasSavedInfo ? 'block' : 'none';
+        if (hasSavedInfo) {
+          targetRow.style.display = '';
+          targetRow.style.visibility = 'visible';
+        } else {
+          targetRow.style.display = 'none';
+          targetRow.style.visibility = 'hidden';
+        }
       } else {
-        item.style.display = '';
+        targetRow.style.display = '';
+        targetRow.style.visibility = 'visible';
       }
     });
   });
@@ -153,7 +162,9 @@ function filterChatListByCrmInfo() {
 function resetChatListVisibility() {
   const chatItems = document.querySelectorAll('#pane-side [role="listitem"]');
   chatItems.forEach((item) => {
-    item.style.display = '';
+    const targetRow = item.closest('div[style*="height"]') || item.parentElement || item;
+    targetRow.style.display = '';
+    targetRow.style.visibility = 'visible';
   });
 }
 

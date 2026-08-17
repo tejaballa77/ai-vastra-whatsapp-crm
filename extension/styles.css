@@ -305,3 +305,33 @@
   color: #c62828;
   border: 1px solid #ef9a9a;
 }
+
+/* AI Vastra CRM Filter Pill on WhatsApp Web Left Sidebar */
+.aivastra-filter-pill {
+  background-color: #f0f2f5;
+  color: #54656f;
+  border: 1px solid #d1d7db;
+  border-radius: 16px;
+  padding: 5px 13px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  margin-left: 6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  transition: all 0.2s ease;
+  user-select: none;
+}
+
+.aivastra-filter-pill:hover {
+  background-color: #e9edef;
+  color: #111b21;
+}
+
+.aivastra-filter-pill.active-crm-filter {
+  background-color: #00a884 !important;
+  color: #ffffff !important;
+  border-color: #00a884 !important;
+  box-shadow: 0 2px 6px rgba(0, 168, 132, 0.4);
+}

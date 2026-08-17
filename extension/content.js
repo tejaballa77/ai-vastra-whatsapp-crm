@@ -16,6 +16,7 @@ let activeFormData = {
 };
 
 let isPanelVisible = true;
+let isCrmFilterActive = false;
 let chatsMetadataMap = {};
 
 // Create or get the injected CRM sidepanel container
@@ -73,6 +74,89 @@ function ensureHeaderButton() {
   };
 }
 
+// Inject "⚡ CRM Info" Filter Pill into WhatsApp Web's Native Chat Filter Bar (All, Unread, Favorites)
+function injectCrmFilterPill() {
+  const filterBar = document.querySelector('div[role="tablist"]') ||
+                    document.querySelector('#side button[role="tab"]')?.parentElement ||
+                    document.querySelector('#pane-side')?.previousElementSibling;
+
+  if (!filterBar) return;
+
+  if (document.getElementById('aivastra-crm-filter-pill')) return;
+
+  const pill = document.createElement('button');
+  pill.id = 'aivastra-crm-filter-pill';
+  pill.className = 'aivastra-filter-pill';
+  pill.innerHTML = `⚡ CRM Info`;
+  pill.title = 'Show only chats with saved CRM contact info';
+
+  pill.onclick = (e) => {
+    e.stopPropagation();
+    isCrmFilterActive = !isCrmFilterActive;
+    updateCrmFilterPillUI();
+    filterChatListByCrmInfo();
+  };
+
+  filterBar.appendChild(pill);
+
+  // Listen to native WhatsApp filter pill clicks to un-toggle CRM filter
+  filterBar.querySelectorAll('button:not(#aivastra-crm-filter-pill)').forEach(btn => {
+    btn.addEventListener('click', () => {
+      isCrmFilterActive = false;
+      updateCrmFilterPillUI();
+      resetChatListVisibility();
+    });
+  });
+}
+
+function updateCrmFilterPillUI() {
+  const pill = document.getElementById('aivastra-crm-filter-pill');
+  if (!pill) return;
+
+  if (isCrmFilterActive) {
+    pill.classList.add('active-crm-filter');
+  } else {
+    pill.classList.remove('active-crm-filter');
+  }
+}
+
+function filterChatListByCrmInfo() {
+  const chatItems = document.querySelectorAll('#pane-side [role="listitem"]');
+  if (!chatItems || chatItems.length === 0) return;
+
+  chrome.storage.local.get(null, (allStored) => {
+    chatItems.forEach((item) => {
+      const titleEl = item.querySelector('span[title]') || item.querySelector('span[dir="auto"]');
+      if (!titleEl) return;
+
+      const rawTitle = (titleEl.getAttribute('title') || titleEl.textContent || '').trim();
+      const cleanDigits = rawTitle.replace(/\D/g, '');
+      const key = cleanDigits.length >= 10 ? cleanDigits : rawTitle;
+
+      const chatMeta = chatsMetadataMap[key] || chatsMetadataMap[rawTitle] || chatsMetadataMap[cleanDigits];
+      const localMeta = allStored[`crm_meta_${key}`] || allStored[`crm_meta_${cleanDigits}`] || allStored[`crm_meta_${rawTitle}`];
+
+      const hasSavedInfo = Boolean(
+        (chatMeta && (chatMeta.leadStatus !== 'UNASSIGNED' || chatMeta.callStatus === 'YES' || chatMeta.followUpDate || (chatMeta.notesList && chatMeta.notesList.length > 0))) ||
+        (localMeta && (localMeta.leadStatus !== 'UNASSIGNED' || localMeta.callStatus === 'YES' || localMeta.followUpDate || (localMeta.notesList && localMeta.notesList.length > 0)))
+      );
+
+      if (isCrmFilterActive) {
+        item.style.display = hasSavedInfo ? 'block' : 'none';
+      } else {
+        item.style.display = '';
+      }
+    });
+  });
+}
+
+function resetChatListVisibility() {
+  const chatItems = document.querySelectorAll('#pane-side [role="listitem"]');
+  chatItems.forEach((item) => {
+    item.style.display = '';
+  });
+}
+
 // Inject Lead Status Emoji Badges into WhatsApp Web Left Chat List (#pane-side)
 function injectChatListBadges() {
   const chatItems = document.querySelectorAll('#pane-side [role="listitem"]');
@@ -115,12 +199,17 @@ function injectChatListBadges() {
       existingBadge.remove();
     }
   });
+
+  if (isCrmFilterActive) {
+    filterChatListByCrmInfo();
+  }
 }
 
 // Observe WhatsApp Web chat header and DOM changes
 function startChatObserver() {
   const observer = new MutationObserver(() => {
     ensureHeaderButton();
+    injectCrmFilterPill();
     detectActiveContact();
     injectChatListBadges();
   });
@@ -137,6 +226,7 @@ function detectActiveContact(force = false) {
   if (!mainHeader) return;
 
   ensureHeaderButton();
+  injectCrmFilterPill();
 
   // Find all text elements in header
   const spans = Array.from(mainHeader.querySelectorAll('span[title], span[dir="auto"]'));
@@ -488,6 +578,7 @@ function renderCrmPanel(displayName, cleanPhone, avatarUrl, showSaveToast = fals
 // Start observing active chat changes
 setTimeout(() => {
   ensureHeaderButton();
+  injectCrmFilterPill();
   detectActiveContact();
   injectChatListBadges();
   startChatObserver();

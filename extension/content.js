@@ -1,14 +1,20 @@
 // AI Vastra Chrome Extension - Injected Content Script on web.whatsapp.com
 console.log('[AI Vastra Chrome Extension] Script active on WhatsApp Web!');
 
+// Active chat identification
 let activeContactKey = '';
 let activeDisplayName = '';
 let activePhoneClean = '';
 let activeAvatarUrl = '';
-let currentLeadStatus = 'UNASSIGNED';
-let currentCallStatus = null;
-let currentFollowUp = '';
-let currentNotesList = [];
+
+// Per-Contact Form Data Store (Strict Chat Isolation)
+let activeFormData = {
+  leadStatus: 'UNASSIGNED',
+  callStatus: null,
+  followUpDate: '',
+  notesList: []
+};
+
 let isPanelVisible = true;
 let chatsMetadataMap = {};
 
@@ -81,7 +87,7 @@ function injectChatListBadges() {
     const key = cleanDigits.length >= 10 ? cleanDigits : rawTitle;
 
     const chatMeta = chatsMetadataMap[key] || chatsMetadataMap[rawTitle] || chatsMetadataMap[cleanDigits];
-    const status = chatMeta?.leadStatus || (key === activeContactKey ? currentLeadStatus : null);
+    const status = chatMeta?.leadStatus || (key === activeContactKey ? activeFormData.leadStatus : null);
 
     let existingBadge = item.querySelector('.aivastra-chat-badge');
 
@@ -169,11 +175,21 @@ function detectActiveContact(force = false) {
   const cleanDigits = targetTitle.replace(/\D/g, '');
   const contactKey = cleanDigits.length >= 10 ? cleanDigits : targetTitle;
 
+  // STRICT CHAT SWITCHING: When changing active chat, reset form data immediately before loading new chat data
   if (activeContactKey !== contactKey || force) {
     activeContactKey = contactKey;
     activeDisplayName = targetTitle;
     activePhoneClean = cleanDigits;
     activeAvatarUrl = domAvatar;
+
+    // Reset current form data for clean chat isolation
+    activeFormData = {
+      leadStatus: 'UNASSIGNED',
+      callStatus: null,
+      followUpDate: '',
+      notesList: []
+    };
+
     fetchCrmMetadata(contactKey, targetTitle, domAvatar);
   }
 }
@@ -181,17 +197,27 @@ function detectActiveContact(force = false) {
 function fetchCrmMetadata(searchKey, displayName, domAvatar) {
   const storageKeys = [`crm_meta_${searchKey}`, `crm_meta_${activePhoneClean}`, `crm_meta_${displayName}`];
 
-  // 1. Load from Chrome Storage Local FIRST so shifting chats NEVER wipes data
+  // 1. Load from Chrome Storage Local FIRST for instant chat isolation
   chrome.storage.local.get(storageKeys, (stored) => {
     const localData = stored[`crm_meta_${searchKey}`] || stored[`crm_meta_${activePhoneClean}`] || stored[`crm_meta_${displayName}`];
     
     if (localData) {
-      currentLeadStatus = localData.leadStatus || 'UNASSIGNED';
-      currentCallStatus = localData.callStatus || null;
-      currentFollowUp = localData.followUpDate || '';
-      currentNotesList = localData.notesList || [];
-      renderCrmPanel(displayName, activePhoneClean, domAvatar || activeAvatarUrl);
+      activeFormData = {
+        leadStatus: localData.leadStatus || 'UNASSIGNED',
+        callStatus: localData.callStatus || null,
+        followUpDate: localData.followUpDate || '',
+        notesList: localData.notesList || []
+      };
+    } else {
+      activeFormData = {
+        leadStatus: 'UNASSIGNED',
+        callStatus: null,
+        followUpDate: '',
+        notesList: []
+      };
     }
+
+    renderCrmPanel(displayName, activePhoneClean, domAvatar || activeAvatarUrl);
 
     // 2. Sync with backend API
     chrome.runtime.sendMessage({ action: 'FETCH_CRM_METADATA', phoneClean: searchKey }, (response) => {
@@ -200,12 +226,13 @@ function fetchCrmMetadata(searchKey, displayName, domAvatar) {
 
       if (response && response.success && response.chat) {
         const chat = response.chat;
-        // Only update if not already set locally
         if (!localData) {
-          currentLeadStatus = chat.leadStatus || 'UNASSIGNED';
-          currentCallStatus = chat.callStatus || null;
-          currentFollowUp = chat.followUpDate || '';
-          currentNotesList = chat.notesList || (chat.notes ? [chat.notes] : []);
+          activeFormData = {
+            leadStatus: chat.leadStatus || 'UNASSIGNED',
+            callStatus: chat.callStatus || null,
+            followUpDate: chat.followUpDate || '',
+            notesList: chat.notesList || (chat.notes ? [chat.notes] : [])
+          };
         }
 
         if (chat.phone) {
@@ -220,10 +247,7 @@ function fetchCrmMetadata(searchKey, displayName, domAvatar) {
         }
 
         const meta = {
-          leadStatus: currentLeadStatus,
-          callStatus: currentCallStatus,
-          followUpDate: currentFollowUp,
-          notesList: currentNotesList,
+          ...activeFormData,
           name: displayName,
           phone: resolvedPhone
         };
@@ -242,21 +266,18 @@ function fetchCrmMetadata(searchKey, displayName, domAvatar) {
   });
 }
 
-function saveCrmMetadata(showToast = false) {
+function saveCrmMetadata() {
   const targetJid = activePhoneClean.length >= 10 
     ? `${activePhoneClean}@s.whatsapp.net` 
     : (activeContactKey.includes('@') ? activeContactKey : `${activeContactKey}@s.whatsapp.net`);
 
   const metaObj = {
-    leadStatus: currentLeadStatus,
-    callStatus: currentCallStatus,
-    followUpDate: currentFollowUp,
-    notesList: currentNotesList,
+    ...activeFormData,
     name: activeDisplayName,
     phone: activePhoneClean
   };
 
-  // 1. Save to Chrome Storage Local permanently
+  // 1. Save to Chrome Storage Local permanently for this exact contact
   const saveKeys = {};
   saveKeys[`crm_meta_${activeContactKey}`] = metaObj;
   if (activePhoneClean) saveKeys[`crm_meta_${activePhoneClean}`] = metaObj;
@@ -276,22 +297,21 @@ function saveCrmMetadata(showToast = false) {
     data: {
       name: activeDisplayName,
       phone: activePhoneClean,
-      leadStatus: currentLeadStatus,
-      callStatus: currentCallStatus,
-      followUpDate: currentFollowUp || undefined,
-      notes: currentNotesList.join('\n\n'),
-      notesList: currentNotesList
+      leadStatus: activeFormData.leadStatus,
+      callStatus: activeFormData.callStatus,
+      followUpDate: activeFormData.followUpDate || undefined,
+      notes: activeFormData.notesList.join('\n\n'),
+      notesList: activeFormData.notesList
     }
   });
 
   injectChatListBadges();
 
-  if (showToast) {
-    const toast = document.getElementById('aivastra-save-toast');
-    if (toast) {
-      toast.style.display = 'block';
-      setTimeout(() => { toast.style.display = 'none'; }, 2500);
-    }
+  // 4. SHOW PROMINENT 2-SECOND GREEN TOAST NOTIFICATION
+  const toast = document.getElementById('aivastra-save-toast');
+  if (toast) {
+    toast.style.display = 'block';
+    setTimeout(() => { toast.style.display = 'none'; }, 2000);
   }
 }
 
@@ -327,8 +347,9 @@ function renderCrmPanel(displayName, cleanPhone, avatarUrl) {
       </div>
     </div>
 
+    <!-- PROMINENT 2-SECOND GREEN TOAST NOTIFICATION -->
     <div id="aivastra-save-toast" class="aivastra-toast" style="display:none;">
-      ✓ Contact info saved & synced to CRM!
+      ✓ Contact info saved successfully!
     </div>
 
     <div class="aivastra-body">
@@ -342,8 +363,8 @@ function renderCrmPanel(displayName, cleanPhone, avatarUrl) {
       <div>
         <div class="aivastra-section-title">CALL</div>
         <div class="aivastra-btn-group-2">
-          <button id="btn-call-yes" class="aivastra-btn ${currentCallStatus === 'YES' ? 'active-call-yes' : ''}">Yes</button>
-          <button id="btn-call-no" class="aivastra-btn ${currentCallStatus === 'NO' ? 'active-call-no' : ''}">No</button>
+          <button id="btn-call-yes" class="aivastra-btn ${activeFormData.callStatus === 'YES' ? 'active-call-yes' : ''}">Yes</button>
+          <button id="btn-call-no" class="aivastra-btn ${activeFormData.callStatus === 'NO' ? 'active-call-no' : ''}">No</button>
         </div>
       </div>
 
@@ -351,16 +372,16 @@ function renderCrmPanel(displayName, cleanPhone, avatarUrl) {
       <div>
         <div class="aivastra-section-title">LEAD STATUS</div>
         <div class="aivastra-btn-group">
-          <button id="btn-interested" class="aivastra-btn ${currentLeadStatus === 'INTERESTED' ? 'active-interested' : ''}">👍 Interested</button>
-          <button id="btn-warm" class="aivastra-btn ${currentLeadStatus === 'WARM_INTERESTED' ? 'active-warm' : ''}">🔥 Warm</button>
-          <button id="btn-not-interested" class="aivastra-btn ${currentLeadStatus === 'NOT_INTERESTED' ? 'active-not-interested' : ''}">👎 Not Interested</button>
+          <button id="btn-interested" class="aivastra-btn ${activeFormData.leadStatus === 'INTERESTED' ? 'active-interested' : ''}">👍 Interested</button>
+          <button id="btn-warm" class="aivastra-btn ${activeFormData.leadStatus === 'WARM_INTERESTED' ? 'active-warm' : ''}">🔥 Warm</button>
+          <button id="btn-not-interested" class="aivastra-btn ${activeFormData.leadStatus === 'NOT_INTERESTED' ? 'active-not-interested' : ''}">👎 Not Interested</button>
         </div>
       </div>
 
       <!-- 3. FOLLOW-UP SCHEDULE -->
       <div>
         <div class="aivastra-section-title">FOLLOW-UP SCHEDULE</div>
-        <input type="date" id="aivastra-followup-date" class="aivastra-date-input" value="${currentFollowUp}" />
+        <input type="date" id="aivastra-followup-date" class="aivastra-date-input" value="${activeFormData.followUpDate}" />
       </div>
 
       <!-- 4. EXTENDED CRM NOTES DOWNWARDS -->
@@ -370,7 +391,7 @@ function renderCrmPanel(displayName, cleanPhone, avatarUrl) {
         <button id="aivastra-add-note-btn" class="aivastra-add-note-btn">+ Add Note</button>
 
         <div id="aivastra-notes-list" style="margin-top: 10px; max-height: 140px; overflow-y: auto;">
-          ${currentNotesList.map((n, i) => `
+          ${activeFormData.notesList.map((n, i) => `
             <div class="aivastra-note-item">
               <span style="flex:1; word-break: break-word;">${n}</span>
               <span class="aivastra-note-delete" data-index="${i}" title="Delete Note">🗑</span>
@@ -395,44 +416,46 @@ function renderCrmPanel(displayName, cleanPhone, avatarUrl) {
   };
 
   document.getElementById('aivastra-clear-btn').onclick = () => {
-    currentLeadStatus = 'UNASSIGNED';
-    currentCallStatus = null;
-    currentFollowUp = '';
-    currentNotesList = [];
-    saveCrmMetadata(true);
+    activeFormData = {
+      leadStatus: 'UNASSIGNED',
+      callStatus: null,
+      followUpDate: '',
+      notesList: []
+    };
+    saveCrmMetadata();
     renderCrmPanel(displayName, cleanPhone, avatarUrl);
   };
 
   document.getElementById('btn-call-yes').onclick = () => { 
-    currentCallStatus = 'YES';
+    activeFormData.callStatus = 'YES';
     renderCrmPanel(displayName, cleanPhone, avatarUrl);
   };
   document.getElementById('btn-call-no').onclick = () => { 
-    currentCallStatus = 'NO';
+    activeFormData.callStatus = 'NO';
     renderCrmPanel(displayName, cleanPhone, avatarUrl);
   };
 
   document.getElementById('btn-interested').onclick = () => { 
-    currentLeadStatus = 'INTERESTED';
+    activeFormData.leadStatus = 'INTERESTED';
     renderCrmPanel(displayName, cleanPhone, avatarUrl);
   };
   document.getElementById('btn-warm').onclick = () => { 
-    currentLeadStatus = 'WARM_INTERESTED';
+    activeFormData.leadStatus = 'WARM_INTERESTED';
     renderCrmPanel(displayName, cleanPhone, avatarUrl);
   };
   document.getElementById('btn-not-interested').onclick = () => { 
-    currentLeadStatus = 'NOT_INTERESTED';
+    activeFormData.leadStatus = 'NOT_INTERESTED';
     renderCrmPanel(displayName, cleanPhone, avatarUrl);
   };
 
   document.getElementById('aivastra-followup-date').onchange = (e) => { 
-    currentFollowUp = e.target.value; 
+    activeFormData.followUpDate = e.target.value; 
   };
 
   document.getElementById('aivastra-add-note-btn').onclick = () => {
     const txt = document.getElementById('aivastra-note-text').value.trim();
     if (txt) {
-      currentNotesList.unshift(txt);
+      activeFormData.notesList.unshift(txt);
       document.getElementById('aivastra-note-text').value = '';
       renderCrmPanel(displayName, cleanPhone, avatarUrl);
     }
@@ -442,17 +465,17 @@ function renderCrmPanel(displayName, cleanPhone, avatarUrl) {
   document.getElementById('aivastra-save-main-btn').onclick = () => {
     const txt = document.getElementById('aivastra-note-text').value.trim();
     if (txt) {
-      currentNotesList.unshift(txt);
+      activeFormData.notesList.unshift(txt);
       document.getElementById('aivastra-note-text').value = '';
     }
-    saveCrmMetadata(true);
+    saveCrmMetadata();
     renderCrmPanel(displayName, cleanPhone, avatarUrl);
   };
 
   panel.querySelectorAll('.aivastra-note-delete').forEach(el => {
     el.onclick = (e) => {
       const idx = parseInt(e.target.getAttribute('data-index'));
-      currentNotesList.splice(idx, 1);
+      activeFormData.notesList.splice(idx, 1);
       renderCrmPanel(displayName, cleanPhone, avatarUrl);
     };
   });

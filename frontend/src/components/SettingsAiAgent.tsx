@@ -1,18 +1,20 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Bot, Save, Sparkles, Check, AlertCircle, RefreshCw, Send } from 'lucide-react';
+import { Bot, Save, Sparkles, Check, Send, Key, Cpu, ShieldCheck } from 'lucide-react';
 import { getBackendUrl } from '../config';
 
 export function SettingsAiAgent() {
   const [kb, setKb] = useState<any>({
     enabled: true,
+    openAiApiKey: '',
+    openAiModel: 'gpt-4o-mini',
     companyName: 'AI Vastra',
     companyDescription: '',
     productsAndPricing: '',
     faqsAndAnswers: '',
     greetingMessage: '',
-    aiTone: 'Professional, polite, and helpful',
+    aiTone: 'Professional, polite, enthusiastic, and helpful sales specialist',
     humanOverrideMinutes: 10,
   });
 
@@ -86,8 +88,8 @@ export function SettingsAiAgent() {
             <Bot className="w-6 h-6" />
           </div>
           <div>
-            <h2 className="text-xl font-bold text-[#111b21]">24/7 AI Agent Knowledge Base & Auto-Responder</h2>
-            <p className="text-xs text-gray-500">Train your AI Agent with company details, pricing, FAQs, and brand voice.</p>
+            <h2 className="text-xl font-bold text-[#111b21]">OpenAI LLM & AI Knowledge Base Settings</h2>
+            <p className="text-xs text-gray-500">Train OpenAI GPT-4o with custom company documents, pricing catalogs, and FAQs.</p>
           </div>
         </div>
 
@@ -126,6 +128,43 @@ export function SettingsAiAgent() {
               </>
             )}
           </button>
+        </div>
+      </div>
+
+      {/* OpenAI API Key Section */}
+      <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm space-y-4">
+        <div className="flex items-center gap-2 text-[#00a884] font-bold text-sm">
+          <Key className="w-4 h-4" />
+          <span>OpenAI API Key & LLM Model Selection</span>
+        </div>
+        <p className="text-xs text-gray-500">
+          Enter your OpenAI API key (`sk-proj-...` from platform.openai.com) so GPT-4o analyzes incoming customer questions against your uploaded documents.
+        </p>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="md:col-span-2">
+            <label className="block text-xs font-bold text-gray-700 mb-1">OpenAI API Key (sk-...)</label>
+            <input
+              type="password"
+              value={kb.openAiApiKey || ''}
+              onChange={(e) => setKb({ ...kb, openAiApiKey: e.target.value })}
+              placeholder="sk-proj-..."
+              className="w-full p-2.5 text-xs bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:border-[#00a884] font-mono"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-bold text-gray-700 mb-1">Select AI Model</label>
+            <select
+              value={kb.openAiModel || 'gpt-4o-mini'}
+              onChange={(e) => setKb({ ...kb, openAiModel: e.target.value })}
+              className="w-full p-2.5 text-xs bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:border-[#00a884] font-semibold"
+            >
+              <option value="gpt-4o-mini">GPT-4o-mini (Fast & Recommended)</option>
+              <option value="gpt-4o">GPT-4o (Maximum Intelligence)</option>
+              <option value="gpt-3.5-turbo">GPT-3.5-Turbo</option>
+            </select>
+          </div>
         </div>
       </div>
 
@@ -171,7 +210,7 @@ export function SettingsAiAgent() {
           {/* Products, Services & Pricing Catalog */}
           <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm space-y-4">
             <h3 className="text-sm font-bold text-[#111b21] uppercase tracking-wider text-gray-500">Products, Plans & Demo Video Links</h3>
-            <p className="text-xs text-gray-500">Add exact package names, prices, features, and demo links so the AI answers pricing inquiries accurately.</p>
+            <p className="text-xs text-gray-500">Add exact package names, prices, features, and demo links so GPT-4o answers pricing inquiries accurately.</p>
 
             <textarea
               rows={5}
@@ -182,15 +221,15 @@ export function SettingsAiAgent() {
             />
           </div>
 
-          {/* FAQs */}
+          {/* FAQs & Document Knowledge */}
           <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm space-y-4">
-            <h3 className="text-sm font-bold text-[#111b21] uppercase tracking-wider text-gray-500">Frequently Asked Questions (FAQs)</h3>
+            <h3 className="text-sm font-bold text-[#111b21] uppercase tracking-wider text-gray-500">Product Policies, Document Knowledge & FAQs</h3>
 
             <textarea
-              rows={5}
+              rows={6}
               value={kb.faqsAndAnswers || ''}
               onChange={(e) => setKb({ ...kb, faqsAndAnswers: e.target.value })}
-              placeholder="Q: How does it work? A: Upload garment photos and AI generates model photos..."
+              placeholder="Paste all product rules, refund policies, FAQs, and brand guidelines here..."
               className="w-full p-3 text-xs bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:border-[#00a884]"
             />
           </div>
@@ -201,16 +240,16 @@ export function SettingsAiAgent() {
           <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm space-y-4">
             <div className="flex items-center gap-2 text-[#00a884] font-bold text-sm">
               <Sparkles className="w-4 h-4" />
-              <span>Interactive AI Test Sandbox</span>
+              <span>Interactive GPT-4o Test Sandbox</span>
             </div>
-            <p className="text-xs text-gray-500">Type any test client message below to test how your AI Agent will respond on WhatsApp in real time!</p>
+            <p className="text-xs text-gray-500">Type any customer question below to test how GPT-4o analyzes your documents and responds in real time!</p>
 
             <form onSubmit={handleTestAi} className="space-y-3">
               <textarea
                 rows={3}
                 value={testMessage}
                 onChange={(e) => setTestMessage(e.target.value)}
-                placeholder="e.g., Hi, what is the price for AI Vastra software?"
+                placeholder="e.g., Can I upgrade my plan mid-month?"
                 className="w-full p-3 text-xs bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:border-[#00a884]"
               />
 
@@ -220,14 +259,14 @@ export function SettingsAiAgent() {
                 className="w-full py-2.5 bg-[#00a884] text-white font-bold text-xs rounded-xl hover:bg-[#008f70] transition-all flex items-center justify-center gap-2 disabled:opacity-50"
               >
                 <Send className="w-3.5 h-3.5" />
-                <span>{isTesting ? 'AI Thinking...' : 'Test AI Auto-Reply'}</span>
+                <span>{isTesting ? 'GPT-4o Analyzing...' : 'Test GPT-4o Auto-Reply'}</span>
               </button>
             </form>
 
             {testResult && (
               <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200 space-y-2 mt-4">
                 <div className="flex items-center justify-between text-xs font-bold text-emerald-800">
-                  <span>🤖 AI Auto-Reply:</span>
+                  <span>🤖 GPT-4o Auto-Reply:</span>
                   {testResult.autoTagStatus && (
                     <span className="px-2 py-0.5 bg-emerald-200 text-emerald-900 rounded-full text-[10px]">
                       Auto-Tag: {testResult.autoTagStatus}

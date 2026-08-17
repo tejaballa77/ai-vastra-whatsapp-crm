@@ -4,6 +4,8 @@ import { db } from './store';
 
 export interface AiKnowledgeBase {
   enabled: boolean;
+  openAiApiKey: string;
+  openAiModel: string;
   companyName: string;
   companyDescription: string;
   productsAndPricing: string;
@@ -15,6 +17,8 @@ export interface AiKnowledgeBase {
 
 const DEFAULT_KB: AiKnowledgeBase = {
   enabled: true,
+  openAiApiKey: process.env.OPENAI_API_KEY || '',
+  openAiModel: 'gpt-4o-mini',
   companyName: 'AI Vastra',
   companyDescription: 'AI Vastra helps fashion brands, retailers, and D2C clothing companies create instant AI-powered virtual model photoshoots, product catalogs, and catalog videos without expensive physical photoshoots.',
   productsAndPricing: `
@@ -34,7 +38,7 @@ Q: Can I see sample videos or catalog photos?
 A: Yes, check our official video demos here: https://youtube.com/@ai.vastra_tryon
   `.trim(),
   greetingMessage: 'Hello! Welcome to AI Vastra. We help fashion brands create instant AI virtual model shoots. How can I help you today?',
-  aiTone: 'Professional, polite, helpful, and concise',
+  aiTone: 'Professional, polite, enthusiastic, and helpful sales specialist',
   humanOverrideMinutes: 10,
 };
 
@@ -89,43 +93,115 @@ class AiAgentService {
       return { text: '' };
     }
 
+    const apiKey = this.kb.openAiApiKey || process.env.OPENAI_API_KEY;
+
+    // 1. If OpenAI API Key is provided -> Call OpenAI GPT-4o / GPT-3.5
+    if (apiKey) {
+      try {
+        const responseText = await this.callOpenAiLlm(apiKey, incomingText, chatJid);
+        const lowerRes = (incomingText + ' ' + responseText).toLowerCase();
+        let autoTagStatus: 'INTERESTED' | 'WARM_INTERESTED' | undefined = undefined;
+
+        if (lowerRes.includes('price') || lowerRes.includes('cost') || lowerRes.includes('pack') || lowerRes.includes('pricing')) {
+          autoTagStatus = 'WARM_INTERESTED';
+        }
+        if (lowerRes.includes('demo') || lowerRes.includes('call') || lowerRes.includes('meeting') || lowerRes.includes('buy')) {
+          autoTagStatus = 'INTERESTED';
+        }
+
+        return { text: responseText, autoTagStatus };
+      } catch (err: any) {
+        console.error('[AI Agent] OpenAI API call error, falling back to rule engine:', err.message);
+      }
+    }
+
+    // 2. Rule Engine Fallback (Zero-Cost)
     const lower = incomingText.toLowerCase().trim();
 
-    // 1. Greetings
     if (/^(hi|hello|hey|good morning|good afternoon|hlo|hii|namaste)$/i.test(lower)) {
       return {
         text: `${this.kb.greetingMessage}\n\nFeel free to ask about our software plans, pricing, or virtual model shoot demos!`,
       };
     }
 
-    // 2. Pricing & Cost inquiries
-    if (lower.includes('price') || lower.includes('cost') || lower.includes('pricing') || lower.includes('pack') || lower.includes('plan') || lower.includes('charge')) {
+    if (lower.includes('price') || lower.includes('cost') || lower.includes('pricing') || lower.includes('pack') || lower.includes('plan')) {
       return {
         text: `Here are our AI Vastra software plans:\n\n${this.kb.productsAndPricing}\n\nWould you like to schedule a 10-minute live demo for your brand today?`,
         autoTagStatus: 'WARM_INTERESTED',
       };
     }
 
-    // 3. Demo / Samples / Videos
-    if (lower.includes('demo') || lower.includes('sample') || lower.includes('video') || lower.includes('catalog') || lower.includes('photo') || lower.includes('work')) {
+    if (lower.includes('demo') || lower.includes('sample') || lower.includes('video') || lower.includes('catalog')) {
       return {
         text: `You can watch our live catalog video demos here:\n👉 https://youtube.com/@ai.vastra_tryon\n\nWe can also arrange a 1-on-1 live demo on your own garments. Let us know what time works best for you!`,
         autoTagStatus: 'INTERESTED',
       };
     }
 
-    // 4. Contact / Meeting / Call Request
-    if (lower.includes('call') || lower.includes('speak') || lower.includes('meeting') || lower.includes('number') || lower.includes('address')) {
-      return {
-        text: `Thank you! Our senior sales specialist will call you shortly. You can also share your convenient time for a quick call.`,
-        autoTagStatus: 'INTERESTED',
-      };
-    }
-
-    // 5. Default Knowledge Base contextual response
     return {
       text: `Thank you for reaching out to ${this.kb.companyName}!\n\n${this.kb.companyDescription}\n\nYou can check demo videos here: https://youtube.com/@ai.vastra_tryon or reply with your preferred demo time!`,
     };
+  }
+
+  private async callOpenAiLlm(apiKey: string, userQuery: string, chatJid: string): Promise<string> {
+    const fetch = globalThis.fetch || require('node-fetch');
+
+    // Fetch recent chat history
+    const msgs = db.messages.get(chatJid) || [];
+    const recentHistory = msgs.slice(-6).map(m => ({
+      role: m.fromMe ? 'assistant' : 'user',
+      content: m.text || ''
+    }));
+
+    const systemPrompt = `
+You are the official AI Sales Specialist & Auto-Responder for ${this.kb.companyName}.
+Your tone must be: ${this.kb.aiTone}.
+
+COMPANY OVERVIEW:
+${this.kb.companyDescription}
+
+PRODUCTS, PACKAGES & PRICING:
+${this.kb.productsAndPricing}
+
+COMPANY POLICIES & FAQS:
+${this.kb.faqsAndAnswers}
+
+INSTRUCTIONS:
+1. Answer the customer's question clearly, concisely, and professionally based strictly on the company overview, pricing, catalog, and FAQs provided above.
+2. If the user asks for prices, detail the packages clearly.
+3. If the user asks for a demo, provide demo links or invite them to schedule a 1-on-1 live demo.
+4. Keep messages formatted cleanly for WhatsApp with line breaks and appropriate emojis. Do not invent false policies outside the provided documents.
+    `.trim();
+
+    const messages = [
+      { role: 'system', content: systemPrompt },
+      ...recentHistory,
+      { role: 'user', content: userQuery }
+    ];
+
+    const body = {
+      model: this.kb.openAiModel || 'gpt-4o-mini',
+      messages,
+      temperature: 0.7,
+      max_tokens: 350
+    };
+
+    const res = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey.trim()}`
+      },
+      body: JSON.stringify(body)
+    });
+
+    if (!res.ok) {
+      const errText = await res.text();
+      throw new Error(`OpenAI API error (${res.status}): ${errText}`);
+    }
+
+    const data: any = await res.json();
+    return data.choices?.[0]?.message?.content?.trim() || '';
   }
 }
 

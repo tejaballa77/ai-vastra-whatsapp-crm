@@ -86,6 +86,25 @@ export const SocketProvider = ({ children }: { children: ReactNode }) => {
       }
     });
 
+    const fetchChats = () => {
+      fetch(`${getBackendUrl()}/api/chats`)
+        .then((res) => res.json())
+        .then((data) => {
+          if (Array.isArray(data)) {
+            setChats(data);
+          }
+        })
+        .catch((err) => console.error('Error fetching chats:', err));
+    };
+
+    fetchChats();
+    const pollInterval = setInterval(fetchChats, 3000);
+
+    return () => {
+      clearInterval(pollInterval);
+      s.disconnect();
+    };
+
     s.on('new_message', (msg: Message) => {
       setMessages((prev) => {
         const list = prev[msg.chatJid] || [];

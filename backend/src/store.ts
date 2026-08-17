@@ -539,6 +539,8 @@ class StorageEngine {
   }
 
   public updateCrmMetadata(rawJid: string, metadata: {
+    name?: string;
+    phone?: string;
     leadStatus?: 'INTERESTED' | 'WARM_INTERESTED' | 'NOT_INTERESTED' | 'UNASSIGNED';
     callStatus?: 'YES' | 'NO';
     followUpDate?: string;
@@ -547,17 +549,21 @@ class StorageEngine {
     tags?: string[];
   }) {
     const jid = this.resolveJid(rawJid);
-    const cleanNum = rawJid.replace(/\D/g, '') || jid.split('@')[0].replace(/\D/g, '');
+    const cleanNum = (metadata.phone || rawJid).replace(/\D/g, '') || jid.split('@')[0].replace(/\D/g, '');
 
     // 1. Update Contact
     let contact = this.contacts.get(jid) || (cleanNum ? this.contacts.get(cleanNum) : undefined);
     if (!contact) {
       contact = this.upsertContact(jid, {
         phone: cleanNum,
-        name: this.getContactName(rawJid) || this.formatPhoneFallback(cleanNum),
+        name: metadata.name || this.getContactName(rawJid) || this.formatPhoneFallback(cleanNum),
         ...metadata
       });
     } else {
+      if (metadata.name && (!contact.name || contact.name === 'Unsaved Contact' || contact.name.includes('@'))) {
+        contact.name = metadata.name;
+      }
+      if (metadata.phone) contact.phone = metadata.phone;
       if (metadata.leadStatus !== undefined) contact.leadStatus = metadata.leadStatus;
       if (metadata.callStatus !== undefined) contact.callStatus = metadata.callStatus;
       if (metadata.followUpDate !== undefined) contact.followUpDate = metadata.followUpDate;
@@ -573,7 +579,7 @@ class StorageEngine {
     if (!chat) {
       chat = {
         jid: jid.includes('@') ? jid : `${jid}@s.whatsapp.net`,
-        name: contact?.name || this.formatPhoneFallback(cleanNum),
+        name: metadata.name || contact?.name || this.formatPhoneFallback(cleanNum),
         unreadCount: 0,
         lastMessageAt: Date.now(),
         isGroup: false,
@@ -587,6 +593,9 @@ class StorageEngine {
       this.chats.set(chat.jid, chat);
       if (cleanNum) this.chats.set(cleanNum, chat);
     } else {
+      if (metadata.name && (!chat.name || chat.name === 'Unsaved Contact' || chat.name.includes('@'))) {
+        chat.name = metadata.name;
+      }
       if (metadata.leadStatus !== undefined) chat.leadStatus = metadata.leadStatus;
       if (metadata.callStatus !== undefined) chat.callStatus = metadata.callStatus;
       if (metadata.followUpDate !== undefined) chat.followUpDate = metadata.followUpDate;
@@ -602,6 +611,9 @@ class StorageEngine {
       for (const [key, c] of this.chats.entries()) {
         const num = c.jid.split('@')[0].replace(/\D/g, '');
         if (num === cleanNum || num.endsWith(cleanNum) || cleanNum.endsWith(num)) {
+          if (metadata.name && (!c.name || c.name === 'Unsaved Contact' || c.name.includes('@'))) {
+            c.name = metadata.name;
+          }
           if (metadata.leadStatus !== undefined) c.leadStatus = metadata.leadStatus;
           if (metadata.callStatus !== undefined) c.callStatus = metadata.callStatus;
           if (metadata.followUpDate !== undefined) c.followUpDate = metadata.followUpDate;

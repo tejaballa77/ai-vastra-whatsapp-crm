@@ -357,22 +357,32 @@ function fetchCrmMetadata(searchKey, displayName, domAvatar) {
 }
 
 function saveCrmMetadata() {
+  // Use phone-based JID always to avoid duplicate entries in CRM
   const targetJid = activePhoneClean.length >= 10
     ? `${activePhoneClean}@s.whatsapp.net`
     : (activeContactKey.includes('@') ? activeContactKey : `${activeContactKey}@s.whatsapp.net`);
 
-  const metaObj = { ...activeFormData, name: activeDisplayName, phone: activePhoneClean };
+  // Use phone number as display name fallback if name is invalid (".", "Contact", empty)
+  const badNames = ['.', 'contact', 'unsaved contact', ''];
+  const effectiveName = (!activeDisplayName || badNames.includes(activeDisplayName.toLowerCase().trim()))
+    ? (activePhoneClean || activeContactKey)
+    : activeDisplayName;
 
+  const metaObj = { ...activeFormData, name: effectiveName, phone: activePhoneClean };
+
+  // Save under ONE primary key only (phone number) to prevent duplicates
+  const primaryKey = activePhoneClean.length >= 10 ? activePhoneClean : activeContactKey;
   const saveKeys = {};
-  saveKeys[`crm_meta_${activeContactKey}`] = metaObj;
-  if (activePhoneClean) saveKeys[`crm_meta_${activePhoneClean}`] = metaObj;
-  if (activeDisplayName) saveKeys[`crm_meta_${activeDisplayName}`] = metaObj;
+  saveKeys[`crm_meta_${primaryKey}`] = metaObj;
+  if (activeDisplayName && !badNames.includes(activeDisplayName.toLowerCase().trim())) {
+    saveKeys[`crm_meta_${activeDisplayName}`] = metaObj;
+  }
 
   safeStorageSet(saveKeys);
 
-  chatsMetadataMap[activeContactKey] = metaObj;
+  chatsMetadataMap[primaryKey] = metaObj;
   if (activePhoneClean) chatsMetadataMap[activePhoneClean] = metaObj;
-  if (activeDisplayName) chatsMetadataMap[activeDisplayName] = metaObj;
+  if (effectiveName !== primaryKey) chatsMetadataMap[effectiveName] = metaObj;
 
   const payload = {
     name: activeDisplayName,

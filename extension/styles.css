@@ -1,0 +1,215 @@
+/* AI Vastra Chrome Extension Injected CRM Styles */
+#aivastra-crm-panel {
+  position: fixed;
+  top: 0;
+  right: 0;
+  width: 340px;
+  height: 100vh;
+  background-color: #ffffff;
+  border-left: 1px solid #e9edef;
+  z-index: 99999;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  box-shadow: -2px 0 10px rgba(0, 0, 0, 0.08);
+  display: flex;
+  flex-direction: column;
+  color: #111b21;
+}
+
+.aivastra-header {
+  height: 60px;
+  background-color: #f0f2f5;
+  border-bottom: 1px solid #e9edef;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px;
+  font-weight: 600;
+  font-size: 15px;
+}
+
+.aivastra-close-btn {
+  background: none;
+  border: none;
+  font-size: 18px;
+  color: #667781;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 50%;
+}
+.aivastra-close-btn:hover {
+  background-color: #e9edef;
+  color: #111b21;
+}
+
+.aivastra-clear-btn {
+  background-color: #ffeef0;
+  color: #e53935;
+  border: 1px solid #ffcdd2;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  margin-right: 8px;
+}
+.aivastra-clear-btn:hover {
+  background-color: #ffcdd2;
+}
+
+.aivastra-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+  display: flex;
+  flex-direction: flex-col;
+  gap: 16px;
+}
+
+.aivastra-card {
+  background-color: #f0f2f5;
+  border: 1px solid #e9edef;
+  border-radius: 12px;
+  padding: 14px;
+  text-align: center;
+}
+
+.aivastra-contact-name {
+  font-weight: 600;
+  font-size: 15px;
+  margin-bottom: 4px;
+  color: #111b21;
+}
+
+.aivastra-contact-phone {
+  font-size: 12px;
+  color: #667781;
+}
+
+.aivastra-section-title {
+  font-size: 11px;
+  font-weight: 700;
+  color: #667781;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 8px;
+}
+
+.aivastra-btn-group {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+
+.aivastra-btn-group-2 {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+}
+
+.aivastra-btn {
+  padding: 8px 4px;
+  border-radius: 8px;
+  border: 1px solid #e9edef;
+  background-color: #f0f2f5;
+  color: #667781;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.aivastra-btn.active-interested {
+  background-color: #e8f5e9;
+  color: #2e7d32;
+  border-color: #4caf50;
+  font-weight: 600;
+}
+
+.aivastra-btn.active-warm {
+  background-color: #fff8e1;
+  color: #f57f17;
+  border-color: #ffb300;
+  font-weight: 600;
+}
+
+.aivastra-btn.active-not-interested {
+  background-color: #ffebee;
+  color: #c62828;
+  border-color: #ef5350;
+  font-weight: 600;
+}
+
+.aivastra-btn.active-call-yes {
+  background-color: #00a884;
+  color: #ffffff;
+  border-color: #00a884;
+  font-weight: 600;
+}
+
+.aivastra-btn.active-call-no {
+  background-color: #e53935;
+  color: #ffffff;
+  border-color: #e53935;
+  font-weight: 600;
+}
+
+.aivastra-date-input {
+  width: 100%;
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 1px solid #e9edef;
+  background-color: #f0f2f5;
+  font-size: 12px;
+  color: #111b21;
+  box-sizing: border-box;
+}
+
+.aivastra-notes-area {
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid #e9edef;
+  background-color: #f0f2f5;
+  font-size: 12px;
+  color: #111b21;
+  resize: none;
+  box-sizing: border-box;
+}
+
+.aivastra-add-note-btn {
+  width: 100%;
+  margin-top: 6px;
+  padding: 8px;
+  background-color: #00a884;
+  color: #ffffff;
+  border: none;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.aivastra-add-note-btn:hover {
+  background-color: #008f70;
+}
+
+.aivastra-note-item {
+  background-color: #f0f2f5;
+  border: 1px solid #e9edef;
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 12px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.aivastra-note-delete {
+  color: #667781;
+  cursor: pointer;
+  font-size: 14px;
+}
+.aivastra-note-delete:hover {
+  color: #e53935;
+}

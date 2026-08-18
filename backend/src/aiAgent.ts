@@ -43,7 +43,20 @@ class AiAgentService {
     try {
       if (fs.existsSync(this.kbPath)) {
         const raw = fs.readFileSync(this.kbPath, 'utf-8');
-        return { ...DEFAULT_KB, ...JSON.parse(raw) };
+        const parsed = JSON.parse(raw);
+
+        // Auto-sanitize legacy ₹4,999 / ₹9,999 hardcoded mock data
+        if (parsed.productsAndPricing && (parsed.productsAndPricing.includes('4,999') || parsed.productsAndPricing.includes('4999') || parsed.productsAndPricing.includes('9,999') || parsed.productsAndPricing.includes('9999'))) {
+          parsed.productsAndPricing = '';
+        }
+        if (parsed.faqsAndAnswers && parsed.faqsAndAnswers.includes('ai.vastra_tryon')) {
+          parsed.faqsAndAnswers = '';
+        }
+
+        const merged = { ...DEFAULT_KB, ...parsed };
+        // Save cleaned KB back to disk
+        fs.writeFileSync(this.kbPath, JSON.stringify(merged, null, 2), 'utf-8');
+        return merged;
       }
     } catch (e) {
       console.warn('[AI Agent] Error loading Knowledge Base, using default:', e);
@@ -153,10 +166,17 @@ CRITICAL RULES — FOLLOW STRICTLY
 
 2. PROJECT INFO & DEMOS: When a client asks about any project/service, explain it briefly in 1-2 lines, and immediately provide the YouTube demo link or website link from the document context.
 
-3. PRICING & COST QUESTIONS (CRITICAL — ALWAYS GIVE PRICES):
-   - Whenever a client asks for "cost", "price", "pricing", "rates", or "plans" (e.g. "Can I know about the cost?"):
-   - You MUST IMMEDIATELY state the EXACT prices/costs from the document for our services!
-   - NEVER ask "which service are you interested in?" or say "our team will send details". ALWAYS state the actual prices from the document immediately in clean bullet points!
+3. PRICING & COST QUESTIONS (CRITICAL — ALWAYS GIVE ACCURATE PRICES FROM DOCUMENT):
+   - Whenever a client asks for "cost", "price", "pricing", "rates", "packages", or "Virtual Try on":
+   - You MUST IMMEDIATELY state the EXACT prices/costs from the KNOWLEDGE BASE DOCUMENTS below!
+   - NEVER mention ₹4,999 or ₹9,999 (those plans are deleted/obsolete).
+   - Use the official Virtual Try-On rates from the document:
+     • Pay-As-You-Go: ₹5 per successful Try-On
+     • Starter: ₹999 (180 Try-Ons — ₹5.55 / Try-On)
+     • Growth: ₹2,500 (455 Try-Ons — ₹5.49 / Try-On)
+     • Pro: ₹10,000 (2,105 Try-Ons — ₹4.75 / Try-On)
+     • Enterprise: ₹25,000 (6,000 Try-Ons — ₹4.17 / Try-On)
+   - NEVER ask "which service are you interested in?" or say "our team will send details". ALWAYS state the actual prices immediately in clear bullet points!
 
 4. URL / LINK RECOGNITION:
    - If the client shares a link (Instagram link, YouTube video, website URL, or shared post preview with keywords like 'aivastra', 'instagram.com', 'try-on', 'catalog', 'kiosk'):
@@ -179,8 +199,6 @@ ${this.kb.companyDescription ? `COMPANY OVERVIEW:\n${this.kb.companyDescription}
 ${this.kb.customPrompt ? `CUSTOM AGENT INSTRUCTIONS:\n${this.kb.customPrompt}\n` : ''}
 
 ${ragContext ? `KNOWLEDGE BASE DOCUMENTS (Source of Truth — use ONLY this for facts):\n${ragContext}` : 'NOTE: No document context retrieved.'}
-
-${this.kb.productsAndPricing ? `ADDITIONAL PRICING INFO:\n${this.kb.productsAndPricing}` : ''}
     `.trim();
 
     const messages = [

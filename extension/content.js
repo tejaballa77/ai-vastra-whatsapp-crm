@@ -150,52 +150,14 @@ function syncAllCrmChats(callback) {
   });
 }
 
-// Inject "⚡ CRM Info" Filter Pill
+// "⚡ CRM Info" Filter Pill Injection (Disabled/Removed as requested)
 function injectCrmFilterPill() {
-  const filterBar = document.querySelector('div[role="tablist"]') ||
-                    document.querySelector('#side button[role="tab"]')?.parentElement ||
-                    document.querySelector('#pane-side')?.previousElementSibling;
-
-  if (!filterBar) return;
-  if (document.getElementById('aivastra-crm-filter-pill')) return;
-
-  const pill = document.createElement('button');
-  pill.id = 'aivastra-crm-filter-pill';
-  pill.className = 'aivastra-filter-pill';
-  pill.innerHTML = `⚡ CRM Info`;
-  pill.title = 'Show only chats with saved CRM contact info';
-
-  pill.onclick = (e) => {
-    e.stopPropagation();
-    isCrmFilterActive = !isCrmFilterActive;
-    updateCrmFilterPillUI();
-    if (isCrmFilterActive) {
-      syncAllCrmChats(() => filterChatListByCrmInfo());
-    } else {
-      resetChatListVisibility();
-    }
-  };
-
-  filterBar.appendChild(pill);
-
-  // When standard WhatsApp filter tabs are clicked, reset our CRM filter
-  filterBar.querySelectorAll('button:not(#aivastra-crm-filter-pill)').forEach(btn => {
-    btn.addEventListener('click', () => {
-      isCrmFilterActive = false;
-      updateCrmFilterPillUI();
-      resetChatListVisibility();
-    });
-  });
+  // Option removed per user request
+  return;
 }
 
 function updateCrmFilterPillUI() {
-  const pill = document.getElementById('aivastra-crm-filter-pill');
-  if (!pill) return;
-  if (isCrmFilterActive) {
-    pill.classList.add('active-crm-filter');
-  } else {
-    pill.classList.remove('active-crm-filter');
-  }
+  return;
 }
 
 function filterChatListByCrmInfo() {

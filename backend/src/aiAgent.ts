@@ -99,26 +99,28 @@ class AiAgentService {
     const docs = ragEngine.getDocuments() || [];
     const pdfDoc = docs.find((d: any) => d.originalName?.toLowerCase().endsWith('.pdf') || d.mimeType?.includes('pdf') || d.filename?.toLowerCase().endsWith('.pdf'));
 
-    let attachedDocPath: string | undefined = undefined;
-    let attachedDocName: string | undefined = undefined;
-
-    const lowerQuery = incomingText.toLowerCase();
-    if (pdfDoc && (lowerQuery.includes('price') || lowerQuery.includes('cost') || lowerQuery.includes('demo') || lowerQuery.includes('detail') || lowerQuery.includes('pdf') || lowerQuery.includes('brochure') || lowerQuery.includes('virtual try'))) {
-      const uploadDir = path.join(__dirname, '../uploads/documents');
-      const fullPath = path.join(uploadDir, pdfDoc.filename);
-      if (fs.existsSync(fullPath)) {
-        attachedDocPath = fullPath;
-        attachedDocName = pdfDoc.originalName;
-      }
-    }
-
     const apiKey = this.kb.openAiApiKey || process.env.OPENAI_API_KEY;
 
     // 1. If OpenAI API Key is provided -> Call OpenAI GPT-4o / GPT-3.5
     if (apiKey) {
       try {
         let responseText = await this.callOpenAiLlm(apiKey, incomingText, chatJid);
-        // Strip raw PDF delivery bracket tags from text output if present
+
+        let attachedDocPath: string | undefined = undefined;
+        let attachedDocName: string | undefined = undefined;
+
+        // ONLY attach PDF document if the matched answer explicitly contains the PDF delivery instruction tag!
+        const requiresPdfDelivery = /pdf\s+should\s+be\s+delivered/i.test(responseText) || /pdf\s+name/i.test(responseText);
+        if (requiresPdfDelivery && pdfDoc) {
+          const uploadDir = path.join(__dirname, '../uploads/documents');
+          const fullPath = path.join(uploadDir, pdfDoc.filename);
+          if (fs.existsSync(fullPath)) {
+            attachedDocPath = fullPath;
+            attachedDocName = pdfDoc.originalName;
+          }
+        }
+
+        // Clean out raw bracket tag from output text so customer gets a clean message
         responseText = responseText.replace(/\[\s*PDF SHOULD BE DELIVERED.*?\\]/gi, '').trim();
 
         const lowerRes = (incomingText + ' ' + responseText).toLowerCase();
@@ -183,7 +185,10 @@ You are a professional, warm, and helpful human sales employee at ${this.kb.comp
 ════════════════════════════════════
 CRITICAL RULES — FOLLOW STRICTLY
 ════════════════════════════════════
-1. EXACT Q&A MATCHING MODE: The uploaded document contains Question and Answer pairs (Q: and A:). When a user asks a question, identify the matching Q: entry in the document and deliver the exact answer text from A: (including any links, formatting, and emojis).
+1. FLEXIBLE SEMANTIC INTENT MATCHING & EXACT ANSWER DELIVERY:
+   - Clients may phrase their questions in many different ways (e.g. "What do I pay?", "Tell me prices", "How much for try-on?").
+   - Analyze the SEMANTIC MEANING of whatever question the client sends and match it to the corresponding Q: entry in the document.
+   - Deliver the EXACT unmodified answer text from the A: block of that question (including any YouTube links, website URLs, and emojis)! Do NOT rewrite or alter the core text.
 
 2. RESPONSE LENGTH: Keep answers clean, concise, and direct as specified in the document's A: block.
 

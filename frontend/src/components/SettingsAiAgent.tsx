@@ -343,75 +343,8 @@ export function SettingsAiAgent() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Left Column: Knowledge Base Forms */}
-        <div className="space-y-6">
-          {/* Company Profile & Employee Tone */}
-          <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm space-y-4">
-            <h3 className="text-sm font-bold text-[#111b21] uppercase tracking-wider text-gray-500">Employee Persona & Company Overview</h3>
-
-            <div>
-              <label className="block text-xs font-bold text-gray-700 mb-1">Company / Brand Name</label>
-              <input
-                type="text"
-                value={kb.companyName || ''}
-                onChange={(e) => setKb({ ...kb, companyName: e.target.value })}
-                className="w-full p-2.5 text-xs bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:border-[#00a884]"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-bold text-gray-700 mb-1">Employee Sales Persona & Chat Tone</label>
-              <input
-                type="text"
-                value={kb.aiTone || ''}
-                onChange={(e) => setKb({ ...kb, aiTone: e.target.value })}
-                placeholder="Professional, polite, enthusiastic sales representative..."
-                className="w-full p-2.5 text-xs bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:border-[#00a884]"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-bold text-gray-700 mb-1">Company Description & Mission</label>
-              <textarea
-                rows={3}
-                value={kb.companyDescription || ''}
-                onChange={(e) => setKb({ ...kb, companyDescription: e.target.value })}
-                placeholder="Describe what your business does..."
-                className="w-full p-2.5 text-xs bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:border-[#00a884]"
-              />
-            </div>
-          </div>
-
-          {/* Products, Services & Pricing Catalog */}
-          <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm space-y-4">
-            <h3 className="text-sm font-bold text-[#111b21] uppercase tracking-wider text-gray-500">Products, Plans & Demo Video Links</h3>
-
-            <textarea
-              rows={4}
-              value={kb.productsAndPricing || ''}
-              onChange={(e) => setKb({ ...kb, productsAndPricing: e.target.value })}
-              placeholder="e.g. Growth Pack: ₹4,999/month - Includes 50 Shoots. Pro Pack: ₹9,999/month..."
-              className="w-full p-3 text-xs bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:border-[#00a884] font-mono"
-            />
-          </div>
-
-          {/* Text FAQs */}
-          <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm space-y-4">
-            <h3 className="text-sm font-bold text-[#111b21] uppercase tracking-wider text-gray-500">Text FAQs & Direct Policies</h3>
-
-            <textarea
-              rows={4}
-              value={kb.faqsAndAnswers || ''}
-              onChange={(e) => setKb({ ...kb, faqsAndAnswers: e.target.value })}
-              placeholder="Paste additional text FAQs, rules, and guidelines here..."
-              className="w-full p-3 text-xs bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:border-[#00a884]"
-            />
-          </div>
-        </div>
-
-        {/* Right Column: CHATGPT-STYLE INTERACTIVE TEST SIMULATOR */}
-        <div className="bg-white rounded-2xl border border-gray-200 shadow-sm flex flex-col overflow-hidden h-[680px]">
+      {/* CHATGPT-STYLE INTERACTIVE TEST SIMULATOR */}
+      <div className="bg-white rounded-2xl border border-gray-200 shadow-sm flex flex-col overflow-hidden h-[600px]">
           {/* Chat Simulator Header */}
           <div className="p-4 bg-[#f0f2f5] border-b border-gray-200 flex items-center justify-between">
             <div className="flex items-center gap-2.5">
@@ -511,7 +444,6 @@ export function SettingsAiAgent() {
             </button>
           </form>
         </div>
-      </div>
     </div>
   );
 }

@@ -322,7 +322,7 @@ app.post('/api/ai/test-reply', async (req, res) => {
   try {
     const { aiAgent } = require('./aiAgent');
     const { message } = req.body;
-    const response = await aiAgent.generateResponse('test_chat@s.whatsapp.net', message || 'Hi');
+    const response = await aiAgent.generateResponse('test_chat@s.whatsapp.net', message || 'Hi', true);
     res.json({ success: true, response });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });

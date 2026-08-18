@@ -117,13 +117,13 @@ class AiAgentService {
     return Boolean(recentHumanMsg);
   }
 
-  public async generateResponse(chatJid: string, incomingText: string): Promise<{ text: string; autoTagStatus?: 'INTERESTED' | 'WARM_INTERESTED'; documentPath?: string; documentName?: string }> {
-    if (!this.kb.enabled) {
+  public async generateResponse(chatJid: string, incomingText: string, isSimulator: boolean = false): Promise<{ text: string; autoTagStatus?: 'INTERESTED' | 'WARM_INTERESTED'; documentPath?: string; documentName?: string }> {
+    if (!isSimulator && !this.kb.enabled) {
       return { text: '' };
     }
 
     // Check Human Override
-    if (this.isHumanActive(chatJid)) {
+    if (!isSimulator && this.isHumanActive(chatJid)) {
       console.log(`[AI Agent] Human agent is active in ${chatJid}. AI auto-reply paused.`);
       return { text: '' };
     }
@@ -245,8 +245,8 @@ CRITICAL RULES — FOLLOW STRICTLY
    - Reply: "Thanks for sharing! 📸 Are you looking for Virtual Try-On for this outfit (AI Vastra) or AI Catalog Photography? Let me know so I can share exact details! 😊"
 
 6. UNRELATED / IRRELEVANT MESSAGES (STRICT SILENCE):
-   - If the client's message is completely unrelated to our business, fashion, AI Vastra, catalogue photo creation, virtual try-on, kiosks, pricing, or document content (e.g. spam, random jokes, weather, or totally unrelated topics):
-   - Reply EXACTLY: "NO_REPLY" (Do NOT send any automatic reply message!).
+   - Greetings like "Hi", "Hello", "Hey", "Good Morning", "Namaste" are VALID client greetings — ALWAYS reply to greetings using the matching Q: Customer says Hi / Hello entry or greeting message!
+   - ONLY if the client's message is completely non-business or off-topic (e.g. spam, random jokes, weather, or totally unrelated topics), reply EXACTLY: "NO_REPLY".
 
 7. STRICT TRUTH: ONLY use facts, prices, and links from the KNOWLEDGE BASE DOCUMENTS and CUSTOM INSTRUCTIONS below. NEVER invent fake numbers or plans.
 

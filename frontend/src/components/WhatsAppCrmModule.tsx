@@ -35,8 +35,7 @@ export function WhatsAppCrmModule() {
 
   const { chats: rawChats } = useSocket();
 
-  // Deduplicate chats strictly by canonical 10-digit phone number
-  const BAD_NAMES = new Set(['.', 'contact', 'unsaved contact', 'unknown contact', '']);
+  const BAD_NAMES = new Set(['.', 'contact', 'unsaved contact', 'unknown contact', 'whatsapp contact', '']);
   const canonicalPhone = (raw: string) => {
     const digits = (raw || '').replace(/\D/g, '');
     if (digits.length > 13 || digits.length === 15) return '';
@@ -44,6 +43,33 @@ export function WhatsAppCrmModule() {
     if (digits.length === 13 && digits.startsWith('091')) return digits.slice(3);
     if (digits.length === 10) return digits;
     return '';
+  };
+
+  const getCleanDisplayContact = (chat: any) => {
+    const rawNum = (chat.phone || chat.jid || '').split('@')[0].replace(/\D/g, '');
+    let tenDigit = rawNum;
+    if (rawNum.length === 12 && rawNum.startsWith('91')) tenDigit = rawNum.slice(2);
+    if (rawNum.length === 13 && rawNum.startsWith('091')) tenDigit = rawNum.slice(3);
+    
+    let formattedPhone = '';
+    if (tenDigit.length === 10) {
+      formattedPhone = `+91 ${tenDigit.slice(0, 5)} ${tenDigit.slice(5)}`;
+    } else if (rawNum.length > 0 && rawNum.length <= 12) {
+      formattedPhone = `+${rawNum}`;
+    } else {
+      formattedPhone = tenDigit.length === 10 ? `+91 ${tenDigit}` : (rawNum ? `+${rawNum}` : 'WhatsApp Contact');
+    }
+
+    let nameRaw = (chat.name || '').trim();
+    if (nameRaw) {
+      nameRaw = nameRaw.replace(/\s*\+?\d{8,15}$/, '').trim();
+    }
+
+    const isLidDigits = /^\d{13,}$/.test(nameRaw.replace(/\D/g, ''));
+    const isBadName = !nameRaw || BAD_NAMES.has(nameRaw.toLowerCase()) || nameRaw.includes('@') || isLidDigits;
+
+    const displayName = isBadName ? formattedPhone : nameRaw;
+    return { displayName, formattedPhone, cleanPhone: tenDigit || rawNum };
   };
 
   const chatsMap = new Map<string, (typeof rawChats)[0]>();
@@ -494,15 +520,12 @@ export function WhatsAppCrmModule() {
                       </tr>
                     ) : (
                       filteredTableLeads.map((chat) => {
-                        const cleanPhone = (chat.phone || chat.jid.split('@')[0]).replace(/\D/g, '');
-                        const formattedPhone = cleanPhone.length === 12 && cleanPhone.startsWith('91')
-                          ? `+91 ${cleanPhone.slice(2, 7)} ${cleanPhone.slice(7)}`
-                          : `+${cleanPhone}`;
+                        const { displayName, formattedPhone, cleanPhone } = getCleanDisplayContact(chat);
 
                         return (
                           <tr key={chat.jid} className="hover:bg-gray-50 transition-colors">
                             <td className="p-3">
-                              <div className="font-bold text-[#111b21]">{chat.name || 'Unsaved Contact'}</div>
+                              <div className="font-bold text-[#111b21]">{displayName}</div>
                               <div className="text-gray-500 font-medium text-[11px] flex items-center gap-1.5 mt-0.5">
                                 <span>📞 {formattedPhone}</span>
                                 <button
@@ -611,12 +634,7 @@ export function WhatsAppCrmModule() {
                   </div>
                 ) : (
                   todayActivityChats.slice(0, 15).map((chat) => {
-                    const cleanPhone = (chat.phone || chat.jid.split('@')[0]).replace(/\D/g, '');
-                    const formattedPhone = cleanPhone.length === 12 && cleanPhone.startsWith('91')
-                      ? `+91 ${cleanPhone.slice(2, 7)} ${cleanPhone.slice(7)}`
-                      : cleanPhone.length === 10
-                      ? `+91 ${cleanPhone.slice(0, 5)} ${cleanPhone.slice(5)}`
-                      : `+${cleanPhone}`;
+                    const { displayName, formattedPhone, cleanPhone } = getCleanDisplayContact(chat);
 
                     return (
                       <div 
@@ -626,11 +644,11 @@ export function WhatsAppCrmModule() {
                         {/* Left: Avatar & Contact Details */}
                         <div className="flex items-center gap-3 min-w-[240px]">
                           <div className="w-9 h-9 rounded-full bg-[#00a884]/15 text-[#00a884] font-bold flex items-center justify-center text-xs flex-shrink-0">
-                            {(chat.name || 'W').charAt(0).toUpperCase()}
+                            {displayName.charAt(0).toUpperCase()}
                           </div>
                           <div className="min-w-0">
-                            <h4 className="text-xs font-bold truncate text-[#111b21]" title={chat.name || formattedPhone || ''}>
-                              {chat.name || formattedPhone || 'WhatsApp Contact'}
+                            <h4 className="text-xs font-bold truncate text-[#111b21]" title={displayName}>
+                              {displayName}
                             </h4>
                             <p className="text-[11px] text-gray-500 font-medium">
                               📞 {formattedPhone}
@@ -716,24 +734,27 @@ export function WhatsAppCrmModule() {
                   No contacts found in this category yet.
                 </div>
               ) : (
-                getModalContacts().map((chat) => (
-                  <div key={chat.jid} className="p-4 rounded-xl bg-gray-50 border border-gray-200 flex flex-col md:flex-row md:items-center justify-between gap-4">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-full bg-[#00a884]/15 text-[#00a884] font-bold flex items-center justify-center text-base flex-shrink-0">
-                        {(chat.name || 'W').charAt(0).toUpperCase()}
-                      </div>
-                      <div>
-                        <h4 className="text-sm font-bold text-[#111b21]">{chat.name || 'Unsaved Contact'}</h4>
-                        <p className="text-xs text-gray-500 font-medium flex items-center gap-1">
-                          <span>📞 +{chat.phone || chat.jid.split('@')[0]}</span>
-                          <button
-                            onClick={() => handleCopyPhone(chat.phone || chat.jid.split('@')[0])}
-                            className="text-gray-400 hover:text-gray-700 ml-1"
-                            title="Copy Phone Number"
-                          >
-                            <Copy className="w-3 h-3" />
-                          </button>
-                        </p>
+                getModalContacts().map((chat) => {
+                  const { displayName, formattedPhone, cleanPhone } = getCleanDisplayContact(chat);
+
+                  return (
+                    <div key={chat.jid} className="p-4 rounded-xl bg-gray-50 border border-gray-200 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-full bg-[#00a884]/15 text-[#00a884] font-bold flex items-center justify-center text-base flex-shrink-0">
+                          {displayName.charAt(0).toUpperCase()}
+                        </div>
+                        <div>
+                          <h4 className="text-sm font-bold text-[#111b21]">{displayName}</h4>
+                          <p className="text-xs text-gray-500 font-medium flex items-center gap-1">
+                            <span>📞 {formattedPhone}</span>
+                            <button
+                              onClick={() => handleCopyPhone(cleanPhone)}
+                              className="text-gray-400 hover:text-gray-700 ml-1"
+                              title="Copy Phone Number"
+                            >
+                              <Copy className="w-3 h-3" />
+                            </button>
+                          </p>
                         {chat.notesList && chat.notesList.length > 0 && (
                           <p className="text-xs text-purple-700 mt-1 italic">📝 "{chat.notesList[0]}"</p>
                         )}
@@ -763,8 +784,9 @@ export function WhatsAppCrmModule() {
                       </button>
                     </div>
                   </div>
-                ))
-              )}
+                );
+              })
+            )}
             </div>
           </div>
         </div>

@@ -48,16 +48,34 @@ export interface CRMMessage {
   status: 'PENDING' | 'SENT' | 'DELIVERED' | 'READ';
 }
 
+export interface NoteEntry {
+  text: string;
+  date: string; // DD-MM-YYYY
+}
+
 export interface ColdCallLead {
   id: string;
-  name: string;
+  // Core display columns
+  businessName: string;
+  personName: string;
   phone: string;
-  company?: string;
-  customFields?: Record<string, any>;
+  // Extended info (shown in popup)
+  businessWebsite?: string;
+  role?: string;
+  email?: string;
+  linkedinProfile?: string;
+  facebookProfile?: string;
+  instaProfile?: string;
+  // Notes
+  note?: string;            // Original note from Excel
+  notesList?: NoteEntry[];  // User-added notes with timestamps
+  // Status & tracking
   callStatus?: 'YES' | 'NO' | 'PENDING' | 'INTERESTED' | 'NOT_INTERESTED';
   followUpDate?: string;
-  notes?: string;
-  notesList?: string[];
+  // Legacy compatibility
+  name?: string;
+  company?: string;
+  customFields?: Record<string, any>;
   createdAt: number;
   updatedAt: number;
 }
@@ -814,21 +832,35 @@ class StorageEngine {
     const now = Date.now();
 
     for (const lead of leads) {
-      if (!lead.name && !lead.phone) continue;
+      // Allow entry if any identifying info is present
+      if (!lead.businessName && !lead.personName && !lead.phone && !lead.name) continue;
       const phoneDigits = (lead.phone || '').replace(/\D/g, '');
-      const id = lead.id || (phoneDigits.length >= 10 ? phoneDigits : `lead_${now}_${Math.random().toString(36).substring(2, 7)}`);
+      const id = lead.id || (phoneDigits.length >= 8 ? phoneDigits : `lead_${now}_${Math.random().toString(36).substring(2, 7)}`);
 
       const existing = this.coldCalls.get(id);
       const entry: ColdCallLead = {
         id,
-        name: lead.name || existing?.name || 'Contact',
-        phone: lead.phone || existing?.phone || '',
-        company: lead.company || existing?.company || '',
-        customFields: { ...(existing?.customFields || {}), ...(lead.customFields || {}) },
-        callStatus: lead.callStatus || existing?.callStatus || 'PENDING',
+        // New primary fields (preserve existing values if not provided)
+        businessName: lead.businessName !== undefined ? lead.businessName : (existing?.businessName || lead.name || existing?.name || ''),
+        personName: lead.personName !== undefined ? lead.personName : (existing?.personName || lead.name || existing?.name || ''),
+        phone: lead.phone !== undefined ? lead.phone : (existing?.phone || ''),
+        // Extended info fields (blank cells stay blank — only set if explicitly provided)
+        businessWebsite: lead.businessWebsite !== undefined ? lead.businessWebsite : (existing?.businessWebsite || ''),
+        role: lead.role !== undefined ? lead.role : (existing?.role || ''),
+        email: lead.email !== undefined ? lead.email : (existing?.email || ''),
+        linkedinProfile: lead.linkedinProfile !== undefined ? lead.linkedinProfile : (existing?.linkedinProfile || ''),
+        facebookProfile: lead.facebookProfile !== undefined ? lead.facebookProfile : (existing?.facebookProfile || ''),
+        instaProfile: lead.instaProfile !== undefined ? lead.instaProfile : (existing?.instaProfile || ''),
+        // Notes
+        note: lead.note !== undefined ? lead.note : (existing?.note || ''),
+        notesList: (lead.notesList && lead.notesList.length > 0) ? lead.notesList : (existing?.notesList || []),
+        // Status
+        callStatus: existing?.callStatus || lead.callStatus || 'PENDING',
         followUpDate: lead.followUpDate !== undefined ? lead.followUpDate : (existing?.followUpDate || ''),
-        notes: lead.notes !== undefined ? lead.notes : (existing?.notes || ''),
-        notesList: lead.notesList || existing?.notesList || [],
+        // Legacy compat
+        name: lead.personName || lead.name || existing?.name || '',
+        company: lead.businessName || lead.company || existing?.company || '',
+        customFields: { ...(existing?.customFields || {}), ...(lead.customFields || {}) },
         createdAt: existing?.createdAt || now,
         updatedAt: now,
       };
@@ -848,10 +880,15 @@ class StorageEngine {
     const updated: ColdCallLead = {
       ...existing,
       ...partial,
-      notesList: partial.notesList !== undefined ? partial.notesList : existing.notesList,
+      // Preserve notesList array type (NoteEntry[])
+      notesList: partial.notesList !== undefined ? (partial.notesList as NoteEntry[]) : existing.notesList,
       customFields: partial.customFields ? { ...existing.customFields, ...partial.customFields } : existing.customFields,
       updatedAt: Date.now(),
     };
+
+    // Keep legacy fields in sync
+    updated.name = updated.personName || updated.name || '';
+    updated.company = updated.businessName || updated.company || '';
 
     this.coldCalls.set(id, updated);
     this.saveData();

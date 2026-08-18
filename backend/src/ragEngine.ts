@@ -84,12 +84,22 @@ class RagEngineService {
   }
 
   // RAG Semantic Retrieval: Search all uploaded documents for relevant context
-  public retrieveRelevantContext(query: string, maxChars: number = 3000): string {
+  public retrieveRelevantContext(query: string, maxChars: number = 8000): string {
     if (this.documents.length === 0) return '';
 
+    // Calculate total character count of all uploaded documents
+    const totalChars = this.documents.reduce((acc, d) => acc + (d.content || '').length, 0);
+
+    // IF total document size is under 15,000 characters (~3000 words summary file),
+    // feed the ENTIRE document to GPT for 100% complete accuracy!
+    if (totalChars <= 15000) {
+      return this.documents.map(d => `=== DOCUMENT: ${d.originalName} ===\n${d.content}`).join('\n\n');
+    }
+
+    // For larger documents, perform keyword-ranked chunk retrieval
     const queryWords = query.toLowerCase().replace(/[^\w\s]/g, '').split(/\s+/).filter(w => w.length > 2);
     if (queryWords.length === 0) {
-      return this.documents.map(d => `--- Document: ${d.originalName} ---\n${d.content.slice(0, 1000)}`).join('\n\n');
+      return this.documents.map(d => `=== DOCUMENT: ${d.originalName} ===\n${d.content.slice(0, 3000)}`).join('\n\n');
     }
 
     const scoredChunks: { text: string; score: number; docName: string }[] = [];
@@ -99,17 +109,17 @@ class RagEngineService {
       const paragraphs = doc.content.split(/\n\s*\n/);
       paragraphs.forEach(p => {
         const pClean = p.trim();
-        if (pClean.length < 20) return;
+        if (pClean.length < 15) return;
 
         const pLower = pClean.toLowerCase();
         let score = 0;
 
         queryWords.forEach(word => {
           if (pLower.includes(word)) {
-            score += 1;
+            score += 2;
             // Bonus for exact word matches
             const matches = (pLower.match(new RegExp(`\\b${word}\\b`, 'g')) || []).length;
-            score += matches * 1.5;
+            score += matches * 2;
           }
         });
 
@@ -123,8 +133,8 @@ class RagEngineService {
     scoredChunks.sort((a, b) => b.score - a.score);
 
     if (scoredChunks.length === 0) {
-      // Return top overview if no direct keyword matches found
-      return this.documents.map(d => `--- Document: ${d.originalName} ---\n${d.content.slice(0, 800)}`).join('\n\n');
+      // Return first 3000 chars if no direct keyword matches found
+      return this.documents.map(d => `=== DOCUMENT: ${d.originalName} ===\n${d.content.slice(0, 3000)}`).join('\n\n');
     }
 
     let combined = '';

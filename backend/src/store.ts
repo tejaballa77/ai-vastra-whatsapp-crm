@@ -80,11 +80,14 @@ class StorageEngine {
   }
 
   private canonicalPhone(digits: string): string {
-    if (!digits) return digits;
+    if (!digits) return '';
     const clean = digits.replace(/\D/g, '');
+    // Ignore 15-digit LIDs or unmapped numbers longer than 13 digits
+    if (clean.length > 13 || clean.length === 15) return '';
     if (clean.length === 12 && clean.startsWith('91')) return clean.slice(2);
     if (clean.length === 13 && clean.startsWith('091')) return clean.slice(3);
-    return clean;
+    if (clean.length === 10) return clean;
+    return '';
   }
 
   private loadData() {
@@ -124,11 +127,16 @@ class StorageEngine {
           }
 
           const rawNum = (chat.phone || chat.jid || key).split('@')[0].replace(/\D/g, '');
+
+          // Ignore 15-digit LIDs or invalid keys
+          if (rawNum.length > 13 || rawNum.length === 15 || key.endsWith('@lid')) {
+            const mapped = this.lidToJidMap.get(key) || this.lidToJidMap.get(rawNum);
+            if (!mapped) continue;
+          }
+
           const tenDigit = this.canonicalPhone(rawNum);
 
-          if (!tenDigit || tenDigit.length < 10) {
-            // Keep groups or non-phone chats with '@'
-            if (key.includes('@')) cleanedChats.set(key, chat);
+          if (!tenDigit || tenDigit.length !== 10) {
             continue;
           }
 
@@ -584,6 +592,8 @@ class StorageEngine {
 
         const rawTs = targetMsg.timestamp || 0;
         lastMessageAt = rawTs < 10000000000 ? rawTs * 1000 : rawTs;
+      } else {
+        lastMessageAt = (c.lastMessageAt && c.lastMessageAt < 10000000000) ? c.lastMessageAt * 1000 : (c.lastMessageAt || 0);
       }
 
       let unreadCount = c.unreadCount;
@@ -766,7 +776,7 @@ class StorageEngine {
         phone: tenDigit ? `91${tenDigit}` : rawDigits,
         name: incomingNameIsValid ? incomingNameClean : (contact.name || this.formatPhoneFallback(rawDigits)),
         unreadCount: 0,
-        lastMessageAt: Date.now(),
+        lastMessageAt: 0,
         isGroup: canonicalJid.endsWith('@g.us'),
         leadStatus: metadata.leadStatus || 'UNASSIGNED',
         callStatus: metadata.callStatus || undefined,

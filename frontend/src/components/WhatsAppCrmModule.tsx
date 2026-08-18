@@ -39,15 +39,21 @@ export function WhatsAppCrmModule() {
   const BAD_NAMES = new Set(['.', 'contact', 'unsaved contact', 'unknown contact', '']);
   const canonicalPhone = (raw: string) => {
     const digits = (raw || '').replace(/\D/g, '');
+    if (digits.length > 13 || digits.length === 15) return '';
     if (digits.length === 12 && digits.startsWith('91')) return digits.slice(2);
     if (digits.length === 13 && digits.startsWith('091')) return digits.slice(3);
-    return digits;
+    if (digits.length === 10) return digits;
+    return '';
   };
 
   const chatsMap = new Map<string, (typeof rawChats)[0]>();
   for (const c of rawChats) {
-    const cleanNum = (c.phone || c.jid.split('@')[0] || '').replace(/\D/g, '');
-    const dedupeKey = canonicalPhone(cleanNum) || c.jid;
+    if (!c.jid) continue;
+    const rawDigits = (c.phone || c.jid.split('@')[0] || '').replace(/\D/g, '');
+    if (c.jid.endsWith('@lid') || rawDigits.length > 13 || rawDigits.length === 15) {
+      continue;
+    }
+    const dedupeKey = canonicalPhone(rawDigits) || c.jid;
     if (!chatsMap.has(dedupeKey)) {
       chatsMap.set(dedupeKey, c);
     } else {
@@ -113,15 +119,25 @@ export function WhatsAppCrmModule() {
   );
 
   // Filter for TODAY's WhatsApp Activity Feed only (messages sent or received today)
-  const todayStart = new Date();
-  todayStart.setHours(0, 0, 0, 0);
-  const todayStartMs = todayStart.getTime();
+  const isToday = (ts?: number) => {
+    if (!ts || ts <= 0) return false;
+    const timeMs = ts < 10000000000 ? ts * 1000 : ts;
+    const msgDate = new Date(timeMs);
+    const today = new Date();
+    return (
+      msgDate.getDate() === today.getDate() &&
+      msgDate.getMonth() === today.getMonth() &&
+      msgDate.getFullYear() === today.getFullYear()
+    );
+  };
 
-  const todayActivityChats = chats.filter((c) => {
-    const msgTime = c.lastMessageAt || 0;
-    const timeMs = msgTime < 10000000000 ? msgTime * 1000 : msgTime;
-    return timeMs >= todayStartMs;
-  });
+  const todayActivityChats = chats
+    .filter((c) => isToday(c.lastMessageAt))
+    .sort((a, b) => {
+      const tsA = (a.lastMessageAt || 0) < 10000000000 ? (a.lastMessageAt || 0) * 1000 : (a.lastMessageAt || 0);
+      const tsB = (b.lastMessageAt || 0) < 10000000000 ? (b.lastMessageAt || 0) * 1000 : (b.lastMessageAt || 0);
+      return tsB - tsA;
+    });
 
   // Filter table leads based on selected sub-filter and search
   const filteredTableLeads = savedLeads.filter((c) => {
@@ -594,25 +610,33 @@ export function WhatsAppCrmModule() {
                     <p className="text-gray-400">Live conversations and messages occurring today will automatically appear here.</p>
                   </div>
                 ) : (
-                  todayActivityChats.slice(0, 15).map((chat) => (
-                    <div 
-                      key={chat.jid} 
-                      className="p-3.5 hover:bg-gray-50/90 transition-all flex flex-col md:flex-row md:items-center justify-between gap-3 bg-white"
-                    >
-                      {/* Left: Avatar & Contact Details */}
-                      <div className="flex items-center gap-3 min-w-[240px]">
-                        <div className="w-9 h-9 rounded-full bg-[#00a884]/15 text-[#00a884] font-bold flex items-center justify-center text-xs flex-shrink-0">
-                          {(chat.name || 'W').charAt(0).toUpperCase()}
+                  todayActivityChats.slice(0, 15).map((chat) => {
+                    const cleanPhone = (chat.phone || chat.jid.split('@')[0]).replace(/\D/g, '');
+                    const formattedPhone = cleanPhone.length === 12 && cleanPhone.startsWith('91')
+                      ? `+91 ${cleanPhone.slice(2, 7)} ${cleanPhone.slice(7)}`
+                      : cleanPhone.length === 10
+                      ? `+91 ${cleanPhone.slice(0, 5)} ${cleanPhone.slice(5)}`
+                      : `+${cleanPhone}`;
+
+                    return (
+                      <div 
+                        key={chat.jid} 
+                        className="p-3.5 hover:bg-gray-50/90 transition-all flex flex-col md:flex-row md:items-center justify-between gap-3 bg-white"
+                      >
+                        {/* Left: Avatar & Contact Details */}
+                        <div className="flex items-center gap-3 min-w-[240px]">
+                          <div className="w-9 h-9 rounded-full bg-[#00a884]/15 text-[#00a884] font-bold flex items-center justify-center text-xs flex-shrink-0">
+                            {(chat.name || 'W').charAt(0).toUpperCase()}
+                          </div>
+                          <div className="min-w-0">
+                            <h4 className="text-xs font-bold truncate text-[#111b21]" title={chat.name || formattedPhone || ''}>
+                              {chat.name || formattedPhone || 'WhatsApp Contact'}
+                            </h4>
+                            <p className="text-[11px] text-gray-500 font-medium">
+                              📞 {formattedPhone}
+                            </p>
+                          </div>
                         </div>
-                        <div className="min-w-0">
-                          <h4 className="text-xs font-bold truncate text-[#111b21]" title={chat.name || chat.phone || ''}>
-                            {chat.name || chat.phone || 'WhatsApp Contact'}
-                          </h4>
-                          <p className="text-[11px] text-gray-500 font-medium">
-                            📞 {chat.phone ? `+${chat.phone}` : chat.jid.split('@')[0]}
-                          </p>
-                        </div>
-                      </div>
 
                       {/* Middle: Message Preview & Notes */}
                       <div className="flex-1 min-w-0 flex items-center gap-2.5">
@@ -653,8 +677,9 @@ export function WhatsAppCrmModule() {
                         </button>
                       </div>
                     </div>
-                  ))
-                )}
+                  );
+                })
+              )}
               </div>
             </div>
           </div>

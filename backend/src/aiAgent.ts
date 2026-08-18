@@ -146,6 +146,15 @@ class AiAgentService {
           return { text: '' };
         }
 
+        // Automatically extract clean A: answer text if model includes Q: question prefix
+        if (/Q:/i.test(responseText) && /A:/i.test(responseText)) {
+          const parts = responseText.split(/A:/i);
+          if (parts.length >= 2) {
+            responseText = parts.slice(1).join('A:').split(/(?=Q:)/i)[0].trim();
+          }
+        }
+        responseText = responseText.replace(/^A:\s*/i, '').trim();
+
         const lowerRes = (incomingText + ' ' + responseText).toLowerCase();
         let autoTagStatus: 'INTERESTED' | 'WARM_INTERESTED' | undefined = undefined;
 

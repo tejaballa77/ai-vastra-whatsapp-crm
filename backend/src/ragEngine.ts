@@ -108,13 +108,14 @@ class RagEngineService {
         const parts = block.split(/(?:A\s*[\:\.\-–])/i);
         if (parts.length >= 2) {
           const qText = parts[0].toLowerCase();
-          const aText = parts.slice(1).join('A:').split(/(?=Q\s*[\:\.\-–])/i)[0].trim();
+          // Extract ONLY the A: text block, stopping before the next Q: or next Section header (# 11. Lead Qualification Questions)
+          let aText = parts.slice(1).join('A:').split(/(?=Q\s*[\:\.\-–]|\n\s*#+\s*|\n\s*\d+\.\s+[A-Z])/i)[0].trim();
 
           let score = 0;
           const cleanQ = qText.replace(/q\s*[\:\.\-–]\s*/i, '').replace(/customer\s+(?:says|only\s+says)\s*[\:\.\-–]?\s*/i, '').trim();
 
           // High bonus for exact phrase match or substring match
-          if (cleanQ.includes(lowerQuery) || lowerQuery.includes(cleanQ)) {
+          if (cleanQ === lowerQuery || cleanQ.includes(lowerQuery) || lowerQuery.includes(cleanQ)) {
             score += 10;
           }
 

@@ -114,10 +114,13 @@ class AiAgentService {
     if (!text) return '';
     let clean = text.trim();
 
-    // 1. Remove bracketed PDF tags if any
+    // 1. Remove markdown backslash escaping (e.g. \! -> !, \- -> -, \, -> ,, \. -> .)
+    clean = clean.replace(/\\([!.,\-?#_*()])/g, '$1');
+
+    // 2. Remove bracketed PDF tags if any
     clean = clean.replace(/\[\s*(PDF SHOULD BE DELIVERED|PDF NAME|SEND_PDF|ATTACH_PDF|SEND_PRESENTATION).*?\]/gi, '').trim();
 
-    // 2. If text contains Q: or Question: before A: or Answer:, extract ONLY what follows A: or Answer:
+    // 3. If text contains Q: or Question: before A: or Answer:, extract ONLY what follows A: or Answer:
     if (/(?:Q|Question)\s*[:\.]/i.test(clean) && /(?:A|Answer)\s*[:\.]/i.test(clean)) {
       const match = clean.match(/(?:A|Answer)\s*[:\.]\s*([\s\S]+)/i);
       if (match && match[1]) {
@@ -125,11 +128,11 @@ class AiAgentService {
       }
     }
 
-    // 3. Remove leading A:, A., Answer: if present
+    // 4. Remove leading A:, A., Answer: if present
     clean = clean.replace(/^(?:A|Answer)\s*[:\.]\s*/i, '').trim();
 
-    // 4. If text still has trailing Q: blocks, strip them
-    clean = clean.split(/(?:Q|Question)\s*[:\.]/i)[0].trim();
+    // 5. If text has trailing Q: blocks or Section headers (# 11. Lead Qualification Questions), cut off clean before them
+    clean = clean.split(/(?:Q|Question)\s*[:\.]|\n\s*#+\s*|\n\s*\d+\.\s+[A-Z]/i)[0].trim();
 
     return clean;
   }

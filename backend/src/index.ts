@@ -367,7 +367,17 @@ app.post('/api/ai/documents/upload', upload.single('file'), async (req: any, res
 
     if (req.file) {
       const ext = path.extname(req.file.originalname).toLowerCase();
-      if (ext === '.pdf' || req.file.mimetype === 'application/pdf') {
+      if (ext === '.docx' || req.file.mimetype === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
+        try {
+          const mammoth = require('mammoth');
+          const result = await mammoth.convertToMarkdown({ path: req.file.path });
+          content = result.value || '';
+          console.log(`[RAG Upload] Successfully extracted ${content.length} characters from DOCX Word document (with Markdown tables): ${originalName}`);
+        } catch (docxErr: any) {
+          console.warn(`[RAG Upload] DOCX mammoth parsing error for ${originalName}:`, docxErr.message);
+          content = fs.readFileSync(req.file.path, 'utf-8');
+        }
+      } else if (ext === '.pdf' || req.file.mimetype === 'application/pdf') {
         try {
           const pdfParseModule = require('pdf-parse');
           const parseFn = typeof pdfParseModule === 'function' ? pdfParseModule : (pdfParseModule.default || pdfParseModule);
@@ -379,7 +389,6 @@ app.post('/api/ai/documents/upload', upload.single('file'), async (req: any, res
           console.warn(`[RAG Upload] pdf-parse fallback error for ${originalName}:`, pdfErr.message);
           try {
             const rawBuf = fs.readFileSync(req.file.path);
-            // Fallback plain text string extraction from binary PDF buffer
             const rawStr = rawBuf.toString('binary');
             const matches = rawStr.match(/[\x20-\x7E\s]{4,}/g) || [];
             content = matches.filter((s: string) => !s.startsWith('%PDF') && !s.startsWith('/Font')).join('\n');

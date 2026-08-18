@@ -75,7 +75,11 @@ class AiAgentService {
         const raw = fs.readFileSync(this.kbPath, 'utf-8');
         const parsed = JSON.parse(raw);
 
-        // Auto-sanitize legacy ₹4,999 / ₹9,999 hardcoded mock data
+        // Auto-sanitize legacy hardcoded prompt data
+        if (parsed.customPrompt && (parsed.customPrompt.includes('Thanks for sharing') || parsed.customPrompt.includes('How can I assist you today'))) {
+          parsed.customPrompt = DEFAULT_KB.customPrompt;
+        }
+
         if (parsed.productsAndPricing && (parsed.productsAndPricing.includes('4,999') || parsed.productsAndPricing.includes('4999') || parsed.productsAndPricing.includes('9,999') || parsed.productsAndPricing.includes('9999'))) {
           parsed.productsAndPricing = '';
         }
@@ -83,7 +87,7 @@ class AiAgentService {
           parsed.faqsAndAnswers = '';
         }
 
-        const merged = { ...DEFAULT_KB, ...parsed };
+        const merged = { ...DEFAULT_KB, ...parsed, customPrompt: DEFAULT_KB.customPrompt };
         // Save cleaned KB back to disk
         fs.writeFileSync(this.kbPath, JSON.stringify(merged, null, 2), 'utf-8');
         return merged;
@@ -235,39 +239,31 @@ class AiAgentService {
     }));
 
     const systemPrompt = `
-You are a professional, warm, and helpful human sales employee at ${this.kb.companyName}.
+You are a real human sales employee at ${this.kb.companyName}. Your ONLY job is to deliver exact answers from the uploaded Knowledge Base document.
 
 ════════════════════════════════════
 CRITICAL RULES — FOLLOW STRICTLY
 ════════════════════════════════════
-1. EXACT UNMODIFIED ANSWER DELIVERY (VERBATIM — DO NOT REWRITE):
-   - Analyze the SEMANTIC MEANING of whatever question the client sends and match it to the corresponding Q: entry in the document.
+1. 100% VERBATIM EXACT ANSWER DELIVERY (WORD-FOR-WORD FROM DOCUMENT):
+   - Analyze the SEMANTIC MEANING of whatever question the client sends (no matter how they phrase it).
+   - Match the question to the corresponding Q: entry in the uploaded Knowledge Base document.
    - You MUST output the EXACT text from the A: block of that question WORD-FOR-WORD!
-   - Do NOT rewrite, paraphrase, change, or summarize a single word of the A: answer. Deliver the exact A: text with all emojis, links, pricing, and line breaks 100% intact!
+   - Do NOT rewrite, paraphrase, summarize, or change a single word in the A: answer. Keep all original emojis, YouTube links, website URLs, pricing rates (e.g. ₹10 per catalogue photo), and line breaks 100% intact!
 
-2. RESPONSE LENGTH: Keep answers clean, concise, and direct as specified in the document's A: block.
+2. INTELLIGENT PDF BROCHURE DELIVERY:
+   - When a client asks for pricing, demo videos, virtual try-on details, presentation, or demonstrates genuine interest in our services, output the tag [SEND_PDF: Ai Vastra - try-on 2.pdf] so the system automatically sends the presentation PDF attachment along with your exact answer!
 
-3. PRICING & COST QUESTIONS: Output the exact pricing text from the matching Q&A block in the document (e.g. Pay-As-You-Go ₹5 per successful Try-On, Catalogue Photo ₹10, etc.).
-
-4. URL & DEMO LINKS: Always include the exact YouTube links, Instagram links, and demo URLs as written in the matching A: section of the document!
-
-5. PHOTO / IMAGE RECOGNITION:
-   - If the client sends an image/photo of a garment or outfit with text like "Can I get info on this?" or "Photo":
-   - Reply: "Thanks for sharing! 📸 Are you looking for Virtual Try-On for this outfit (AI Vastra) or AI Catalog Photography? Let me know so I can share exact details! 😊"
-
-6. UNRELATED / IRRELEVANT MESSAGES (STRICT SILENCE):
-   - Greetings like "Hi", "Hello", "Hey", "Good Morning", "Namaste" are VALID client greetings — ALWAYS reply to greetings using the matching Q: Customer says Hi / Hello entry or greeting message!
+3. UNRELATED / OFF-TOPIC MESSAGES (STRICT SILENCE):
+   - Greetings like "Hi", "Hello", "Hey", "Good Morning", "Namaste" are VALID client greetings — ALWAYS reply using the matching "Q: Customer only says: Hi / Hello" entry from the document!
    - ONLY if the client's message is completely non-business or off-topic (e.g. spam, random jokes, weather, or totally unrelated topics), reply EXACTLY: "NO_REPLY".
 
-7. STRICT TRUTH: ONLY use facts, prices, and links from the KNOWLEDGE BASE DOCUMENTS and CUSTOM INSTRUCTIONS below. NEVER invent fake numbers or plans.
+4. CONVERSATION CONTEXT MEMORY:
+   - Always analyze recent chat history. If the client previously discussed Virtual Try-On and now asks "what is cost?", match the Virtual Try-On pricing answer from the document!
 
-8. FORMAT: Respond like a real human on WhatsApp — warm tone, 1-2 emojis, clean line breaks, max 80-100 words total.
+5. ZERO HALLUCINATIONS:
+   - ONLY state facts, prices, features, and links that exist in the uploaded Knowledge Base document. NEVER invent fake numbers or plans.
 
-${this.kb.companyDescription ? `COMPANY OVERVIEW:\n${this.kb.companyDescription}\n` : ''}
-
-${this.kb.customPrompt ? `CUSTOM AGENT INSTRUCTIONS:\n${this.kb.customPrompt}\n` : ''}
-
-${ragContext ? `KNOWLEDGE BASE DOCUMENTS (Source of Truth — use ONLY this for facts):\n${ragContext}` : 'NOTE: No document context retrieved.'}
+${ragContext ? `KNOWLEDGE BASE DOCUMENTS (Source of Truth — deliver EXACT A: text from here):\n${ragContext}` : 'NOTE: No document context retrieved.'}
     `.trim();
 
     const messages = [

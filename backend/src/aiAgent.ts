@@ -117,7 +117,10 @@ class AiAgentService {
     // 1. If OpenAI API Key is provided -> Call OpenAI GPT-4o / GPT-3.5
     if (apiKey) {
       try {
-        const responseText = await this.callOpenAiLlm(apiKey, incomingText, chatJid);
+        let responseText = await this.callOpenAiLlm(apiKey, incomingText, chatJid);
+        // Strip raw PDF delivery bracket tags from text output if present
+        responseText = responseText.replace(/\[\s*PDF SHOULD BE DELIVERED.*?\\]/gi, '').trim();
+
         const lowerRes = (incomingText + ' ' + responseText).toLowerCase();
         let autoTagStatus: 'INTERESTED' | 'WARM_INTERESTED' | undefined = undefined;
 

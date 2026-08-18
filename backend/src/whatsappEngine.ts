@@ -213,8 +213,9 @@ export class WhatsAppEngine {
             console.log(`[WhatsApp Engine] Real-time message (${parsed.fromMe ? 'Outbound' : 'Inbound'}):`, parsed.text);
             this.io.emit('new_message', parsed);
 
-            // AI Agent Auto-Responder for Inbound Messages
-            if (!parsed.fromMe && parsed.text && !parsed.chatJid.endsWith('@g.us')) {
+            // AI Agent Auto-Responder for Inbound Messages (PAUSED for offline testing)
+            const AUTO_REPLY_LIVE_WHATSAPP_ENABLED = false;
+            if (AUTO_REPLY_LIVE_WHATSAPP_ENABLED && !parsed.fromMe && parsed.text && !parsed.chatJid.endsWith('@g.us')) {
               setTimeout(async () => {
                 try {
                   const { aiAgent } = await import('./aiAgent');

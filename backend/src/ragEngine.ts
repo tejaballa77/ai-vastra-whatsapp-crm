@@ -86,10 +86,46 @@ class RagEngineService {
   // RAG Semantic Retrieval: Search all uploaded documents for relevant context
   public retrieveRelevantContext(query: string, maxChars: number = 25000): string {
     if (this.documents.length === 0) return '';
-
-    // Pass ENTIRE document text to GPT-4o (up to 100,000 characters / ~20,000 tokens)
-    // GPT-4o has a 128,000 token context window, so passing 100% of the document ensures 100% accuracy!
     return this.documents.map(d => `=== DOCUMENT: ${d.originalName} ===\n${d.content}`).join('\n\n').slice(0, maxChars);
+  }
+
+  // 100% Verbatim Exact Q&A Answer Extractor: Finds matching Q: block in uploaded docs and returns exact A: block
+  public findExactAnswerInDocs(query: string): string | null {
+    if (this.documents.length === 0) return null;
+
+    const lowerQuery = query.toLowerCase().replace(/[^\w\s]/g, '').trim();
+    const queryWords = lowerQuery.split(/\s+/).filter(w => w.length > 2);
+    if (queryWords.length === 0) return null;
+
+    let bestMatch: { answer: string; score: number } | null = null;
+
+    for (const doc of this.documents) {
+      if (!doc.content) continue;
+
+      // Split document into Q: and A: blocks
+      const qnaBlocks = doc.content.split(/(?=Q\s*[\:\.\-–])/i);
+      for (const block of qnaBlocks) {
+        const parts = block.split(/(?:A\s*[\:\.\-–])/i);
+        if (parts.length >= 2) {
+          const qText = parts[0].toLowerCase();
+          const aText = parts.slice(1).join('A:').split(/(?=Q\s*[\:\.\-–])/i)[0].trim();
+
+          let score = 0;
+          for (const word of queryWords) {
+            if (qText.includes(word)) {
+              score += 2;
+            }
+          }
+
+          if (score > (bestMatch ? bestMatch.score : 0) && aText.length > 5) {
+            bestMatch = { answer: aText, score };
+          }
+        }
+      }
+    }
+
+    // Only return if we have a solid match (at least 1 matching key concept)
+    return (bestMatch && bestMatch.score >= 2) ? bestMatch.answer : null;
   }
 }
 

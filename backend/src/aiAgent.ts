@@ -189,6 +189,14 @@ class AiAgentService {
       };
     }
 
+    // Direct Exact Answer Extractor from Uploaded Document Text
+    const docExactAnswer = ragEngine.findExactAnswerInDocs(incomingText);
+    if (docExactAnswer) {
+      console.log(`[AI Agent] Found exact verbatim document answer for "${incomingText}"`);
+      this.aiAutoReplyCount++;
+      return { text: this.cleanOutputAnswerText(docExactAnswer) };
+    }
+
     const docs = ragEngine.getDocuments() || [];
     const pdfDoc = docs.find((d: any) => d.originalName?.toLowerCase().endsWith('.pdf') || d.mimeType?.includes('pdf') || d.filename?.toLowerCase().endsWith('.pdf'));
 

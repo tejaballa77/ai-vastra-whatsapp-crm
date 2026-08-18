@@ -106,12 +106,25 @@ class AiAgentService {
       try {
         let responseText = await this.callOpenAiLlm(apiKey, incomingText, chatJid);
 
+        const lowerRes = (incomingText + ' ' + responseText).toLowerCase();
+        let autoTagStatus: 'INTERESTED' | 'WARM_INTERESTED' | undefined = undefined;
+
+        if (lowerRes.includes('price') || lowerRes.includes('cost') || lowerRes.includes('pack') || lowerRes.includes('pricing')) {
+          autoTagStatus = 'WARM_INTERESTED';
+        }
+        if (lowerRes.includes('demo') || lowerRes.includes('call') || lowerRes.includes('meeting') || lowerRes.includes('buy') || lowerRes.includes('catalogue') || lowerRes.includes('try-on')) {
+          autoTagStatus = 'INTERESTED';
+        }
+
         let attachedDocPath: string | undefined = undefined;
         let attachedDocName: string | undefined = undefined;
 
-        // ONLY attach PDF document if the matched answer explicitly contains the PDF delivery instruction tag!
-        const requiresPdfDelivery = /pdf\s+should\s+be\s+delivered/i.test(responseText) || /pdf\s+name/i.test(responseText);
-        if (requiresPdfDelivery && pdfDoc) {
+        // Intelligent Human Sales Behavior: Attach PDF whenever client asks for pricing/demo/features or explicitly triggers PDF tags
+        const lowerQuery = incomingText.toLowerCase();
+        const hasPdfTag = /pdf\s+should\s+be\s+delivered|pdf\s+name|send_pdf|attach_pdf|send_presentation/i.test(responseText);
+        const isInterestedLead = Boolean(autoTagStatus) && (lowerQuery.includes('demo') || lowerQuery.includes('price') || lowerQuery.includes('cost') || lowerQuery.includes('detail') || lowerQuery.includes('pdf') || lowerQuery.includes('brochure') || lowerQuery.includes('virtual try'));
+
+        if ((hasPdfTag || isInterestedLead) && pdfDoc) {
           const uploadDir = path.join(__dirname, '../uploads/documents');
           const fullPath = path.join(uploadDir, pdfDoc.filename);
           if (fs.existsSync(fullPath)) {
@@ -120,18 +133,8 @@ class AiAgentService {
           }
         }
 
-        // Clean out raw bracket tag from output text so customer gets a clean message
-        responseText = responseText.replace(/\[\s*PDF SHOULD BE DELIVERED.*?\\]/gi, '').trim();
-
-        const lowerRes = (incomingText + ' ' + responseText).toLowerCase();
-        let autoTagStatus: 'INTERESTED' | 'WARM_INTERESTED' | undefined = undefined;
-
-        if (lowerRes.includes('price') || lowerRes.includes('cost') || lowerRes.includes('pack') || lowerRes.includes('pricing')) {
-          autoTagStatus = 'WARM_INTERESTED';
-        }
-        if (lowerRes.includes('demo') || lowerRes.includes('call') || lowerRes.includes('meeting') || lowerRes.includes('buy')) {
-          autoTagStatus = 'INTERESTED';
-        }
+        // Clean out raw bracket tags from output text so customer gets a clean human message
+        responseText = responseText.replace(/\[\s*(PDF SHOULD BE DELIVERED|PDF NAME|SEND_PDF|ATTACH_PDF|SEND_PRESENTATION).*?\\]/gi, '').trim();
 
         return { text: responseText, autoTagStatus, documentPath: attachedDocPath, documentName: attachedDocName };
       } catch (err: any) {

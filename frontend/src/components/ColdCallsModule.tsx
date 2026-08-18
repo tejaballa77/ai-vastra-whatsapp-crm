@@ -3,7 +3,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   PhoneCall,
-  Upload,
   Search,
   X,
   Trash2,
@@ -128,6 +127,9 @@ export function ColdCallsModule() {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterTab, setFilterTab] = useState<'ALL' | 'INTERESTED' | 'WARM' | 'NOT_INTERESTED' | 'PENDING' | 'FOLLOWUPS'>('ALL');
 
+  // Global edit mode — like Excel: one toggle to enable / disable editing entire table
+  const [isEditMode, setIsEditMode] = useState(false);
+
   // Inline edit tracking: Map<leadId, partial changes>
   const [editedRows, setEditedRows] = useState<Map<string, Partial<ColdCallLead>>>(new Map());
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
@@ -213,19 +215,22 @@ export function ColdCallsModule() {
 
   // ── Save All Edits ────────────────────────────────────────────────────────────
   const handleSaveAll = async () => {
-    if (editedRows.size === 0) { triggerSaveToast('saved'); return; }
     setSaveStatus('saving');
     try {
-      await Promise.all(
-        Array.from(editedRows.entries()).map(([id, partial]) =>
-          fetch(`${getBackendUrl()}/api/cold-calls/${id}`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(partial),
-          })
-        )
-      );
-      setEditedRows(new Map());
+      if (editedRows.size > 0) {
+        await Promise.all(
+          Array.from(editedRows.entries()).map(([id, partial]) =>
+            fetch(`${getBackendUrl()}/api/cold-calls/${id}`, {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(partial),
+            })
+          )
+        );
+        setEditedRows(new Map());
+      }
+      // Exit edit mode on save
+      setIsEditMode(false);
       triggerSaveToast('saved');
     } catch (e) {
       console.error('Save error', e);
@@ -391,48 +396,40 @@ export function ColdCallsModule() {
   };
 
   // ── Editable Cell Component ───────────────────────────────────────────────────
+  // In VIEW mode: plain text display. In EDIT mode: live input (Excel-style).
   const EditableCell = ({
-    leadId, field, value, placeholder = '', className = ''
+    leadId, field, value, placeholder = '', className = '', editMode = false
   }: {
     leadId: string;
     field: keyof ColdCallLead;
     value: string;
     placeholder?: string;
     className?: string;
+    editMode?: boolean;
   }) => {
-    const [editing, setEditing] = useState(false);
     const [localVal, setLocalVal] = useState(value);
-    const inputRef = useRef<HTMLInputElement>(null);
 
-    useEffect(() => { if (editing) inputRef.current?.focus(); }, [editing]);
     useEffect(() => { setLocalVal(value); }, [value]);
 
-    const commit = () => {
-      setEditing(false);
-      if (localVal !== value) handleCellEdit(leadId, field, localVal);
+    const commit = (val: string) => {
+      if (val !== value) handleCellEdit(leadId, field, val);
     };
 
-    if (editing) {
+    if (editMode) {
       return (
         <input
-          ref={inputRef}
           value={localVal}
-          onChange={e => setLocalVal(e.target.value)}
-          onBlur={commit}
-          onKeyDown={e => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') { setLocalVal(value); setEditing(false); } }}
-          className={`w-full px-2 py-1 text-xs border border-[#00a884] rounded-lg outline-none bg-white shadow-sm ${className}`}
-          placeholder={placeholder}
+          onChange={e => { setLocalVal(e.target.value); commit(e.target.value); }}
+          onKeyDown={e => { if (e.key === 'Escape') setLocalVal(value); }}
+          className={`w-full px-2 py-1.5 text-xs border border-[#00a884]/60 rounded-lg outline-none bg-amber-50/40 focus:bg-white focus:border-[#00a884] focus:shadow-sm transition-all ${className}`}
+          placeholder={placeholder || '—'}
         />
       );
     }
+    // View mode — plain text, no icons
     return (
-      <span
-        onClick={() => setEditing(true)}
-        title="Click to edit"
-        className={`group inline-flex items-center gap-1 cursor-pointer hover:bg-gray-100 px-1.5 py-0.5 rounded-md transition-all min-w-[60px] ${className}`}
-      >
-        <span className={value ? 'text-[#111b21]' : 'text-gray-400 italic'}>{value || placeholder || '—'}</span>
-        <Pencil className="w-2.5 h-2.5 text-gray-300 group-hover:text-gray-500 flex-shrink-0 transition-all" />
+      <span className={`text-xs ${value ? 'text-[#111b21]' : 'text-gray-400'} ${className}`}>
+        {value || ''}
       </span>
     );
   };
@@ -549,7 +546,44 @@ export function ColdCallsModule() {
       </div>
 
       {/* ── TABLE ───────────────────────────────────────────────────────────── */}
-      <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+      <div className={`bg-white rounded-2xl border shadow-sm overflow-hidden transition-all ${
+        isEditMode ? 'border-amber-300 ring-2 ring-amber-200' : 'border-gray-200'
+      }`}>
+        {/* Table top-bar: Edit toggle on left */}
+        {filteredLeads.length > 0 && (
+          <div className={`flex items-center justify-between px-4 py-2.5 border-b transition-all ${
+            isEditMode ? 'bg-amber-50 border-amber-200' : 'bg-gray-50/60 border-gray-100'
+          }`}>
+            <button
+              onClick={() => {
+                if (isEditMode) {
+                  // Clicking pencil again while in edit mode = save & exit
+                  handleSaveAll();
+                } else {
+                  setIsEditMode(true);
+                }
+              }}
+              className={`inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl font-bold text-xs transition-all ${
+                isEditMode
+                  ? 'bg-amber-500 text-white hover:bg-amber-600 shadow-sm'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
+              title={isEditMode ? 'Exit edit mode (or click Save above)' : 'Enable edit mode to modify cells'}
+            >
+              {isEditMode ? (
+                <><X className="w-3.5 h-3.5" /><span>Done Editing</span></>
+              ) : (
+                <><Pencil className="w-3.5 h-3.5" /><span>Edit Table</span></>
+              )}
+            </button>
+            {isEditMode && (
+              <span className="text-[10px] text-amber-600 font-semibold">
+                ✏️ Edit mode active — cells are now editable
+              </span>
+            )}
+          </div>
+        )}
+
         {loading ? (
           <div className="p-16 text-center text-xs text-gray-400">Loading leads...</div>
         ) : filteredLeads.length === 0 ? (
@@ -566,7 +600,9 @@ export function ColdCallsModule() {
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
               <thead>
-                <tr className="bg-gray-50/80 border-b border-gray-200 text-[11px] font-bold text-gray-500 uppercase tracking-wider">
+                <tr className={`border-b text-[11px] font-bold text-gray-500 uppercase tracking-wider ${
+                  isEditMode ? 'bg-amber-50/80 border-amber-200' : 'bg-gray-50/80 border-gray-200'
+                }`}>
                   <th className="py-3.5 px-4 w-8 text-center">#</th>
                   <th className="py-3.5 px-4">Business Name</th>
                   <th className="py-3.5 px-4">Person Name</th>
@@ -590,6 +626,7 @@ export function ColdCallsModule() {
                           field="businessName"
                           value={lead.businessName || ''}
                           placeholder="Business name"
+                          editMode={isEditMode}
                         />
                       </td>
 
@@ -604,6 +641,7 @@ export function ColdCallsModule() {
                             field="personName"
                             value={lead.personName || lead.name || ''}
                             placeholder="Person name"
+                            editMode={isEditMode}
                           />
                         </div>
                       </td>
@@ -617,6 +655,7 @@ export function ColdCallsModule() {
                             field="phone"
                             value={lead.phone || ''}
                             placeholder="Phone number"
+                            editMode={isEditMode}
                           />
                         </div>
                       </td>

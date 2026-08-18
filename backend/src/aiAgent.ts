@@ -128,8 +128,8 @@ class AiAgentService {
     // 4. Remove leading A:, A., Answer: if present
     clean = clean.replace(/^(?:A|Answer)\s*[:\.]\s*/i, '').trim();
 
-    // 5. If text has trailing Q: blocks or Section headers (# 11. Lead Qualification Questions), cut off clean before them
-    clean = clean.split(/(?:Q|Question)\s*[:\.]|\n\s*#+\s*|\n\s*\d+\.\s+[A-Z]/i)[0].trim();
+    // 5. If text has trailing Q: blocks, Section headers (e.g. 14 . Demo..., # 11), or dividers (—), cut off clean before them
+    clean = clean.split(/(?:Q|Question)\s*[:\.]|\n\s*#+|\n\s*\d+\s*[\.\-–\:]|\n\s*[\-\—\_]{1,}/i)[0].trim();
 
     return clean;
   }

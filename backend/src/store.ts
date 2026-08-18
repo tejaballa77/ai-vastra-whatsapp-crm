@@ -201,6 +201,19 @@ class StorageEngine {
         }
 
         this.chats = cleanedChats;
+
+        // Reset legacy Chand Sir test lead fields so it does not appear in CRM Info
+        const chandJid = '919505595434@s.whatsapp.net';
+        const chand = this.chats.get(chandJid);
+        if (chand) {
+          chand.leadStatus = 'UNASSIGNED';
+          chand.callStatus = undefined;
+          chand.followUpDate = '';
+          chand.notes = '';
+          chand.notesList = [];
+          this.chats.set(chandJid, chand);
+        }
+
         this.saveData();
         console.log(`[Storage] Loaded & cleaned: ${this.chats.size} unique chats and ${this.contacts.size} contacts from storage.`);
       }

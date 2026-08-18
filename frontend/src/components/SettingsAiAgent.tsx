@@ -158,11 +158,13 @@ export function SettingsAiAgent() {
       if (data.success && data.response) {
         const aiMsg: TestChatMessage = {
           sender: 'ai',
-          text: data.response.text || 'No response generated.',
+          text: data.response.text ? data.response.text : '🤖 [No automatic message sent — message deemed off-topic / irrelevant]',
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
           autoTagStatus: data.response.autoTagStatus
         };
         setChatMessages((prev) => [...prev, aiMsg]);
+        // Refresh KB to update live counter
+        fetch(`${getBackendUrl()}/api/ai/knowledge-base`).then(r => r.json()).then(d => { if (d.success) setKb(d.kb); });
       }
     } catch (err) {
       console.error('Error testing AI:', err);
@@ -203,7 +205,13 @@ export function SettingsAiAgent() {
           </div>
         </div>
 
-        <div className="flex items-center gap-4">
+        <div className="flex flex-wrap items-center gap-3">
+          {/* Automatic Messages Counter Badge */}
+          <div className="flex items-center gap-2 bg-emerald-50 px-3.5 py-2 rounded-xl border border-emerald-200 text-xs font-bold text-emerald-800">
+            <Sparkles className="w-4 h-4 text-emerald-600" />
+            <span>AI Replies Sent: {kb.aiAutoReplyCount || 0}</span>
+          </div>
+
           {/* Master Switch */}
           <div className="flex items-center gap-3 bg-gray-100 px-4 py-2 rounded-xl border border-gray-200">
             <span className="text-xs font-bold text-gray-700">AI Auto-Replies</span>

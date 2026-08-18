@@ -75,6 +75,8 @@ class AiAgentService {
     }
   }
 
+  public aiAutoReplyCount: number = 0;
+
   public isHumanActive(chatJid: string): boolean {
     const msgs = db.messages.get(chatJid);
     if (!msgs || msgs.length === 0) return false;
@@ -95,7 +97,6 @@ class AiAgentService {
       return { text: '' };
     }
 
-
     const docs = ragEngine.getDocuments() || [];
     const pdfDoc = docs.find((d: any) => d.originalName?.toLowerCase().endsWith('.pdf') || d.mimeType?.includes('pdf') || d.filename?.toLowerCase().endsWith('.pdf'));
 
@@ -105,6 +106,12 @@ class AiAgentService {
     if (apiKey) {
       try {
         let responseText = await this.callOpenAiLlm(apiKey, incomingText, chatJid);
+
+        // Strict Silence Rule for Irrelevant / Off-Topic Messages: Do NOT send any automatic reply!
+        if (responseText.includes('NO_REPLY') || responseText.trim().length === 0) {
+          console.log(`[AI Agent] Message from ${chatJid} deemed irrelevant/off-topic. Staying silent (0 auto-replies sent).`);
+          return { text: '' };
+        }
 
         const lowerRes = (incomingText + ' ' + responseText).toLowerCase();
         let autoTagStatus: 'INTERESTED' | 'WARM_INTERESTED' | undefined = undefined;
@@ -135,6 +142,9 @@ class AiAgentService {
 
         // Clean out raw bracket tags from output text so customer gets a clean human message
         responseText = responseText.replace(/\[\s*(PDF SHOULD BE DELIVERED|PDF NAME|SEND_PDF|ATTACH_PDF|SEND_PRESENTATION).*?\\]/gi, '').trim();
+
+        // Increment automatic replies count
+        this.aiAutoReplyCount++;
 
         return { text: responseText, autoTagStatus, documentPath: attachedDocPath, documentName: attachedDocName };
       } catch (err: any) {
@@ -203,9 +213,9 @@ CRITICAL RULES — FOLLOW STRICTLY
    - If the client sends an image/photo of a garment or outfit with text like "Can I get info on this?" or "Photo":
    - Reply: "Thanks for sharing! 📸 Are you looking for Virtual Try-On for this outfit (AI Vastra) or AI Catalog Photography? Let me know so I can share exact details! 😊"
 
-6. UNRELATED / IRRELEVANT MESSAGES:
-   - ONLY if the client's message is completely non-business (e.g. random chit-chat, jokes, weather, or totally unrelated topics), reply EXACTLY:
-   "Our team is reviewing your message and we will get back to you in 5 minutes! 😊"
+6. UNRELATED / IRRELEVANT MESSAGES (STRICT SILENCE):
+   - If the client's message is completely unrelated to our business, fashion, AI Vastra, catalogue photo creation, virtual try-on, kiosks, pricing, or document content (e.g. spam, random jokes, weather, or totally unrelated topics):
+   - Reply EXACTLY: "NO_REPLY" (Do NOT send any automatic reply message!).
 
 7. STRICT TRUTH: ONLY use facts, prices, and links from the KNOWLEDGE BASE DOCUMENTS and CUSTOM INSTRUCTIONS below. NEVER invent fake numbers or plans.
 

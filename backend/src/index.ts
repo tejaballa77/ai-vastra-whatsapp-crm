@@ -302,7 +302,7 @@ app.delete('/api/cold-calls', (req, res) => {
 app.get('/api/ai/knowledge-base', (req, res) => {
   try {
     const { aiAgent } = require('./aiAgent');
-    res.json({ success: true, kb: aiAgent.kb });
+    res.json({ success: true, kb: { ...aiAgent.kb, aiAutoReplyCount: aiAgent.aiAutoReplyCount } });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });
   }
@@ -312,7 +312,7 @@ app.put('/api/ai/knowledge-base', (req, res) => {
   try {
     const { aiAgent } = require('./aiAgent');
     aiAgent.saveKb(req.body);
-    res.json({ success: true, kb: aiAgent.kb });
+    res.json({ success: true, kb: { ...aiAgent.kb, aiAutoReplyCount: aiAgent.aiAutoReplyCount } });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });
   }

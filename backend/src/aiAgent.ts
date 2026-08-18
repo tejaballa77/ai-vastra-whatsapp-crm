@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { db } from './store';
+import { ragEngine } from './ragEngine';
 
 export interface AiKnowledgeBase {
   enabled: boolean;
@@ -83,7 +84,7 @@ class AiAgentService {
     return Boolean(recentHumanMsg);
   }
 
-  public async generateResponse(chatJid: string, incomingText: string): Promise<{ text: string; autoTagStatus?: 'INTERESTED' | 'WARM_INTERESTED' }> {
+  public async generateResponse(chatJid: string, incomingText: string): Promise<{ text: string; autoTagStatus?: 'INTERESTED' | 'WARM_INTERESTED'; documentPath?: string; documentName?: string }> {
     if (!this.kb.enabled) {
       return { text: '' };
     }
@@ -92,6 +93,23 @@ class AiAgentService {
     if (this.isHumanActive(chatJid)) {
       console.log(`[AI Agent] Human agent is active in ${chatJid}. AI auto-reply paused.`);
       return { text: '' };
+    }
+
+
+    const docs = ragEngine.getDocuments() || [];
+    const pdfDoc = docs.find((d: any) => d.originalName?.toLowerCase().endsWith('.pdf') || d.mimeType?.includes('pdf') || d.filename?.toLowerCase().endsWith('.pdf'));
+
+    let attachedDocPath: string | undefined = undefined;
+    let attachedDocName: string | undefined = undefined;
+
+    const lowerQuery = incomingText.toLowerCase();
+    if (pdfDoc && (lowerQuery.includes('price') || lowerQuery.includes('cost') || lowerQuery.includes('demo') || lowerQuery.includes('detail') || lowerQuery.includes('pdf') || lowerQuery.includes('brochure') || lowerQuery.includes('virtual try'))) {
+      const uploadDir = path.join(__dirname, '../uploads/documents');
+      const fullPath = path.join(uploadDir, pdfDoc.filename);
+      if (fs.existsSync(fullPath)) {
+        attachedDocPath = fullPath;
+        attachedDocName = pdfDoc.originalName;
+      }
     }
 
     const apiKey = this.kb.openAiApiKey || process.env.OPENAI_API_KEY;
@@ -110,14 +128,14 @@ class AiAgentService {
           autoTagStatus = 'INTERESTED';
         }
 
-        return { text: responseText, autoTagStatus };
+        return { text: responseText, autoTagStatus, documentPath: attachedDocPath, documentName: attachedDocName };
       } catch (err: any) {
         console.error('[AI Agent] OpenAI API call error, falling back to rule engine:', err.message);
       }
     }
 
     // 2. Smart Rule Engine Fallback (Uses uploaded document context if available)
-    const { ragEngine } = require('./ragEngine');
+
     const docContext = ragEngine.retrieveRelevantContext(incomingText, 2000);
     const lower = incomingText.toLowerCase().trim();
 
@@ -144,7 +162,7 @@ class AiAgentService {
 
   private async callOpenAiLlm(apiKey: string, userQuery: string, chatJid: string): Promise<string> {
     const fetch = globalThis.fetch || require('node-fetch');
-    const { ragEngine } = require('./ragEngine');
+
 
     // Retrieve semantic RAG document context from uploaded files (up to 8000 chars)
     const ragContext = ragEngine.retrieveRelevantContext(userQuery, 8000);

@@ -147,38 +147,7 @@ function syncAllCrmChats(callback) {
     injectChatListBadges();
   });
 }
-                          item.closest('[role="listitem"]') ||
-                          item;
 
-        if (isCrmFilterActive) {
-          if (hasSavedInfo) {
-            targetRow.style.removeProperty('display');
-          } else {
-            targetRow.style.setProperty('display', 'none', 'important');
-          }
-        } else {
-          targetRow.style.removeProperty('display');
-        }
-      } catch (e) {}
-    });
-  });
-}
-
-function resetChatListVisibility() {
-  const paneSide = document.getElementById('pane-side');
-  if (!paneSide) return;
-  const chatItems = paneSide.querySelectorAll('[role="listitem"], [data-testid="cell-frame-container"]');
-  chatItems.forEach((item) => {
-    try {
-      const targetRow = item.closest('div[style*="translateY"]') ||
-                        item.closest('div[style*="height: 72px"]') ||
-                        item.closest('div[style*="height:72px"]') ||
-                        item.closest('[role="listitem"]') ||
-                        item;
-      targetRow.style.removeProperty('display');
-    } catch (e) {}
-  });
-}
 
 // Inject Lead Status Emoji Badges into left chat list
 function injectChatListBadges() {

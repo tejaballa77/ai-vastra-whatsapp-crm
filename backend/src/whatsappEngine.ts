@@ -223,6 +223,20 @@ export class WhatsAppEngine {
                     console.log(`[AI Agent] Auto-replying to ${parsed.chatJid}: "${aiResult.text.slice(0, 50)}..."`);
                     await this.sendMessage(parsed.chatJid, aiResult.text);
 
+                    // If a PDF document attachment is attached by RAG engine, send the document natively on WhatsApp!
+                    if (aiResult.documentPath && fs.existsSync(aiResult.documentPath) && this.sock) {
+                      try {
+                        console.log(`[AI Agent] Auto-attaching PDF document: ${aiResult.documentName} for ${parsed.chatJid}`);
+                        await this.sock.sendMessage(parsed.chatJid, {
+                          document: { url: aiResult.documentPath },
+                          fileName: aiResult.documentName || 'Ai Vastra Document.pdf',
+                          mimetype: 'application/pdf'
+                        });
+                      } catch (docErr: any) {
+                        console.error('[AI Agent] Error sending PDF document attachment:', docErr.message);
+                      }
+                    }
+
                     if (aiResult.autoTagStatus) {
                       db.upsertChat(parsed.chatJid, { leadStatus: aiResult.autoTagStatus });
                     }

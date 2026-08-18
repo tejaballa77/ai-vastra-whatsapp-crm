@@ -156,45 +156,20 @@ class AiAgentService {
 
     const lowerQuery = incomingText.toLowerCase().trim();
 
-    // 0. EXACT VERBATIM FAQ DOCUMENT MATCHING (Zero Delay / 100% Word-for-Word Accuracy)
-    // Greetings: Hi / Hello / Hii / Hey
-    if (/^(hi|hii|hiii|hello|helloo|hey|namaste|good\s+morning|good\s+afternoon|good\s+evening)[\!\s\.]*$/i.test(lowerQuery)) {
-      this.aiAutoReplyCount++;
-      return {
-        text: `Hello! 👋 Welcome to AI Vastra. We provide AI Catalogue Photo Creation and AI Virtual Try-On for fashion businesses. What are you interested in — Catalogue Creation, Virtual Try-On, or Both?`
-      };
-    }
-
-    // What is AI Vastra?
-    if (lowerQuery.includes('what is ai vastra') || lowerQuery.includes('what is vastra') || lowerQuery === 'ai vastra' || lowerQuery === 'vastra') {
-      this.aiAutoReplyCount++;
-      return {
-        text: `AI Vastra is a SaaS platform that generates high-converting AI catalogue photos and realistic Virtual Try-On models for fashion brands, retailers, and e-commerce sellers — in seconds, without expensive photoshoots.`
-      };
-    }
-
-    // I want catalogue / Catalogue Creation
-    if (lowerQuery.includes('i want catalogue') || lowerQuery.includes('catalogue creation') || lowerQuery.includes('catalog creation') || lowerQuery === 'catalogue' || lowerQuery === 'catalog') {
-      this.aiAutoReplyCount++;
-      return {
-        text: `Great! 📸 For AI Catalogue Creation, we convert your plain flat-lay or mannequin garment photos into high-fashion model shots. What type of garments do you sell (Sarees, Kurtis, Westernwear, Men's wear)?`
-      };
-    }
-
-    // Virtual Try-On
-    if (lowerQuery.includes('virtual try') || lowerQuery.includes('try on') || lowerQuery.includes('virtual tryon') || lowerQuery === 'tryon') {
-      this.aiAutoReplyCount++;
-      return {
-        text: `Awesome! 👗 Virtual Try-On lets your customers try on outfits digitally on realistic AI models. Would you like to see a demo video or try a live demo?`
-      };
-    }
-
-    // Direct Exact Answer Extractor from Uploaded Document Text
+    // Direct Exact Answer Extractor from Uploaded Document Text (100% Verbatim from Doc)
     const docExactAnswer = ragEngine.findExactAnswerInDocs(incomingText);
     if (docExactAnswer) {
       console.log(`[AI Agent] Found exact verbatim document answer for "${incomingText}"`);
       this.aiAutoReplyCount++;
       return { text: this.cleanOutputAnswerText(docExactAnswer) };
+    }
+
+    // Default Greeting Handler if no doc match
+    if (/^(hi|hii|hiii|hello|helloo|hey|namaste|good\s+morning|good\s+afternoon|good\s+evening)[\!\s\.]*$/i.test(lowerQuery)) {
+      this.aiAutoReplyCount++;
+      return {
+        text: `Hello! 👋 Welcome to AI Vastra. We provide AI Catalogue Photo Creation and AI Virtual Try-On for fashion businesses. What are you interested in — Catalogue Creation, Virtual Try-On, or Both?`
+      };
     }
 
     const docs = ragEngine.getDocuments() || [];

@@ -111,6 +111,13 @@ class RagEngineService {
           const aText = parts.slice(1).join('A:').split(/(?=Q\s*[\:\.\-–])/i)[0].trim();
 
           let score = 0;
+          const cleanQ = qText.replace(/q\s*[\:\.\-–]\s*/i, '').replace(/customer\s+(?:says|only\s+says)\s*[\:\.\-–]?\s*/i, '').trim();
+
+          // High bonus for exact phrase match or substring match
+          if (cleanQ.includes(lowerQuery) || lowerQuery.includes(cleanQ)) {
+            score += 10;
+          }
+
           for (const word of queryWords) {
             if (qText.includes(word)) {
               score += 2;
@@ -124,7 +131,7 @@ class RagEngineService {
       }
     }
 
-    // Only return if we have a solid match (at least 1 matching key concept)
+    // Return exact A: answer if match score threshold met
     return (bestMatch && bestMatch.score >= 2) ? bestMatch.answer : null;
   }
 }

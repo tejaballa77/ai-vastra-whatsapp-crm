@@ -352,7 +352,7 @@ app.get('/api/ai/documents', (req, res) => {
   }
 });
 
-app.post('/api/ai/documents/upload', upload.single('file'), (req: any, res: any) => {
+app.post('/api/ai/documents/upload', upload.single('file'), async (req: any, res: any) => {
   try {
     const { ragEngine } = require('./ragEngine');
     if (!req.file && !req.body.text) {
@@ -366,7 +366,21 @@ app.post('/api/ai/documents/upload', upload.single('file'), (req: any, res: any)
     let content = '';
 
     if (req.file) {
-      content = fs.readFileSync(req.file.path, 'utf-8');
+      const ext = path.extname(req.file.originalname).toLowerCase();
+      if (ext === '.pdf' || req.file.mimetype === 'application/pdf') {
+        try {
+          const pdfParse = require('pdf-parse');
+          const dataBuffer = fs.readFileSync(req.file.path);
+          const pdfData = await pdfParse(dataBuffer);
+          content = pdfData.text || '';
+          console.log(`[RAG Upload] Successfully extracted ${content.length} characters from PDF: ${originalName}`);
+        } catch (pdfErr: any) {
+          console.warn(`[RAG Upload] pdf-parse fallback error for ${originalName}:`, pdfErr.message);
+          content = fs.readFileSync(req.file.path, 'utf-8');
+        }
+      } else {
+        content = fs.readFileSync(req.file.path, 'utf-8');
+      }
     } else {
       content = req.body.text || '';
     }

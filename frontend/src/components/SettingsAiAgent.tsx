@@ -16,13 +16,14 @@ export function SettingsAiAgent() {
     enabled: true,
     openAiApiKey: '',
     openAiModel: 'gpt-4o-mini',
-    companyName: 'AI Vastra',
+    companyName: 'Nice Digitals',
     companyDescription: '',
     productsAndPricing: '',
     faqsAndAnswers: '',
     greetingMessage: '',
-    aiTone: 'Professional, polite, enthusiastic, and helpful sales specialist',
+    aiTone: 'Professional, warm, helpful, and human-like',
     humanOverrideMinutes: 10,
+    customPrompt: '',
   });
 
   const [documents, setDocuments] = useState<any[]>([]);
@@ -340,6 +341,48 @@ export function SettingsAiAgent() {
               </div>
             ))
           )}
+        </div>
+      </div>
+
+      {/* ── AI PROMPT / AGENT INSTRUCTIONS BLOCK ─────────────────────────────── */}
+      <div className="bg-white p-6 rounded-2xl border-2 border-[#00a884]/30 shadow-sm space-y-4">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h3 className="text-sm font-bold text-[#111b21] flex items-center gap-2">
+              <Bot className="w-4 h-4 text-[#00a884]" />
+              <span>AI Prompt — Agent Behaviour Instructions</span>
+            </h3>
+            <p className="text-xs text-gray-500 mt-1">
+              Write the rules and guidelines here that control how your AI agent talks to clients.
+              These instructions are sent to the AI with every message — this is your agent's "brain".
+            </p>
+          </div>
+          <span className="text-[10px] font-bold bg-[#00a884]/10 text-[#00a884] px-2 py-1 rounded-full whitespace-nowrap">Primary Control</span>
+        </div>
+
+        <textarea
+          value={kb.customPrompt || ''}
+          onChange={(e) => setKb({ ...kb, customPrompt: e.target.value })}
+          rows={14}
+          placeholder={`Example:\n\nYou are a sales agent for Nice Digitals.\n\nRules:\n1. Only answer from the uploaded document. Never invent prices or features.\n2. If you don't know the answer, say: "Let me confirm this for you! 😊"\n3. Detect the project: if client mentions "try on" → AI Vastra, "catalog" → Catalog Generation, "kiosk" → AI Kiosk\n4. Always share the project website URL when relevant.\n5. Reply like a human — warm, concise, use emojis naturally.`}
+          className="w-full p-4 text-xs bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:border-[#00a884] focus:ring-2 focus:ring-[#00a884]/20 font-mono leading-relaxed resize-y transition-all"
+        />
+
+        <div className="flex items-center justify-between pt-1">
+          <p className="text-[11px] text-gray-400">
+            💡 Tip: Include project URLs here so the AI always shares them when clients ask.
+          </p>
+          <button
+            onClick={handleSaveKb}
+            disabled={isSaving}
+            className="inline-flex items-center gap-2 px-4 py-2 bg-[#00a884] text-white font-bold text-xs rounded-xl hover:bg-[#008f70] transition-all shadow-sm active:scale-95 disabled:opacity-50"
+          >
+            {saveSuccess ? (
+              <><Check className="w-3.5 h-3.5" /><span>Saved!</span></>
+            ) : (
+              <><Save className="w-3.5 h-3.5" /><span>{isSaving ? 'Saving...' : 'Save Prompt'}</span></>
+            )}
+          </button>
         </div>
       </div>
 

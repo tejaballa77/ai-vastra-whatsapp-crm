@@ -13,33 +13,21 @@ export interface AiKnowledgeBase {
   greetingMessage: string;
   aiTone: string;
   humanOverrideMinutes: number;
+  customPrompt: string; // User-defined AI behaviour rules & guidelines
 }
 
 const DEFAULT_KB: AiKnowledgeBase = {
   enabled: true,
   openAiApiKey: process.env.OPENAI_API_KEY || '',
   openAiModel: 'gpt-4o-mini',
-  companyName: 'AI Vastra',
-  companyDescription: 'AI Vastra helps fashion brands, retailers, and D2C clothing companies create instant AI-powered virtual model photoshoots, product catalogs, and catalog videos without expensive physical photoshoots.',
-  productsAndPricing: `
-1. Growth Pack: ₹4,999/month - Includes 50 Virtual Model Shoots, High-Resolution Output, Catalog Exports.
-2. Pro Pack: ₹9,999/month - Includes 150 Virtual Model Shoots, Custom Models, Priority Rendering, Dedicated Support.
-3. Enterprise Plan: Custom Pricing - Unlimited Virtual Shoots, Custom AI Model Training, API Access.
-Live Demo Video Link: https://youtube.com/@ai.vastra_tryon
-  `.trim(),
-  faqsAndAnswers: `
-Q: How does AI Vastra work?
-A: You simply upload flat photos of your garments (shirts, sarees, dresses), and our AI places them onto realistic virtual models in 30 seconds.
-
-Q: Is there a free trial or live demo?
-A: Yes, we arrange 10-minute live interactive demos for brands.
-
-Q: Can I see sample videos or catalog photos?
-A: Yes, check our official video demos here: https://youtube.com/@ai.vastra_tryon
-  `.trim(),
-  greetingMessage: 'Hello! Welcome to AI Vastra. We help fashion brands create instant AI virtual model shoots. How can I help you today?',
-  aiTone: 'Professional, polite, enthusiastic, and helpful sales specialist',
+  companyName: 'Nice Digitals',
+  companyDescription: 'Nice Digitals offers AI-powered solutions for fashion and retail businesses including AI Vastra (Virtual Try-On), AI Catalog Generation, and AI Kiosk.',
+  productsAndPricing: '',
+  faqsAndAnswers: '',
+  greetingMessage: 'Hello! 👋 Welcome to Nice Digitals! We offer AI-powered solutions for fashion and retail. How can I help you today?',
+  aiTone: 'Professional, warm, helpful, and human-like',
   humanOverrideMinutes: 10,
+  customPrompt: '',
 };
 
 class AiAgentService {
@@ -126,7 +114,7 @@ class AiAgentService {
 
     if (lower.includes('price') || lower.includes('cost') || lower.includes('pricing') || lower.includes('pack') || lower.includes('plan')) {
       return {
-        text: `Here are our AI Vastra software plans:\n\n${this.kb.productsAndPricing}\n\nWould you like to schedule a 10-minute live demo for your brand today?`,
+        text: `For pricing details, our team will share the exact information with you shortly. You can also check our website for more details. Would you like to schedule a quick demo first? 😊`,
         autoTagStatus: 'WARM_INTERESTED',
       };
     }
@@ -158,26 +146,27 @@ class AiAgentService {
     }));
 
     const systemPrompt = `
-You are a human employee and official Sales Specialist at ${this.kb.companyName}.
-Your tone must be: ${this.kb.aiTone}. Chat naturally, politely, and professionally as a real employee.
+You are a professional sales representative and human employee at ${this.kb.companyName}.
+Your communication tone: ${this.kb.aiTone}.
 
-COMPANY OVERVIEW:
-${this.kb.companyDescription}
+════════════════════════════════════
+CRITICAL RULES — FOLLOW STRICTLY
+════════════════════════════════════
+1. NEVER invent, assume, or guess any information — especially prices, plans, timelines, or features.
+2. ONLY answer using information from the KNOWLEDGE BASE DOCUMENTS and CUSTOM INSTRUCTIONS below.
+3. If the answer to a question is NOT in the documents, say:
+   "Let me get the exact details for you. Our team will confirm this shortly! 😊"
+4. NEVER create pricing plans or packages that are not explicitly mentioned in the documents.
+5. Respond like a real human — warm, concise (under 120 words), use emojis naturally.
+6. Format for WhatsApp: clean line breaks, no markdown headers.
 
-PRODUCTS, PACKAGES & PRICING:
-${this.kb.productsAndPricing}
+${this.kb.companyDescription ? `COMPANY OVERVIEW:\n${this.kb.companyDescription}\n` : ''}
 
-TEXT FAQS & POLICIES:
-${this.kb.faqsAndAnswers}
+${this.kb.customPrompt ? `CUSTOM AGENT INSTRUCTIONS & BEHAVIOUR RULES:\n${this.kb.customPrompt}\n` : ''}
 
-${ragContext ? `RETRIEVED DOCUMENT KNOWLEDGE (RAG PIPELINE):
-${ragContext}` : ''}
+${ragContext ? `KNOWLEDGE BASE DOCUMENTS (Source of Truth — use ONLY this for facts):\n${ragContext}` : 'NOTE: No documents uploaded yet. Only answer from custom instructions above.'}
 
-CRITICAL INSTRUCTIONS:
-1. Analyze the customer's question carefully. Understand the underlying meaning/intent, even if the wording differs from the FAQs or documents.
-2. Frame a 100% RELEVANT, professional, natural, and helpful response strictly based on the company overview, pricing, FAQs, and uploaded RAG document knowledge above.
-3. Chat like a real human employee working at this company (friendly, helpful, concise).
-4. Format for WhatsApp with clean line breaks and appropriate emojis. Keep response under 150 words.
+${this.kb.productsAndPricing ? `ADDITIONAL PRICING INFO:\n${this.kb.productsAndPricing}` : ''}
     `.trim();
 
     const messages = [

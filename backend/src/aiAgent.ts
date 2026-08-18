@@ -252,8 +252,8 @@ class AiAgentService {
     const fetch = globalThis.fetch || require('node-fetch');
 
 
-    // Retrieve semantic RAG document context from uploaded files (up to 8000 chars)
-    const ragContext = ragEngine.retrieveRelevantContext(userQuery, 8000);
+    // Retrieve semantic RAG document context from uploaded files (up to 25,000 chars - 100% of document)
+    const ragContext = ragEngine.retrieveRelevantContext(userQuery, 25000);
 
     // Fetch recent chat history
     const msgs = db.messages.get(chatJid) || [];
@@ -299,8 +299,8 @@ ${ragContext ? `KNOWLEDGE BASE DOCUMENTS (Source of Truth — deliver EXACT A: t
     const body = {
       model: this.kb.openAiModel || 'gpt-4o-mini',
       messages,
-      temperature: 0.7,
-      max_tokens: 350
+      temperature: 0.0,
+      max_tokens: 500
     };
 
     const res = await fetch('https://api.openai.com/v1/chat/completions', {

@@ -110,6 +110,30 @@ class AiAgentService {
 
   public aiAutoReplyCount: number = 0;
 
+  private cleanOutputAnswerText(text: string): string {
+    if (!text) return '';
+    let clean = text.trim();
+
+    // 1. Remove bracketed PDF tags if any
+    clean = clean.replace(/\[\s*(PDF SHOULD BE DELIVERED|PDF NAME|SEND_PDF|ATTACH_PDF|SEND_PRESENTATION).*?\]/gi, '').trim();
+
+    // 2. If text contains Q: or Question: before A: or Answer:, extract ONLY what follows A: or Answer:
+    if (/(?:Q|Question)\s*[:\.]/i.test(clean) && /(?:A|Answer)\s*[:\.]/i.test(clean)) {
+      const match = clean.match(/(?:A|Answer)\s*[:\.]\s*([\s\S]+)/i);
+      if (match && match[1]) {
+        clean = match[1].trim();
+      }
+    }
+
+    // 3. Remove leading A:, A., Answer: if present
+    clean = clean.replace(/^(?:A|Answer)\s*[:\.]\s*/i, '').trim();
+
+    // 4. If text still has trailing Q: blocks, strip them
+    clean = clean.split(/(?:Q|Question)\s*[:\.]/i)[0].trim();
+
+    return clean;
+  }
+
   public isHumanActive(chatJid: string): boolean {
     const msgs = db.messages.get(chatJid);
     if (!msgs || msgs.length === 0) return false;
@@ -146,15 +170,6 @@ class AiAgentService {
           return { text: '' };
         }
 
-        // Automatically extract clean A: answer text if model includes Q: question prefix
-        if (/Q:/i.test(responseText) && /A:/i.test(responseText)) {
-          const parts = responseText.split(/A:/i);
-          if (parts.length >= 2) {
-            responseText = parts.slice(1).join('A:').split(/(?=Q:)/i)[0].trim();
-          }
-        }
-        responseText = responseText.replace(/^A:\s*/i, '').trim();
-
         const lowerRes = (incomingText + ' ' + responseText).toLowerCase();
         let autoTagStatus: 'INTERESTED' | 'WARM_INTERESTED' | undefined = undefined;
 
@@ -182,8 +197,8 @@ class AiAgentService {
           }
         }
 
-        // Clean out raw bracket tags from output text so customer gets a clean human message
-        responseText = responseText.replace(/\[\s*(PDF SHOULD BE DELIVERED|PDF NAME|SEND_PDF|ATTACH_PDF|SEND_PRESENTATION).*?\\]/gi, '').trim();
+        // Clean out raw bracket tags, Q: headers, and A: prefixes so customer gets a clean human message
+        responseText = this.cleanOutputAnswerText(responseText);
 
         // Increment automatic replies count
         this.aiAutoReplyCount++;
@@ -210,7 +225,7 @@ class AiAgentService {
           // Check if user query matches the Q: part or key intent
           if (qPart.includes(lower) || (lower.includes('hello') && qPart.includes('hello')) || (lower.includes('hi') && qPart.includes('hi'))) {
             this.aiAutoReplyCount++;
-            return { text: aPart };
+            return { text: this.cleanOutputAnswerText(aPart) };
           }
         }
       }

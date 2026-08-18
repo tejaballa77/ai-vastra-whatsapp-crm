@@ -5,7 +5,7 @@ import { WhatsAppCrmModule } from '../components/WhatsAppCrmModule';
 
 export default function Home() {
   return (
-    <main className="w-screen h-screen flex overflow-hidden bg-[#f0f2f5] relative select-none">
+    <main className="w-screen h-screen flex overflow-hidden bg-[#f0f2f5] relative">
       <WhatsAppCrmModule />
     </main>
   );

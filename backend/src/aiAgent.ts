@@ -103,31 +103,29 @@ class AiAgentService {
       }
     }
 
-    // 2. Rule Engine Fallback (Zero-Cost)
+    // 2. Smart Rule Engine Fallback (Uses uploaded document context if available)
+    const { ragEngine } = require('./ragEngine');
+    const docContext = ragEngine.retrieveRelevantContext(incomingText, 2000);
     const lower = incomingText.toLowerCase().trim();
 
     if (/^(hi|hello|hey|good morning|good afternoon|hlo|hii|namaste)$/i.test(lower)) {
       return {
-        text: `${this.kb.greetingMessage}\n\nFeel free to ask about our software plans, pricing, or virtual model shoot demos!`,
+        text: `${this.kb.greetingMessage}\n\nWe offer Virtual Try-On, AI Catalog Photography, and Smart AI Kiosks. What would you like to know? 😊`,
       };
     }
 
-    if (lower.includes('price') || lower.includes('cost') || lower.includes('pricing') || lower.includes('pack') || lower.includes('plan')) {
+    if (docContext && docContext.trim().length > 20) {
+      // Extract top clean lines from document context
+      const lines = docContext.split('\n').map(l => l.trim()).filter(l => l.length > 5 && !l.startsWith('==='));
+      const textSnippet = lines.slice(0, 3).join(' ');
       return {
-        text: `For pricing details, our team will share the exact information with you shortly. You can also check our website for more details. Would you like to schedule a quick demo first? 😊`,
-        autoTagStatus: 'WARM_INTERESTED',
-      };
-    }
-
-    if (lower.includes('demo') || lower.includes('sample') || lower.includes('video') || lower.includes('catalog')) {
-      return {
-        text: `You can watch our live catalog video demos here:\n👉 https://youtube.com/@ai.vastra_tryon\n\nWe can also arrange a 1-on-1 live demo on your own garments. Let us know what time works best for you!`,
-        autoTagStatus: 'INTERESTED',
+        text: `${textSnippet}\n\nFor more details or a live demo, let us know! 😊`,
+        autoTagStatus: lower.includes('price') || lower.includes('cost') ? 'WARM_INTERESTED' : 'INTERESTED'
       };
     }
 
     return {
-      text: `Thank you for reaching out to ${this.kb.companyName}!\n\n${this.kb.companyDescription}\n\nYou can check demo videos here: https://youtube.com/@ai.vastra_tryon or reply with your preferred demo time!`,
+      text: `Thank you for reaching out! 😊\nWe offer AI Virtual Try-On, AI Catalog Photography, and Smart AI Kiosks.\n\nCheck out demo videos here: https://youtube.com/@ai.vastra_tryon or let us know how we can assist you!`,
     };
   }
 
@@ -135,8 +133,8 @@ class AiAgentService {
     const fetch = globalThis.fetch || require('node-fetch');
     const { ragEngine } = require('./ragEngine');
 
-    // Retrieve semantic RAG document context from uploaded files
-    const ragContext = ragEngine.retrieveRelevantContext(userQuery, 3000);
+    // Retrieve semantic RAG document context from uploaded files (up to 8000 chars)
+    const ragContext = ragEngine.retrieveRelevantContext(userQuery, 8000);
 
     // Fetch recent chat history
     const msgs = db.messages.get(chatJid) || [];
@@ -146,25 +144,24 @@ class AiAgentService {
     }));
 
     const systemPrompt = `
-You are a professional sales representative and human employee at ${this.kb.companyName}.
-Your communication tone: ${this.kb.aiTone}.
+You are a professional, warm, and helpful human employee at ${this.kb.companyName}.
 
 ════════════════════════════════════
 CRITICAL RULES — FOLLOW STRICTLY
 ════════════════════════════════════
-1. NEVER invent, assume, or guess any information — especially prices, plans, timelines, or features.
-2. ONLY answer using information from the KNOWLEDGE BASE DOCUMENTS and CUSTOM INSTRUCTIONS below.
-3. If the answer to a question is NOT in the documents, say:
+1. RESPONSE LENGTH: Keep answers VERY SHORT (1 to 2 lines max per point). Never send long paragraphs.
+2. PROJECT INFO & DEMOS: When a client asks about any project/service, explain it briefly in 1-2 lines, and immediately provide the YouTube demo link or website link from the document context.
+3. PRICING QUESTIONS: If the user asks about price, cost, or plans, state the EXACT price/rate from the document clearly in 1-2 lines. Do NOT hide prices if they are in the document.
+4. STRICT TRUTH: ONLY use facts, prices, and links from the KNOWLEDGE BASE DOCUMENTS and CUSTOM INSTRUCTIONS below. NEVER invent fake numbers or plans.
+5. If the requested information is NOT in the document, say:
    "Let me get the exact details for you. Our team will confirm this shortly! 😊"
-4. NEVER create pricing plans or packages that are not explicitly mentioned in the documents.
-5. Respond like a real human — warm, concise (under 120 words), use emojis naturally.
-6. Format for WhatsApp: clean line breaks, no markdown headers.
+6. FORMAT: Respond like a real human on WhatsApp — warm tone, 1-2 emojis, clean line breaks, max 80-100 words total.
 
 ${this.kb.companyDescription ? `COMPANY OVERVIEW:\n${this.kb.companyDescription}\n` : ''}
 
-${this.kb.customPrompt ? `CUSTOM AGENT INSTRUCTIONS & BEHAVIOUR RULES:\n${this.kb.customPrompt}\n` : ''}
+${this.kb.customPrompt ? `CUSTOM AGENT INSTRUCTIONS:\n${this.kb.customPrompt}\n` : ''}
 
-${ragContext ? `KNOWLEDGE BASE DOCUMENTS (Source of Truth — use ONLY this for facts):\n${ragContext}` : 'NOTE: No documents uploaded yet. Only answer from custom instructions above.'}
+${ragContext ? `KNOWLEDGE BASE DOCUMENTS (Source of Truth — use ONLY this for facts):\n${ragContext}` : 'NOTE: No document context retrieved.'}
 
 ${this.kb.productsAndPricing ? `ADDITIONAL PRICING INFO:\n${this.kb.productsAndPricing}` : ''}
     `.trim();

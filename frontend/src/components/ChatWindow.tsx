@@ -79,7 +79,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ isCrmOpen, toggleCrm }) 
 
     if (isMissed) {
       return (
-        <div className="my-1.5 p-3 rounded-xl bg-white border border-wa-border flex items-center space-x-3 min-w-[210px] shadow-sm select-none">
+        <div className="my-1.5 p-3 rounded-xl bg-white border border-wa-border flex items-center space-x-3 min-w-[210px] shadow-sm">
           <div className="w-10 h-10 rounded-full bg-red-100/80 flex items-center justify-center text-rose-600 shadow-inner flex-shrink-0">
             <Phone className="w-5 h-5 transform -rotate-45" />
           </div>
@@ -94,7 +94,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ isCrmOpen, toggleCrm }) 
     const duration = text.replace(/Voice call|Video call|Missed voice call/gi, '').trim() || '1 minute';
 
     return (
-      <div className="my-1.5 p-3 rounded-xl bg-white/90 border border-wa-border flex items-center space-x-3 min-w-[210px] shadow-sm select-none">
+      <div className="my-1.5 p-3 rounded-xl bg-white/90 border border-wa-border flex items-center space-x-3 min-w-[210px] shadow-sm">
         <div className="w-10 h-10 rounded-full bg-white flex items-center justify-center text-slate-800 shadow-sm border border-wa-border flex-shrink-0">
           <Phone className="w-5 h-5" />
         </div>
@@ -212,7 +212,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ isCrmOpen, toggleCrm }) 
     if (isDoc) {
       const docName = fileName || (text.endsWith('.pdf') ? text : 'Document.pdf');
       return (
-        <div className="my-1.5 p-2.5 rounded-lg bg-wa-header/90 border border-wa-border flex items-center justify-between min-w-[220px] max-w-[300px] shadow-sm select-none">
+        <div className="my-1.5 p-2.5 rounded-lg bg-wa-header/90 border border-wa-border flex items-center justify-between min-w-[220px] max-w-[300px] shadow-sm">
           <div className="flex items-center space-x-3 min-w-0 mr-2">
             <div className="w-9 h-9 rounded bg-rose-500/20 text-rose-400 flex items-center justify-center flex-shrink-0 font-bold text-[11px]">
               PDF

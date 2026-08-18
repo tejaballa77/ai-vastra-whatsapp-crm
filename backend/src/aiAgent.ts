@@ -184,28 +184,41 @@ class AiAgentService {
     }
 
     // 2. Smart Rule Engine Fallback (Uses uploaded document context if available)
-
-    const docContext = ragEngine.retrieveRelevantContext(incomingText, 2000);
+    const docContext = ragEngine.retrieveRelevantContext(incomingText, 4000);
     const lower = incomingText.toLowerCase().trim();
 
-    if (/^(hi|hello|hey|good morning|good afternoon|hlo|hii|namaste)$/i.test(lower)) {
-      return {
-        text: `${this.kb.greetingMessage}\n\nWe offer Virtual Try-On, AI Catalog Photography, and Smart AI Kiosks. What would you like to know? 😊`,
-      };
-    }
-
     if (docContext && docContext.trim().length > 20) {
-      // Extract top clean lines from document context
-      const lines = docContext.split('\n').map(l => l.trim()).filter(l => l.length > 5 && !l.startsWith('==='));
-      const textSnippet = lines.slice(0, 3).join(' ');
-      return {
-        text: `${textSnippet}\n\nFor more details or a live demo, let us know! 😊`,
-        autoTagStatus: lower.includes('price') || lower.includes('cost') ? 'WARM_INTERESTED' : 'INTERESTED'
-      };
+      // Parse Q: & A: blocks from document context for exact answer matching
+      const blocks = docContext.split(/(?=Q:)/i);
+      for (const block of blocks) {
+        const parts = block.split(/A:/i);
+        if (parts.length >= 2) {
+          const qPart = parts[0].toLowerCase();
+          const aPart = parts.slice(1).join('A:').split(/(?=Q:)/i)[0].trim();
+
+          // Check if user query matches the Q: part or key intent
+          if (qPart.includes(lower) || (lower.includes('hello') && qPart.includes('hello')) || (lower.includes('hi') && qPart.includes('hi'))) {
+            this.aiAutoReplyCount++;
+            return { text: aPart };
+          }
+        }
+      }
+
+      // If generic match, extract top clean section from document
+      const cleanLines = docContext.split('\n').map(l => l.trim()).filter(l => l.startsWith('A:') || (l.length > 10 && !l.startsWith('===') && !l.startsWith('Q:')));
+      if (cleanLines.length > 0) {
+        const textSnippet = cleanLines.slice(0, 2).join('\n').replace(/^A:\s*/i, '');
+        this.aiAutoReplyCount++;
+        return {
+          text: textSnippet,
+          autoTagStatus: lower.includes('price') || lower.includes('cost') ? 'WARM_INTERESTED' : 'INTERESTED'
+        };
+      }
     }
 
+    this.aiAutoReplyCount++;
     return {
-      text: `Thank you for reaching out! 😊\nWe offer AI Virtual Try-On, AI Catalog Photography, and Smart AI Kiosks.\n\nCheck out demo videos here: https://youtube.com/@ai.vastra_tryon or let us know how we can assist you!`,
+      text: `Hello! 👋 Welcome to AI Vastra.\nWe provide AI Catalogue Photo Creation and AI Virtual Try-On for fashion businesses. What are you interested in — Catalogue Creation, Virtual Try-On, or Both?`,
     };
   }
 

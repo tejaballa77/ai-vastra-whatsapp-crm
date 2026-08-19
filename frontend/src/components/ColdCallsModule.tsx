@@ -725,17 +725,6 @@ export function ColdCallsModule({
                 <Plus className="w-3.5 h-3.5" />
                 <span>Add Data</span>
               </button>
-
-              {/* Upload Excel */}
-              <input type="file" ref={fileInputRef} onChange={handleFileUpload} accept=".xlsx,.xls,.csv" className="hidden" />
-              <button
-                onClick={() => fileInputRef.current?.click()}
-                disabled={isUploading}
-                className="inline-flex items-center gap-2 px-4 py-2.5 bg-zinc-100 hover:bg-zinc-200 border border-zinc-300 text-black font-bold text-xs rounded-xl transition-all shadow-sm active:scale-95 disabled:opacity-60"
-              >
-                <FileSpreadsheet className="w-3.5 h-3.5" />
-                <span>{isUploading ? 'Uploading...' : 'Upload Excel'}</span>
-              </button>
             </div>
           </div>
 

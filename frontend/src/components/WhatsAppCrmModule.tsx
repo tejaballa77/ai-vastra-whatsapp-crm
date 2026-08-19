@@ -35,15 +35,16 @@ export function WhatsAppCrmModule() {
   const [showLogoutModal, setShowLogoutModal] = useState<boolean>(false);
   const [adminDisplayName, setAdminDisplayName] = useState<string>(() => {
     if (typeof window !== 'undefined') {
-      return localStorage.getItem('crm_admin_display_name') || 'Admin';
+      return localStorage.getItem('crm_user_name') || localStorage.getItem('crm_admin_display_name') || 'Executive User';
     }
-    return 'Admin';
+    return 'Executive User';
   });
   const [adminUsername, setAdminUsername] = useState<string>(() => {
     if (typeof window !== 'undefined') {
-      return localStorage.getItem('crm_admin_username') || 'admin';
+      const user = localStorage.getItem('crm_user_name') || localStorage.getItem('crm_admin_username') || 'user';
+      return user.toLowerCase().replace(/\s+/g, '_');
     }
-    return 'admin';
+    return 'user';
   });
   const [adminAvatar, setAdminAvatar] = useState<string>(() => {
     if (typeof window !== 'undefined') {
@@ -54,8 +55,9 @@ export function WhatsAppCrmModule() {
 
   const refreshAdminProfile = () => {
     if (typeof window !== 'undefined') {
-      setAdminDisplayName(localStorage.getItem('crm_admin_display_name') || 'Admin');
-      setAdminUsername(localStorage.getItem('crm_admin_username') || 'admin');
+      const user = localStorage.getItem('crm_user_name') || localStorage.getItem('crm_admin_display_name') || 'Executive User';
+      setAdminDisplayName(user);
+      setAdminUsername(user.toLowerCase().replace(/\s+/g, '_'));
       setAdminAvatar(localStorage.getItem('crm_admin_avatar') || '');
     }
   };

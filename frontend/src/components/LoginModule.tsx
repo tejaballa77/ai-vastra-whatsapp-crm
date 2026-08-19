@@ -28,16 +28,17 @@ export function LoginModule({ onLoginSuccess }: LoginModuleProps) {
 
     setLoading(true);
 
-    // Get stored credentials from localStorage (or fallback to defaults)
-    const storedUser = localStorage.getItem('crm_admin_username') || 'admin';
+    // Get stored password from localStorage (or fallback to default)
     const storedPass = localStorage.getItem('crm_admin_password') || 'Nicedigitals@2025';
 
     setTimeout(() => {
-      if (trimmedUser === storedUser && trimmedPass === storedPass) {
+      if (trimmedPass === storedPass) {
         localStorage.setItem('crm_authenticated', 'true');
+        localStorage.setItem('crm_user_name', trimmedUser);
+        localStorage.setItem('crm_user_display', trimmedUser);
         onLoginSuccess();
       } else {
-        setError('Invalid username or password. Please try again.');
+        setError('Invalid password. Please enter correct password.');
         setLoading(false);
       }
     }, 400);

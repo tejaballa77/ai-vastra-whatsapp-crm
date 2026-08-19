@@ -70,8 +70,12 @@ export interface ColdCallLead {
   note?: string;            // Original note from Excel
   notesList?: NoteEntry[];  // User-added notes with timestamps
   // Status & tracking
-  callStatus?: 'YES' | 'NO' | 'PENDING' | 'INTERESTED' | 'NOT_INTERESTED';
+  callStatus?: 'YES' | 'NO' | 'PENDING' | 'INTERESTED' | 'NOT_INTERESTED' | 'CONNECTED' | 'BUSY' | 'NO_ANSWER' | 'CALLBACK_REQUESTED';
   followUpDate?: string;
+  // Multi-user & tracking
+  calledBy?: string;        // Logged-in username (e.g. James Mitchell)
+  callTimestamp?: number;   // Timestamp of last call/note update
+  callOutcome?: string;     // Outcome badge (INTERESTED, NOT_INTERESTED, BUSY, NO_ANSWER, CALLBACK_REQUESTED, CONNECTED, PENDING)
   // Legacy compatibility
   name?: string;
   company?: string;
@@ -870,6 +874,10 @@ class StorageEngine {
         // Status
         callStatus: existing?.callStatus || lead.callStatus || 'PENDING',
         followUpDate: lead.followUpDate !== undefined ? lead.followUpDate : (existing?.followUpDate || ''),
+        // Multi-user & tracking
+        calledBy: lead.calledBy !== undefined ? lead.calledBy : (existing?.calledBy || 'Staff'),
+        callTimestamp: lead.callTimestamp !== undefined ? lead.callTimestamp : (existing?.callTimestamp || now),
+        callOutcome: lead.callOutcome !== undefined ? lead.callOutcome : (existing?.callOutcome || 'Pending'),
         // Legacy compat
         name: lead.personName || lead.name || existing?.name || '',
         company: lead.businessName || lead.company || existing?.company || '',
@@ -890,13 +898,17 @@ class StorageEngine {
     const existing = this.coldCalls.get(id);
     if (!existing) return null;
 
+    const now = Date.now();
     const updated: ColdCallLead = {
       ...existing,
       ...partial,
       // Preserve notesList array type (NoteEntry[])
       notesList: partial.notesList !== undefined ? (partial.notesList as NoteEntry[]) : existing.notesList,
       customFields: partial.customFields ? { ...existing.customFields, ...partial.customFields } : existing.customFields,
-      updatedAt: Date.now(),
+      calledBy: partial.calledBy !== undefined ? partial.calledBy : existing.calledBy,
+      callTimestamp: partial.callTimestamp !== undefined ? partial.callTimestamp : now,
+      callOutcome: partial.callOutcome !== undefined ? partial.callOutcome : existing.callOutcome,
+      updatedAt: now,
     };
 
     // Keep legacy fields in sync

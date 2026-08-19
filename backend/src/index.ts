@@ -51,8 +51,9 @@ io.on('connection', (socket) => {
     meJid: waEngine.meJid,
   });
 
-  // Send initial chat list from local cache
+  // Send initial chat list & cold calls from local cache
   socket.emit('chats_updated', db.getAllChatsSorted());
+  socket.emit('cold_calls_updated', db.getAllColdCalls());
 
   socket.on('disconnect', () => {
     console.log(`[Socket.IO] Client disconnected: ${socket.id}`);
@@ -271,6 +272,7 @@ app.post('/api/cold-calls/import', (req, res) => {
   }
 
   const imported = db.importColdCalls(leads);
+  io.emit('cold_calls_updated', db.getAllColdCalls());
   res.json({ success: true, count: imported.length, leads: imported });
 });
 
@@ -281,6 +283,7 @@ app.put('/api/cold-calls/:id', (req, res) => {
   if (!updated) {
     return res.status(404).json({ error: 'Cold call lead not found' });
   }
+  io.emit('cold_calls_updated', db.getAllColdCalls());
   res.json({ success: true, lead: updated });
 });
 
@@ -288,12 +291,16 @@ app.put('/api/cold-calls/:id', (req, res) => {
 app.delete('/api/cold-calls/:id', (req, res) => {
   const { id } = req.params;
   const deleted = db.deleteColdCall(id);
+  if (deleted) {
+    io.emit('cold_calls_updated', db.getAllColdCalls());
+  }
   res.json({ success: deleted });
 });
 
 // Clear all cold call leads
 app.delete('/api/cold-calls', (req, res) => {
   db.clearColdCalls();
+  io.emit('cold_calls_updated', db.getAllColdCalls());
   res.json({ success: true, message: 'All cold calls cleared' });
 });
 

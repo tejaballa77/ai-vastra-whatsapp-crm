@@ -25,8 +25,12 @@ import {
   Briefcase,
   Calendar,
   Database,
+  Filter,
+  MessageSquare,
+  ArrowUpRight
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
+import { useSocket } from '../context/SocketContext';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -50,8 +54,11 @@ export interface ColdCallLead {
   name?: string;
   company?: string;
   customFields?: Record<string, any>;
-  callStatus?: 'YES' | 'NO' | 'PENDING' | 'INTERESTED' | 'NOT_INTERESTED';
+  callStatus?: 'YES' | 'NO' | 'PENDING' | 'INTERESTED' | 'NOT_INTERESTED' | 'CONNECTED' | 'BUSY' | 'NO_ANSWER' | 'CALLBACK_REQUESTED';
   followUpDate?: string;
+  calledBy?: string;        // Logged-in username (e.g. James Mitchell)
+  callTimestamp?: number;   // Timestamp of last call/note update
+  callOutcome?: string;     // Call status badge
   createdAt: number;
   updatedAt: number;
 }
@@ -130,10 +137,21 @@ export function ColdCallsModule({
   subPage?: 'analytics' | 'sheet' | 'database';
   onSubPageChange?: (page: 'analytics' | 'sheet' | 'database') => void;
 }) {
+  const { socket } = useSocket();
   const [leads, setLeads] = useState<ColdCallLead[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterTab, setFilterTab] = useState<'ALL' | 'INTERESTED' | 'WARM' | 'NOT_INTERESTED' | 'PENDING' | 'FOLLOWUPS'>('ALL');
+  
+  // Date selection state for dashboard (defaults to YYYY-MM-DD today)
+  const [selectedDate, setSelectedDate] = useState<string>(() => {
+    const today = new Date();
+    return today.toISOString().slice(0, 10);
+  });
+
+  const currentUserName = typeof window !== 'undefined'
+    ? (localStorage.getItem('crm_user_name') || localStorage.getItem('crm_admin_display_name') || 'Executive User')
+    : 'Executive User';
 
   // Inline edit tracking: Map<leadId, partial changes>
   const [editedRows, setEditedRows] = useState<Map<string, Partial<ColdCallLead>>>(new Map());
@@ -192,7 +210,7 @@ export function ColdCallsModule({
     window.addEventListener('mouseup', handleMouseUp);
   };
 
-  // ── Fetch ───────────────────────────────────────────────────────────────────
+  // ── Fetch & Socket Sync ───────────────────────────────────────────────────────
   const fetchLeads = useCallback(async () => {
     try {
       setLoading(true);
@@ -208,7 +226,22 @@ export function ColdCallsModule({
     }
   }, []);
 
-  useEffect(() => { fetchLeads(); }, [fetchLeads]);
+  useEffect(() => { 
+    fetchLeads(); 
+  }, [fetchLeads]);
+
+  useEffect(() => {
+    if (!socket) return;
+    const handleColdCallsUpdated = (updatedLeads: ColdCallLead[]) => {
+      if (Array.isArray(updatedLeads)) {
+        setLeads(updatedLeads);
+      }
+    };
+    socket.on('cold_calls_updated', handleColdCallsUpdated);
+    return () => {
+      socket.off('cold_calls_updated', handleColdCallsUpdated);
+    };
+  }, [socket]);
 
   // ── Upload Excel ─────────────────────────────────────────────────────────────
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -251,11 +284,23 @@ export function ColdCallsModule({
     const now = Date.now();
     setEditedRows(prev => {
       const next = new Map(prev);
-      next.set(leadId, { ...(next.get(leadId) || {}), [field]: value, updatedAt: now });
+      next.set(leadId, { 
+        ...(next.get(leadId) || {}), 
+        [field]: value, 
+        calledBy: currentUserName,
+        callTimestamp: now,
+        updatedAt: now 
+      });
       return next;
     });
     // Optimistically update displayed leads and bring the edited lead TO THE TOP!
-    setLeads(prev => prev.map(l => l.id === leadId ? { ...l, [field]: value, updatedAt: now } : l));
+    setLeads(prev => prev.map(l => l.id === leadId ? { 
+      ...l, 
+      [field]: value, 
+      calledBy: currentUserName,
+      callTimestamp: now,
+      updatedAt: now 
+    } : l));
   };
 
   // ── Save All Edits ────────────────────────────────────────────────────────────
@@ -268,7 +313,7 @@ export function ColdCallsModule({
             fetch(`${getBackendUrl()}/api/cold-calls/${id}`, {
               method: 'PUT',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(partial),
+              body: JSON.stringify({ ...partial, calledBy: currentUserName, callTimestamp: Date.now() }),
             })
           )
         );
@@ -318,6 +363,7 @@ export function ColdCallsModule({
         updatedNotesList.unshift(newEntry);
       }
 
+      const now = Date.now();
       const partial: Partial<ColdCallLead> = {
         businessName: notePopupLead.businessName,
         personName: notePopupLead.personName,
@@ -332,7 +378,9 @@ export function ColdCallsModule({
         notesList: updatedNotesList,
         callStatus: notePopupLead.callStatus,
         followUpDate: notePopupLead.followUpDate,
-        updatedAt: Date.now(),
+        calledBy: currentUserName,
+        callTimestamp: now,
+        updatedAt: now,
       };
 
       const res = await fetch(`${getBackendUrl()}/api/cold-calls/${notePopupLead.id}`, {
@@ -400,6 +448,8 @@ export function ColdCallsModule({
       instaProfile: (addForm.instaProfile || '').trim(),
       note: (addForm.note || '').trim(),
       callStatus: 'PENDING',
+      calledBy: currentUserName,
+      callTimestamp: now,
       createdAt: now,
       updatedAt: now,
     };
@@ -550,114 +600,268 @@ export function ColdCallsModule({
       )}
 
       {/* ══════════════════════════════════════════════════════════════════════
-          PAGE 1: ANALYTICS & TODAY'S FOLLOW-UPS
+          PAGE 1: ANALYTICS & RECENT CALLS DASHBOARD
       ══════════════════════════════════════════════════════════════════════ */}
-      {subPage === 'analytics' && (
-        <div className="space-y-6">
-          {/* 5 Count Boxes */}
-          <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
-            {/* Box 1: Calls Made Today */}
-            <div className="bg-white p-5 rounded-2xl border border-zinc-200 shadow-sm space-y-2">
-              <div className="text-xs font-bold text-zinc-500 uppercase tracking-wider">Calls Made Today</div>
-              <div className="text-3xl font-extrabold text-black">{counts.callsToday}</div>
-              <p className="text-xs text-zinc-400 font-semibold">Calls logged today</p>
-            </div>
+      {subPage === 'analytics' && (() => {
+        // Filter leads based on selectedDate
+        const dateLeads = leads.filter(l => {
+          const timestamp = l.callTimestamp || l.updatedAt || l.createdAt;
+          if (!timestamp) return false;
+          const dStr = new Date(timestamp).toISOString().slice(0, 10);
+          return dStr === selectedDate;
+        });
 
-            {/* Box 2: Interested */}
-            <div className="bg-white p-5 rounded-2xl border border-zinc-200 shadow-sm space-y-2">
-              <div className="text-xs font-bold text-zinc-500 uppercase tracking-wider">Interested</div>
-              <div className="text-3xl font-extrabold text-black">{counts.interested}</div>
-              <p className="text-xs text-zinc-400 font-semibold">Marked Interested</p>
-            </div>
+        // Metrics calculations
+        const totalCalls = dateLeads.length > 0 ? dateLeads.length : leads.length;
+        const connectedCalls = dateLeads.filter(l => l.callStatus === 'CONNECTED' || l.callStatus === 'INTERESTED' || l.callStatus === 'YES' || l.callStatus === 'NOT_INTERESTED' || l.callStatus === 'BUSY' || l.callStatus === 'CALLBACK_REQUESTED').length;
+        const conversations = dateLeads.filter(l => l.callStatus === 'INTERESTED' || l.callStatus === 'YES' || l.callStatus === 'NOT_INTERESTED' || (l.notesList && l.notesList.length > 0)).length;
+        const interestedLeads = dateLeads.filter(l => l.callStatus === 'INTERESTED' || l.callStatus === 'YES').length;
 
-            {/* Box 3: Warm */}
-            <div className="bg-white p-5 rounded-2xl border border-zinc-200 shadow-sm space-y-2">
-              <div className="text-xs font-bold text-zinc-500 uppercase tracking-wider">Warm</div>
-              <div className="text-3xl font-extrabold text-black">{counts.warm}</div>
-              <p className="text-xs text-zinc-400 font-semibold">Marked Warm</p>
-            </div>
+        // Recent calls list (for selected date, or all recent leads sorted by timestamp)
+        const displayCallsList = [...(dateLeads.length > 0 ? dateLeads : leads)].sort((a, b) => {
+          const tA = a.callTimestamp || a.updatedAt || a.createdAt || 0;
+          const tB = b.callTimestamp || b.updatedAt || b.createdAt || 0;
+          return tB - tA;
+        });
 
-            {/* Box 4: Total Follow-ups Needed */}
-            <div className="bg-white p-5 rounded-2xl border border-zinc-200 shadow-sm space-y-2">
-              <div className="text-xs font-bold text-zinc-500 uppercase tracking-wider">Total Follow-ups</div>
-              <div className="text-3xl font-extrabold text-black">{counts.followups}</div>
-              <p className="text-xs text-zinc-400 font-semibold">Future dates set</p>
-            </div>
-
-            {/* Box 5: Follow-ups Due TODAY */}
-            <div className="bg-white p-5 rounded-2xl border-2 border-black shadow-md space-y-2 bg-zinc-50">
-              <div className="text-xs font-extrabold text-black uppercase tracking-wider">Follow-ups Due Today</div>
-              <div className="text-3xl font-extrabold text-black">{counts.followupsToday}</div>
-              <p className="text-xs text-black font-extrabold">Requires action today!</p>
-            </div>
-          </div>
-
-          {/* Info List of Today's Scheduled Follow-ups */}
-          <div className="bg-white p-6 rounded-2xl border border-zinc-200 shadow-sm space-y-4">
-            <div className="flex items-center justify-between border-b border-zinc-200 pb-4">
+        return (
+          <div className="space-y-6">
+            {/* Top Toolbar Header with Date Filter */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-4 rounded-2xl border border-zinc-200 shadow-sm">
               <div>
-                <h3 className="text-xl font-extrabold text-black flex items-center gap-2">
-                  <span>📅 Info List of Today's Scheduled Follow-ups</span>
+                <h3 className="text-lg font-extrabold text-black tracking-tight flex items-center gap-2">
+                  <span>Cold Calls Performance Overview</span>
                 </h3>
-                <p className="text-xs text-zinc-500 font-medium mt-0.5">Leads scheduled to be called specifically today ({todayStr})</p>
+                <p className="text-xs text-zinc-500 font-medium">Real-time team cold calling metrics & recent calls log</p>
               </div>
-              <span className="px-3 py-1 bg-black text-white text-xs font-bold rounded-full">
-                {followUpsDueTodayLeads.length} Due Today
-              </span>
+
+              <div className="flex items-center gap-3">
+                {/* Date Selection Filter (Defaults to Today) */}
+                <div className="flex items-center gap-2 bg-zinc-50 px-3.5 py-2 rounded-xl border border-zinc-200 shadow-inner">
+                  <Calendar className="w-4 h-4 text-zinc-500" />
+                  <span className="text-xs font-bold text-zinc-600 uppercase tracking-wider">Date Filter:</span>
+                  <input
+                    type="date"
+                    value={selectedDate}
+                    onChange={(e) => setSelectedDate(e.target.value)}
+                    className="bg-transparent text-xs font-extrabold text-black outline-none cursor-pointer"
+                  />
+                </div>
+                <button
+                  onClick={() => setSelectedDate(new Date().toISOString().slice(0, 10))}
+                  className="px-3 py-2 bg-zinc-100 hover:bg-zinc-200 text-black text-xs font-bold rounded-xl border border-zinc-200 transition-all"
+                >
+                  Today
+                </button>
+              </div>
             </div>
 
-            {followUpsDueTodayLeads.length === 0 ? (
-              <div className="p-12 text-center text-sm text-zinc-400 italic bg-zinc-50 rounded-xl border border-zinc-200">
-                No follow-ups scheduled for today ({todayStr}). All clear!
+            {/* 4 Modern Metric Cards matching the reference design */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
+              {/* Card 1: Total Calls */}
+              <div className="bg-[#eff6ff] p-5 rounded-2xl border border-blue-200/80 shadow-sm flex items-center gap-4 transition-all hover:shadow-md">
+                <div className="w-12 h-12 rounded-2xl bg-blue-500 text-white flex items-center justify-center flex-shrink-0 shadow-md">
+                  <Phone className="w-6 h-6" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="text-xs font-bold text-blue-700 uppercase tracking-wider">Total Calls</div>
+                  <div className="text-3xl font-black text-blue-950 tracking-tight">{totalCalls.toLocaleString()}</div>
+                  <div className="text-[11px] font-semibold text-blue-600/90 mt-0.5">Logs for {selectedDate}</div>
+                </div>
               </div>
-            ) : (
-              <div className="divide-y divide-zinc-200 border border-zinc-200 rounded-xl overflow-hidden">
-                {followUpsDueTodayLeads.map((lead) => (
-                  <div key={lead.id} className="p-4 hover:bg-zinc-50 transition-colors flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white">
-                    <div className="space-y-1">
-                      <div className="flex items-center gap-2">
-                        <span className="text-base font-extrabold text-black">{lead.personName || lead.businessName || 'Contact'}</span>
-                        {lead.businessName && lead.personName && (
-                          <span className="text-xs text-zinc-500 font-semibold">({lead.businessName})</span>
-                        )}
-                      </div>
-                      <div className="text-xs text-zinc-600 font-semibold flex items-center gap-3">
-                        <span>📞 {lead.phone}</span>
-                        {lead.callStatus && (
-                          <span className="px-2 py-0.5 bg-zinc-100 text-black border border-black rounded text-[10px] font-bold">
-                            {lead.callStatus}
-                          </span>
-                        )}
-                      </div>
-                      {lead.note && (
-                        <p className="text-xs text-zinc-700 italic">"{lead.note}"</p>
-                      )}
-                    </div>
 
-                    <div className="flex items-center gap-3 flex-shrink-0">
-                      <button
-                        onClick={() => openNotePopup(lead)}
-                        className="px-3.5 py-1.5 bg-zinc-100 hover:bg-zinc-200 text-black border border-zinc-300 font-bold text-xs rounded-lg transition-all"
-                      >
-                        Notes / Edit
-                      </button>
-                      {lead.phone && (
-                        <button
-                          onClick={() => window.open(`https://web.whatsapp.com/send?phone=${lead.phone.replace(/\D/g, '')}`, '_blank')}
-                          className="px-4 py-2 bg-black hover:bg-zinc-800 text-white font-bold text-xs rounded-xl transition-all flex items-center gap-1.5 shadow-sm"
-                        >
-                          <span>Open WhatsApp</span>
-                          <ExternalLink className="w-3.5 h-3.5" />
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                ))}
+              {/* Card 2: Connected Calls */}
+              <div className="bg-[#ecfdf5] p-5 rounded-2xl border border-emerald-200/80 shadow-sm flex items-center gap-4 transition-all hover:shadow-md">
+                <div className="w-12 h-12 rounded-2xl bg-emerald-500 text-white flex items-center justify-center flex-shrink-0 shadow-md">
+                  <PhoneCall className="w-6 h-6" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="text-xs font-bold text-emerald-700 uppercase tracking-wider">Connected Calls</div>
+                  <div className="text-3xl font-black text-emerald-950 tracking-tight">{connectedCalls.toLocaleString()}</div>
+                  <div className="text-[11px] font-semibold text-emerald-600/90 mt-0.5">Answered by clients</div>
+                </div>
               </div>
-            )}
+
+              {/* Card 3: Conversations */}
+              <div className="bg-[#f5f3ff] p-5 rounded-2xl border border-purple-200/80 shadow-sm flex items-center gap-4 transition-all hover:shadow-md">
+                <div className="w-12 h-12 rounded-2xl bg-purple-500 text-white flex items-center justify-center flex-shrink-0 shadow-md">
+                  <User className="w-6 h-6" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="text-xs font-bold text-purple-700 uppercase tracking-wider">Conversations</div>
+                  <div className="text-3xl font-black text-purple-950 tracking-tight">{conversations.toLocaleString()}</div>
+                  <div className="text-[11px] font-semibold text-purple-600/90 mt-0.5">Detailed notes logged</div>
+                </div>
+              </div>
+
+              {/* Card 4: Interested Leads */}
+              <div className="bg-[#fffbeb] p-5 rounded-2xl border border-amber-200/80 shadow-sm flex items-center gap-4 transition-all hover:shadow-md">
+                <div className="w-12 h-12 rounded-2xl bg-amber-500 text-white flex items-center justify-center flex-shrink-0 shadow-md">
+                  <Briefcase className="w-6 h-6" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="text-xs font-bold text-amber-700 uppercase tracking-wider">Interested Leads</div>
+                  <div className="text-3xl font-black text-amber-950 tracking-tight">{interestedLeads.toLocaleString()}</div>
+                  <div className="text-[11px] font-semibold text-amber-600/90 mt-0.5">High potential leads</div>
+                </div>
+              </div>
+            </div>
+
+            {/* Recent Calls Table matching reference picture */}
+            <div className="bg-white p-6 rounded-2xl border border-zinc-200 shadow-sm space-y-4">
+              <div className="flex items-center justify-between border-b border-zinc-200 pb-4">
+                <div>
+                  <h3 className="text-xl font-extrabold text-black tracking-tight">Recent Calls</h3>
+                  <p className="text-xs text-zinc-500 font-medium">Calls and notes logged by team members on selected date ({selectedDate})</p>
+                </div>
+                <span className="px-3.5 py-1.5 bg-black text-white text-xs font-bold rounded-full">
+                  {displayCallsList.length} Records
+                </span>
+              </div>
+
+              {displayCallsList.length === 0 ? (
+                <div className="p-12 text-center text-sm text-zinc-400 italic bg-zinc-50 rounded-2xl border border-zinc-200">
+                  No call logs found for selected date ({selectedDate}). Select another date or add data.
+                </div>
+              ) : (
+                <div className="overflow-x-auto border border-zinc-200 rounded-2xl">
+                  <table className="w-full text-left border-collapse text-sm">
+                    <thead>
+                      <tr className="bg-zinc-100/80 border-b border-zinc-200 text-xs font-extrabold text-black uppercase tracking-wider">
+                        <th className="py-3.5 px-4">Business Name</th>
+                        <th className="py-3.5 px-4">Phone Number</th>
+                        <th className="py-3.5 px-4">Called By</th>
+                        <th className="py-3.5 px-4">Time</th>
+                        <th className="py-3.5 px-4">Outcome</th>
+                        <th className="py-3.5 px-4">Note</th>
+                        <th className="py-3.5 px-4 text-right">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-zinc-200 bg-white">
+                      {displayCallsList.map((lead) => {
+                        const timeTs = lead.callTimestamp || lead.updatedAt || lead.createdAt;
+                        const formattedTime = timeTs
+                          ? new Date(timeTs).toLocaleString('en-IN', {
+                              day: '2-digit',
+                              month: 'short',
+                              hour: '2-digit',
+                              minute: '2-digit',
+                              hour12: true,
+                            })
+                          : 'Today';
+
+                        const outcome = lead.callStatus || 'PENDING';
+                        let outcomeBadge = (
+                          <span className="px-2.5 py-1 bg-zinc-100 text-zinc-700 border border-zinc-300 rounded-lg text-xs font-bold">
+                            Pending
+                          </span>
+                        );
+
+                        if (outcome === 'INTERESTED' || outcome === 'YES') {
+                          outcomeBadge = (
+                            <span className="px-2.5 py-1 bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-lg text-xs font-extrabold">
+                              Interested
+                            </span>
+                          );
+                        } else if (outcome === 'NOT_INTERESTED' || outcome === 'NO') {
+                          outcomeBadge = (
+                            <span className="px-2.5 py-1 bg-rose-100 text-rose-800 border border-rose-300 rounded-lg text-xs font-extrabold">
+                              Not Interested
+                            </span>
+                          );
+                        } else if (outcome === 'BUSY') {
+                          outcomeBadge = (
+                            <span className="px-2.5 py-1 bg-amber-100 text-amber-800 border border-amber-300 rounded-lg text-xs font-extrabold">
+                              Busy
+                            </span>
+                          );
+                        } else if (outcome === 'NO_ANSWER') {
+                          outcomeBadge = (
+                            <span className="px-2.5 py-1 bg-zinc-100 text-zinc-700 border border-zinc-300 rounded-lg text-xs font-extrabold">
+                              No Answer
+                            </span>
+                          );
+                        } else if (outcome === 'CALLBACK_REQUESTED' || outcome === 'CONNECTED') {
+                          outcomeBadge = (
+                            <span className="px-2.5 py-1 bg-blue-100 text-blue-800 border border-blue-300 rounded-lg text-xs font-extrabold">
+                              Callback / Connected
+                            </span>
+                          );
+                        }
+
+                        const latestNoteText = (lead.notesList && lead.notesList.length > 0)
+                          ? lead.notesList[0].text
+                          : (lead.note || 'No note added');
+
+                        return (
+                          <tr key={lead.id} className="hover:bg-zinc-50/80 transition-colors">
+                            {/* Business Name */}
+                            <td className="py-3.5 px-4 font-extrabold text-black">
+                              {lead.businessName || lead.personName || lead.name || 'Unsaved Contact'}
+                              {lead.personName && lead.businessName && lead.personName !== lead.businessName && (
+                                <span className="block text-xs font-medium text-zinc-500">({lead.personName})</span>
+                              )}
+                            </td>
+
+                            {/* Phone Number (Vibrant Green) */}
+                            <td className="py-3.5 px-4 font-black text-[#00a884]">
+                              {lead.phone || 'N/A'}
+                            </td>
+
+                            {/* Called By */}
+                            <td className="py-3.5 px-4">
+                              <span className="px-2.5 py-1 bg-zinc-100 border border-zinc-200 rounded-lg text-xs font-bold text-black flex items-center gap-1.5 w-fit">
+                                <User className="w-3.5 h-3.5 text-zinc-500" />
+                                {lead.calledBy || 'Staff'}
+                              </span>
+                            </td>
+
+                            {/* Time */}
+                            <td className="py-3.5 px-4 text-xs font-semibold text-zinc-600">
+                              {formattedTime}
+                            </td>
+
+                            {/* Outcome */}
+                            <td className="py-3.5 px-4">
+                              {outcomeBadge}
+                            </td>
+
+                            {/* Note */}
+                            <td className="py-3.5 px-4 max-w-xs truncate text-xs text-zinc-700 font-medium italic">
+                              "{latestNoteText}"
+                            </td>
+
+                            {/* Action Buttons */}
+                            <td className="py-3.5 px-4 text-right">
+                              <div className="flex items-center justify-end gap-2">
+                                <button
+                                  onClick={() => openNotePopup(lead)}
+                                  className="px-3 py-1.5 bg-zinc-100 hover:bg-zinc-200 text-black border border-zinc-300 font-bold text-xs rounded-lg transition-all"
+                                >
+                                  Notes
+                                </button>
+                                {lead.phone && (
+                                  <button
+                                    onClick={() => window.open(`https://web.whatsapp.com/send?phone=${lead.phone.replace(/\D/g, '')}`, '_blank')}
+                                    className="p-1.5 bg-black hover:bg-zinc-800 text-white rounded-lg transition-all"
+                                    title="Open WhatsApp"
+                                  >
+                                    <ExternalLink className="w-3.5 h-3.5" />
+                                  </button>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* ══════════════════════════════════════════════════════════════════════
           PAGE 2: COLD CALLS EXCEL SPREADSHEET SHEET

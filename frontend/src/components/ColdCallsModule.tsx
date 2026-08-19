@@ -1354,33 +1354,7 @@ export function ColdCallsModule({
             </div>
 
             {/* Body */}
-            <div className="overflow-y-auto flex-1 p-6 space-y-6">
-
-              {/* ── Call Status ───────────────────────────────────────────── */}
-              <div>
-                <label className="text-xs font-black text-black uppercase tracking-wider block mb-2">Lead Status</label>
-                <div className="flex gap-2 flex-wrap">
-                  {([
-                    ['INTERESTED', '👍 Interested', 'bg-emerald-600'],
-                    ['YES', '🔥 Warm', 'bg-amber-500'],
-                    ['NOT_INTERESTED', '👎 Not Interested', 'bg-rose-600'],
-                    ['PENDING', '⏳ Pending', 'bg-black'],
-                  ] as [string, string, string][]).map(([val, label, activeClass]) => (
-                    <button
-                      key={val}
-                      type="button"
-                      onClick={() => handlePopupFieldEdit('callStatus', val as any)}
-                      className={`px-3.5 py-2 rounded-xl text-xs font-extrabold transition-all border ${
-                        notePopupLead.callStatus === val
-                          ? `${activeClass} text-white border-transparent shadow-sm`
-                          : 'bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100'
-                      }`}
-                    >
-                      {label}
-                    </button>
-                  ))}
-                </div>
-              </div>
+            <div className="overflow-y-auto flex-1 p-6 space-y-6 font-sans">
 
               {/* ── Follow-up Date ────────────────────────────────────────── */}
               <div>

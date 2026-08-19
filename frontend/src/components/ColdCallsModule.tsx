@@ -387,16 +387,41 @@ export function ColdCallsModule() {
     return true;
   });
 
+
+
+  const [activePage, setActivePage] = useState<'analytics' | 'registry'>('analytics');
+
+  // Calculate Today's Scheduled Follow-ups
+  const todayStr = getTodayDate();
+  const followUpsDueTodayLeads = leads.filter(l => {
+    if (!l.followUpDate) return false;
+    const fDate = l.followUpDate.trim();
+    return fDate === todayStr || fDate === new Date().toISOString().slice(0, 10);
+  });
+
+  const callsMadeTodayCount = leads.filter(l => {
+    if (!l.updatedAt) return false;
+    const d = new Date(l.updatedAt);
+    const today = new Date();
+    return (
+      d.getDate() === today.getDate() &&
+      d.getMonth() === today.getMonth() &&
+      d.getFullYear() === today.getFullYear() &&
+      l.callStatus && l.callStatus !== 'PENDING'
+    );
+  }).length;
+
   const counts = {
     all: leads.length,
     interested: leads.filter(l => l.callStatus === 'INTERESTED').length,
     warm: leads.filter(l => l.callStatus === 'YES').length,
     notInterested: leads.filter(l => l.callStatus === 'NOT_INTERESTED').length,
     followups: leads.filter(l => Boolean(l.followUpDate)).length,
+    followupsToday: followUpsDueTodayLeads.length,
+    callsToday: callsMadeTodayCount,
   };
 
   // ── Editable Cell Component ───────────────────────────────────────────────────
-  // In VIEW mode: plain text display. In EDIT mode: live input (Excel-style).
   const EditableCell = ({
     leadId, field, value, placeholder = '', className = '', editMode = false
   }: {
@@ -421,14 +446,14 @@ export function ColdCallsModule() {
           value={localVal}
           onChange={e => { setLocalVal(e.target.value); commit(e.target.value); }}
           onKeyDown={e => { if (e.key === 'Escape') setLocalVal(value); }}
-          className={`w-full px-2 py-1.5 text-xs border border-[#00a884]/60 rounded-lg outline-none bg-amber-50/40 focus:bg-white focus:border-[#00a884] focus:shadow-sm transition-all ${className}`}
+          className={`w-full px-2 py-1.5 text-sm border border-black rounded-lg outline-none bg-zinc-50 focus:bg-white transition-all font-semibold text-black ${className}`}
           placeholder={placeholder || '—'}
         />
       );
     }
     // View mode — plain text, no icons
     return (
-      <span className={`text-xs ${value ? 'text-[#111b21]' : 'text-gray-400'} ${className}`}>
+      <span className={`text-sm font-semibold ${value ? 'text-black' : 'text-zinc-400'} ${className}`}>
         {value || ''}
       </span>
     );
@@ -436,270 +461,408 @@ export function ColdCallsModule() {
 
   // ─── Render ───────────────────────────────────────────────────────────────────
   return (
-    <div className="flex-1 overflow-y-auto p-5 space-y-5 bg-[#f0f2f5]">
+    <div className="flex-1 overflow-y-auto p-6 space-y-6 bg-zinc-50/50 text-black">
 
       {/* ── TOAST ───────────────────────────────────────────────────────────── */}
       {saveStatus !== 'idle' && (
-        <div className="fixed top-5 right-5 z-[9999] bg-[#111b21] text-white px-5 py-3 rounded-2xl shadow-2xl border border-emerald-500/30 flex items-center gap-3">
+        <div className="fixed top-5 right-5 z-[9999] bg-black text-white px-6 py-3 rounded-2xl shadow-2xl border border-zinc-700 flex items-center gap-3">
           {saveStatus === 'saving' ? (
-            <div className="w-6 h-6 rounded-full border-2 border-emerald-400 border-t-transparent animate-spin" />
+            <div className="w-6 h-6 rounded-full border-2 border-white border-t-transparent animate-spin" />
           ) : (
-            <div className="w-6 h-6 rounded-full bg-emerald-500 flex items-center justify-center">
-              <Check className="w-3.5 h-3.5 text-white" />
+            <div className="w-6 h-6 rounded-full bg-white flex items-center justify-center text-black font-bold">
+              ✓
             </div>
           )}
-          <span className="text-xs font-semibold">{saveStatus === 'saving' ? 'Saving...' : '✓ Saved'}</span>
+          <span className="text-sm font-bold">{saveStatus === 'saving' ? 'Saving...' : '✓ Saved'}</span>
         </div>
       )}
 
-      {/* ── TOP BAR ─────────────────────────────────────────────────────────── */}
-      <div className="bg-white rounded-2xl border border-gray-200 shadow-sm px-6 py-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl bg-[#00a884]/15 text-[#00a884] flex items-center justify-center">
-            <PhoneCall className="w-5 h-5" />
-          </div>
-          <div>
-            <h2 className="text-base font-bold text-[#111b21]">Cold Calls Lead Center</h2>
-            <p className="text-[11px] text-gray-500">Upload an Excel sheet, edit inline, add notes, track status</p>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2.5 flex-wrap">
-          {/* Save Button */}
-          <button
-            onClick={handleSaveAll}
-            disabled={saveStatus === 'saving'}
-            className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl transition-all shadow-sm active:scale-95 disabled:opacity-60"
-          >
-            {saveStatus === 'saving' ? (
-              <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-            ) : saveStatus === 'saved' ? (
-              <Check className="w-3.5 h-3.5" />
-            ) : (
-              <Save className="w-3.5 h-3.5" />
-            )}
-            <span>{saveStatus === 'saved' ? 'Saved ✓' : 'Save'}</span>
-          </button>
-
-          {/* Add Data Button */}
-          <button
-            onClick={() => { setAddForm({}); setShowAddPopup(true); }}
-            className="inline-flex items-center gap-2 px-4 py-2 bg-[#111b21] hover:bg-[#1a2936] text-white font-bold text-xs rounded-xl transition-all shadow-sm active:scale-95"
-          >
-            <Plus className="w-3.5 h-3.5" />
-            <span>+ Add Data</span>
-          </button>
-
-          {/* Upload Excel */}
-          <input type="file" ref={fileInputRef} onChange={handleFileUpload} accept=".xlsx,.xls,.csv" className="hidden" />
-          <button
-            onClick={() => fileInputRef.current?.click()}
-            disabled={isUploading}
-            className="inline-flex items-center gap-2 px-4 py-2 bg-[#00a884] hover:bg-[#008f70] text-white font-bold text-xs rounded-xl transition-all shadow-sm active:scale-95 disabled:opacity-60"
-          >
-            <FileSpreadsheet className="w-3.5 h-3.5" />
-            <span>{isUploading ? 'Uploading...' : 'Upload Excel'}</span>
-          </button>
-
-          {/* Clear All */}
-          {leads.length > 0 && (
-            <button
-              onClick={handleClearAll}
-              className="px-3 py-2 bg-gray-100 hover:bg-rose-50 hover:text-rose-600 text-gray-500 rounded-xl transition-all border border-gray-200"
-              title="Clear all leads"
-            >
-              <Trash2 className="w-4 h-4" />
-            </button>
-          )}
-        </div>
-      </div>
-
-      {/* ── FILTER + SEARCH ──────────────────────────────────────────────────── */}
-      <div className="bg-white rounded-2xl border border-gray-200 shadow-sm px-4 py-3 flex flex-col md:flex-row md:items-center justify-between gap-3">
-        <div className="flex items-center gap-1.5 overflow-x-auto">
-          {([
-            ['ALL', `All (${counts.all})`, 'bg-[#111b21] text-white', 'text-gray-600 hover:bg-gray-100'],
-            ['INTERESTED', `👍 Interested (${counts.interested})`, 'bg-emerald-600 text-white', 'text-emerald-700 bg-emerald-50 hover:bg-emerald-100'],
-            ['WARM', `🔥 Warm (${counts.warm})`, 'bg-amber-600 text-white', 'text-amber-700 bg-amber-50 hover:bg-amber-100'],
-            ['NOT_INTERESTED', `👎 Not Interested (${counts.notInterested})`, 'bg-rose-600 text-white', 'text-rose-700 bg-rose-50 hover:bg-rose-100'],
-            ['FOLLOWUPS', `📅 Follow-ups (${counts.followups})`, 'bg-purple-600 text-white', 'text-purple-700 bg-purple-50 hover:bg-purple-100'],
-          ] as [string, string, string, string][]).map(([tab, label, active, inactive]) => (
-            <button
-              key={tab}
-              onClick={() => setFilterTab(tab as any)}
-              className={`px-3 py-1.5 rounded-lg text-[11px] font-bold transition-all whitespace-nowrap ${filterTab === tab ? active : inactive}`}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-        <div className="relative min-w-[240px]">
-          <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={e => setSearchQuery(e.target.value)}
-            placeholder="Search name, phone, business..."
-            className="w-full pl-9 pr-3 py-2 text-xs rounded-xl border border-gray-200 bg-gray-50 focus:bg-white focus:border-[#00a884] focus:outline-none transition-all"
-          />
-        </div>
-      </div>
-
-      {/* ── TABLE ───────────────────────────────────────────────────────────── */}
-      <div className={`bg-white rounded-2xl border shadow-sm overflow-hidden transition-all ${
-        isEditMode ? 'border-amber-300 ring-2 ring-amber-200' : 'border-gray-200'
-      }`}>
-        {/* Table top-bar: Edit toggle on left */}
-        {filteredLeads.length > 0 && (
-          <div className={`flex items-center justify-between px-4 py-2.5 border-b transition-all ${
-            isEditMode ? 'bg-amber-50 border-amber-200' : 'bg-gray-50/60 border-gray-100'
-          }`}>
-            <button
-              onClick={() => {
-                if (isEditMode) {
-                  // Clicking pencil again while in edit mode = save & exit
-                  handleSaveAll();
-                } else {
-                  setIsEditMode(true);
-                }
-              }}
-              className={`inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl font-bold text-xs transition-all ${
-                isEditMode
-                  ? 'bg-amber-500 text-white hover:bg-amber-600 shadow-sm'
-                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-              }`}
-              title={isEditMode ? 'Exit edit mode (or click Save above)' : 'Enable edit mode to modify cells'}
-            >
-              {isEditMode ? (
-                <><X className="w-3.5 h-3.5" /><span>Done Editing</span></>
-              ) : (
-                <><Pencil className="w-3.5 h-3.5" /><span>Edit Table</span></>
-              )}
-            </button>
-            {isEditMode && (
-              <span className="text-[10px] text-amber-600 font-semibold">
-                ✏️ Edit mode active — cells are now editable
-              </span>
-            )}
-          </div>
-        )}
-
-        {loading ? (
-          <div className="p-16 text-center text-xs text-gray-400">Loading leads...</div>
-        ) : filteredLeads.length === 0 ? (
-          <div className="p-16 text-center space-y-3">
-            <div className="w-12 h-12 rounded-2xl bg-gray-100 text-gray-400 flex items-center justify-center mx-auto">
-              <FileSpreadsheet className="w-6 h-6" />
+      {/* ── MODULE HEADER & PAGE SWITCHER TABS ─────────────────────────────────── */}
+      <div className="bg-white rounded-2xl border border-zinc-200 shadow-sm p-6 space-y-5">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="flex items-center gap-3.5">
+            <div className="w-11 h-11 rounded-xl bg-black text-white flex items-center justify-center shadow-md">
+              <PhoneCall className="w-6 h-6" />
             </div>
-            <p className="text-sm font-bold text-gray-700">No leads found</p>
-            <p className="text-xs text-gray-400">
-              {leads.length === 0 ? 'Upload an Excel sheet to get started.' : 'No leads match your search.'}
-            </p>
+            <div>
+              <h2 className="text-2xl font-extrabold text-black tracking-tight">Cold Calls Lead Center</h2>
+              <p className="text-xs text-zinc-500 font-semibold">Track daily call analytics, scheduled follow-ups, and manage contacts</p>
+            </div>
           </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className={`border-b text-[11px] font-bold text-gray-500 uppercase tracking-wider ${
-                  isEditMode ? 'bg-amber-50/80 border-amber-200' : 'bg-gray-50/80 border-gray-200'
-                }`}>
-                  <th className="py-3.5 px-4 w-8 text-center">#</th>
-                  <th className="py-3.5 px-4">Business Name</th>
-                  <th className="py-3.5 px-4">Person Name</th>
-                  <th className="py-3.5 px-4">Phone Number</th>
-                  <th className="py-3.5 px-4 text-center">Note</th>
-                  <th className="py-3.5 px-4 text-center">Status</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100 text-xs text-[#111b21]">
-                {filteredLeads.map((lead, idx) => {
-                  const hasNotes = (lead.notesList && lead.notesList.length > 0) || Boolean(lead.note);
-                  return (
-                    <tr key={lead.id} className="hover:bg-gray-50/70 transition-all">
-                      {/* Row number */}
-                      <td className="py-3 px-4 text-center text-gray-400 font-mono text-[11px]">{idx + 1}</td>
 
-                      {/* Business Name */}
-                      <td className="py-3 px-4 font-semibold">
-                        <EditableCell
-                          leadId={lead.id}
-                          field="businessName"
-                          value={lead.businessName || ''}
-                          placeholder="Business name"
-                          editMode={isEditMode}
-                        />
-                      </td>
+          <div className="flex items-center gap-3 flex-wrap">
+            {/* Save Button */}
+            <button
+              onClick={handleSaveAll}
+              disabled={saveStatus === 'saving'}
+              className="inline-flex items-center gap-2 px-5 py-2.5 bg-black hover:bg-zinc-800 text-white font-bold text-sm rounded-xl transition-all shadow-sm active:scale-95 disabled:opacity-60"
+            >
+              {saveStatus === 'saving' ? (
+                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+              ) : saveStatus === 'saved' ? (
+                <Check className="w-4 h-4" />
+              ) : (
+                <Save className="w-4 h-4" />
+              )}
+              <span>{saveStatus === 'saved' ? 'Saved ✓' : 'Save Changes'}</span>
+            </button>
 
-                      {/* Person Name */}
-                      <td className="py-3 px-4">
-                        <div className="flex items-center gap-2">
-                          <div className="w-7 h-7 rounded-full bg-[#00a884]/15 text-[#00a884] font-bold flex items-center justify-center text-[10px] flex-shrink-0">
-                            {((lead.personName || lead.name || 'C').charAt(0)).toUpperCase()}
-                          </div>
-                          <EditableCell
-                            leadId={lead.id}
-                            field="personName"
-                            value={lead.personName || lead.name || ''}
-                            placeholder="Person name"
-                            editMode={isEditMode}
-                          />
-                        </div>
-                      </td>
+            {/* Add Data Button */}
+            <button
+              onClick={() => { setAddForm({}); setShowAddPopup(true); }}
+              className="inline-flex items-center gap-2 px-4 py-2.5 bg-zinc-100 hover:bg-zinc-200 border border-zinc-300 text-black font-bold text-sm rounded-xl transition-all shadow-sm active:scale-95"
+            >
+              <Plus className="w-4 h-4" />
+              <span>+ Add Contact</span>
+            </button>
 
-                      {/* Phone Number */}
-                      <td className="py-3 px-4">
-                        <div className="flex items-center gap-1.5">
-                          <Phone className="w-3 h-3 text-gray-400 flex-shrink-0" />
-                          <EditableCell
-                            leadId={lead.id}
-                            field="phone"
-                            value={lead.phone || ''}
-                            placeholder="Phone number"
-                            editMode={isEditMode}
-                          />
-                        </div>
-                      </td>
+            {/* Upload Excel */}
+            <input type="file" ref={fileInputRef} onChange={handleFileUpload} accept=".xlsx,.xls,.csv" className="hidden" />
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              disabled={isUploading}
+              className="inline-flex items-center gap-2 px-4 py-2.5 bg-zinc-100 hover:bg-zinc-200 border border-zinc-300 text-black font-bold text-sm rounded-xl transition-all shadow-sm active:scale-95 disabled:opacity-60"
+            >
+              <FileSpreadsheet className="w-4 h-4" />
+              <span>{isUploading ? 'Uploading...' : 'Upload Excel / CSV'}</span>
+            </button>
 
-                      {/* Note — clickable word */}
-                      <td className="py-3 px-4 text-center">
-                        <button
-                          onClick={() => openNotePopup(lead)}
-                          title="Click to view / add notes"
-                          className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-bold text-[11px] transition-all ${
-                            hasNotes
-                              ? 'bg-purple-50 text-purple-700 border border-purple-200 hover:bg-purple-100'
-                              : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
-                          }`}
-                        >
-                          <span>Note</span>
-                          {hasNotes && (
-                            <span className="w-4 h-4 rounded-full bg-purple-600 text-white text-[9px] font-black flex items-center justify-center">
-                              {(lead.notesList?.length || 0) + (lead.note ? 1 : 0)}
-                            </span>
-                          )}
-                        </button>
-                      </td>
-
-                      {/* Status badge */}
-                      <td className="py-3 px-4 text-center">
-                        {lead.callStatus === 'INTERESTED' ? (
-                          <span className="px-2 py-1 text-[10px] font-bold rounded-md bg-emerald-50 text-emerald-700 border border-emerald-200">👍 Interested</span>
-                        ) : lead.callStatus === 'YES' ? (
-                          <span className="px-2 py-1 text-[10px] font-bold rounded-md bg-amber-50 text-amber-700 border border-amber-200">🔥 Warm</span>
-                        ) : lead.callStatus === 'NOT_INTERESTED' ? (
-                          <span className="px-2 py-1 text-[10px] font-bold rounded-md bg-rose-50 text-rose-700 border border-rose-200">👎 Not Int.</span>
-                        ) : (
-                          <span className="text-gray-400 italic text-[10px]">—</span>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+            {/* Clear All */}
+            {leads.length > 0 && (
+              <button
+                onClick={handleClearAll}
+                className="px-3.5 py-2.5 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 rounded-xl transition-all border border-zinc-300"
+                title="Clear all leads"
+              >
+                <Trash2 className="w-4 h-4 text-black" />
+              </button>
+            )}
           </div>
-        )}
+        </div>
+
+        {/* PAGE 1 vs PAGE 2 SUB-PAGE SWITCHER */}
+        <div className="flex items-center gap-2 border-t border-zinc-200 pt-4">
+          <button
+            onClick={() => setActivePage('analytics')}
+            className={`px-5 py-2.5 rounded-xl text-sm font-extrabold transition-all border ${
+              activePage === 'analytics'
+                ? 'bg-black text-white border-black shadow-sm'
+                : 'bg-zinc-100 text-zinc-700 border-zinc-200 hover:bg-zinc-200 hover:text-black'
+            }`}
+          >
+            📊 Page 1: Analytics & Today's Follow-ups
+          </button>
+
+          <button
+            onClick={() => setActivePage('registry')}
+            className={`px-5 py-2.5 rounded-xl text-sm font-extrabold transition-all border ${
+              activePage === 'registry'
+                ? 'bg-black text-white border-black shadow-sm'
+                : 'bg-zinc-100 text-zinc-700 border-zinc-200 hover:bg-zinc-200 hover:text-black'
+            }`}
+          >
+            📋 Page 2: Contacts Data Table ({leads.length})
+          </button>
+        </div>
       </div>
+
+      {/* ══════════════════════════════════════════════════════════════════════
+          PAGE 1: ANALYTICS & TODAY'S FOLLOW-UPS
+      ══════════════════════════════════════════════════════════════════════ */}
+      {activePage === 'analytics' && (
+        <div className="space-y-6">
+          {/* 5 Count Boxes */}
+          <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
+            {/* Box 1: Calls Made Today */}
+            <div className="bg-white p-5 rounded-2xl border border-zinc-200 shadow-sm space-y-2">
+              <div className="text-xs font-bold text-zinc-500 uppercase tracking-wider">Calls Made Today</div>
+              <div className="text-3xl font-extrabold text-black">{counts.callsToday}</div>
+              <p className="text-xs text-zinc-400 font-semibold">Calls logged today</p>
+            </div>
+
+            {/* Box 2: Interested */}
+            <div className="bg-white p-5 rounded-2xl border border-zinc-200 shadow-sm space-y-2">
+              <div className="text-xs font-bold text-zinc-500 uppercase tracking-wider">Interested</div>
+              <div className="text-3xl font-extrabold text-black">{counts.interested}</div>
+              <p className="text-xs text-zinc-400 font-semibold">Marked Interested</p>
+            </div>
+
+            {/* Box 3: Warm */}
+            <div className="bg-white p-5 rounded-2xl border border-zinc-200 shadow-sm space-y-2">
+              <div className="text-xs font-bold text-zinc-500 uppercase tracking-wider">Warm</div>
+              <div className="text-3xl font-extrabold text-black">{counts.warm}</div>
+              <p className="text-xs text-zinc-400 font-semibold">Marked Warm</p>
+            </div>
+
+            {/* Box 4: Total Follow-ups Needed */}
+            <div className="bg-white p-5 rounded-2xl border border-zinc-200 shadow-sm space-y-2">
+              <div className="text-xs font-bold text-zinc-500 uppercase tracking-wider">Total Follow-ups</div>
+              <div className="text-3xl font-extrabold text-black">{counts.followups}</div>
+              <p className="text-xs text-zinc-400 font-semibold">Future dates set</p>
+            </div>
+
+            {/* Box 5: Follow-ups Due TODAY */}
+            <div className="bg-white p-5 rounded-2xl border-2 border-black shadow-md space-y-2 bg-zinc-50">
+              <div className="text-xs font-extrabold text-black uppercase tracking-wider">Follow-ups Due Today</div>
+              <div className="text-3xl font-extrabold text-black">{counts.followupsToday}</div>
+              <p className="text-xs text-black font-extrabold">Requires action today!</p>
+            </div>
+          </div>
+
+          {/* Info List of Today's Scheduled Follow-ups */}
+          <div className="bg-white p-6 rounded-2xl border border-zinc-200 shadow-sm space-y-4">
+            <div className="flex items-center justify-between border-b border-zinc-200 pb-4">
+              <div>
+                <h3 className="text-xl font-extrabold text-black flex items-center gap-2">
+                  <span>📅 Info List of Today's Scheduled Follow-ups</span>
+                </h3>
+                <p className="text-xs text-zinc-500 font-medium mt-0.5">Leads scheduled to be called specifically today ({todayStr})</p>
+              </div>
+              <span className="px-3 py-1 bg-black text-white text-xs font-bold rounded-full">
+                {followUpsDueTodayLeads.length} Due Today
+              </span>
+            </div>
+
+            {followUpsDueTodayLeads.length === 0 ? (
+              <div className="p-12 text-center text-sm text-zinc-400 italic bg-zinc-50 rounded-xl border border-zinc-200">
+                No follow-ups scheduled for today ({todayStr}). All clear!
+              </div>
+            ) : (
+              <div className="divide-y divide-zinc-200 border border-zinc-200 rounded-xl overflow-hidden">
+                {followUpsDueTodayLeads.map((lead) => (
+                  <div key={lead.id} className="p-4 hover:bg-zinc-50 transition-colors flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <span className="text-base font-extrabold text-black">{lead.personName || lead.businessName || 'Contact'}</span>
+                        {lead.businessName && lead.personName && (
+                          <span className="text-xs text-zinc-500 font-semibold">({lead.businessName})</span>
+                        )}
+                      </div>
+                      <div className="text-xs text-zinc-600 font-semibold flex items-center gap-3">
+                        <span>📞 {lead.phone}</span>
+                        {lead.callStatus && (
+                          <span className="px-2 py-0.5 bg-zinc-100 text-black border border-black rounded text-[10px] font-bold">
+                            {lead.callStatus}
+                          </span>
+                        )}
+                      </div>
+                      {lead.note && (
+                        <p className="text-xs text-zinc-700 italic">"{lead.note}"</p>
+                      )}
+                    </div>
+
+                    <div className="flex items-center gap-3 flex-shrink-0">
+                      <button
+                        onClick={() => openNotePopup(lead)}
+                        className="px-3.5 py-1.5 bg-zinc-100 hover:bg-zinc-200 text-black border border-zinc-300 font-bold text-xs rounded-lg transition-all"
+                      >
+                        Notes / Edit
+                      </button>
+                      {lead.phone && (
+                        <button
+                          onClick={() => window.open(`https://web.whatsapp.com/send?phone=${lead.phone.replace(/\D/g, '')}`, '_blank')}
+                          className="px-4 py-2 bg-black hover:bg-zinc-800 text-white font-bold text-xs rounded-xl transition-all flex items-center gap-1.5 shadow-sm"
+                        >
+                          <span>Open WhatsApp</span>
+                          <ExternalLink className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ══════════════════════════════════════════════════════════════════════
+          PAGE 2: COLD CALLS REGISTRY & CONTACTS TABLE
+      ══════════════════════════════════════════════════════════════════════ */}
+      {activePage === 'registry' && (
+        <div className="space-y-6">
+          {/* ── FILTER + SEARCH ──────────────────────────────────────────────────── */}
+          <div className="bg-white rounded-2xl border border-zinc-200 shadow-sm p-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="flex items-center gap-2 overflow-x-auto">
+              {([
+                ['ALL', `All (${counts.all})`, 'bg-black text-white', 'text-zinc-700 bg-zinc-100 hover:bg-zinc-200'],
+                ['INTERESTED', `Interested (${counts.interested})`, 'bg-black text-white', 'text-zinc-700 bg-zinc-100 hover:bg-zinc-200'],
+                ['WARM', `Warm (${counts.warm})`, 'bg-black text-white', 'text-zinc-700 bg-zinc-100 hover:bg-zinc-200'],
+                ['NOT_INTERESTED', `Not Interested (${counts.notInterested})`, 'bg-black text-white', 'text-zinc-700 bg-zinc-100 hover:bg-zinc-200'],
+                ['FOLLOWUPS', `Follow-ups (${counts.followups})`, 'bg-black text-white', 'text-zinc-700 bg-zinc-100 hover:bg-zinc-200'],
+              ] as [string, string, string, string][]).map(([tab, label, active, inactive]) => (
+                <button
+                  key={tab}
+                  onClick={() => setFilterTab(tab as any)}
+                  className={`px-3.5 py-2 rounded-xl text-xs font-extrabold transition-all whitespace-nowrap ${filterTab === tab ? active : inactive}`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            <div className="relative min-w-[280px]">
+              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+                placeholder="Search name, phone, business..."
+                className="w-full pl-9 pr-4 py-2 text-sm font-medium rounded-xl border border-zinc-300 bg-zinc-50 focus:bg-white focus:border-black focus:outline-none transition-all text-black"
+              />
+            </div>
+          </div>
+
+          {/* ── TABLE ───────────────────────────────────────────────────────────── */}
+          <div className={`bg-white rounded-2xl border shadow-sm overflow-hidden transition-all ${
+            isEditMode ? 'border-black ring-2 ring-black' : 'border-zinc-200'
+          }`}>
+            {/* Table top-bar */}
+            {filteredLeads.length > 0 && (
+              <div className={`flex items-center justify-between px-5 py-3 border-b transition-all ${
+                isEditMode ? 'bg-zinc-100 border-zinc-300' : 'bg-zinc-50 border-zinc-200'
+              }`}>
+                <button
+                  onClick={() => {
+                    if (isEditMode) {
+                      handleSaveAll();
+                    } else {
+                      setIsEditMode(true);
+                    }
+                  }}
+                  className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl font-extrabold text-xs transition-all ${
+                    isEditMode
+                      ? 'bg-black text-white hover:bg-zinc-800 shadow-sm'
+                      : 'bg-zinc-200 text-black hover:bg-zinc-300'
+                  }`}
+                  title={isEditMode ? 'Exit edit mode' : 'Enable edit mode'}
+                >
+                  {isEditMode ? (
+                    <><X className="w-4 h-4" /><span>Done Editing</span></>
+                  ) : (
+                    <><Pencil className="w-4 h-4" /><span>Edit Table</span></>
+                  )}
+                </button>
+                {isEditMode && (
+                  <span className="text-xs text-black font-extrabold">
+                    ✏️ Edit mode active — cells are now editable
+                  </span>
+                )}
+              </div>
+            )}
+
+            {loading ? (
+              <div className="p-16 text-center text-sm text-zinc-400">Loading leads...</div>
+            ) : filteredLeads.length === 0 ? (
+              <div className="p-16 text-center space-y-3">
+                <div className="w-12 h-12 rounded-2xl bg-zinc-100 text-zinc-400 flex items-center justify-center mx-auto">
+                  <FileSpreadsheet className="w-6 h-6 text-black" />
+                </div>
+                <p className="text-base font-extrabold text-black">No leads found</p>
+                <p className="text-xs text-zinc-500 font-semibold">
+                  {leads.length === 0 ? 'Upload an Excel sheet to get started.' : 'No leads match your search.'}
+                </p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="border-b text-xs font-extrabold text-black uppercase tracking-wider bg-zinc-100 border-zinc-200">
+                      <th className="py-4 px-4 w-10 text-center">#</th>
+                      <th className="py-4 px-4">Business Name</th>
+                      <th className="py-4 px-4">Person Name</th>
+                      <th className="py-4 px-4">Phone Number</th>
+                      <th className="py-4 px-4 text-center">Note</th>
+                      <th className="py-4 px-4 text-center">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-zinc-200 text-sm font-medium text-black">
+                    {filteredLeads.map((lead, idx) => {
+                      const hasNotes = (lead.notesList && lead.notesList.length > 0) || Boolean(lead.note);
+                      return (
+                        <tr key={lead.id} className="hover:bg-zinc-50 transition-all">
+                          {/* Row number */}
+                          <td className="py-3.5 px-4 text-center text-zinc-400 font-mono text-xs">{idx + 1}</td>
+
+                          {/* Business Name */}
+                          <td className="py-3.5 px-4 font-bold text-black">
+                            <EditableCell
+                              leadId={lead.id}
+                              field="businessName"
+                              value={lead.businessName || ''}
+                              placeholder="Business name"
+                              editMode={isEditMode}
+                            />
+                          </td>
+
+                          {/* Person Name (NO CIRCLE AVATAR - CLEAN PLAIN TEXT) */}
+                          <td className="py-3.5 px-4 font-bold text-black">
+                            <EditableCell
+                              leadId={lead.id}
+                              field="personName"
+                              value={lead.personName || lead.name || ''}
+                              placeholder="Person name"
+                              editMode={isEditMode}
+                            />
+                          </td>
+
+                          {/* Phone Number */}
+                          <td className="py-3.5 px-4 font-semibold text-black">
+                            <div className="flex items-center gap-1.5">
+                              <Phone className="w-3.5 h-3.5 text-zinc-400 flex-shrink-0" />
+                              <EditableCell
+                                leadId={lead.id}
+                                field="phone"
+                                value={lead.phone || ''}
+                                placeholder="Phone number"
+                                editMode={isEditMode}
+                              />
+                            </div>
+                          </td>
+
+                          {/* Note */}
+                          <td className="py-3.5 px-4 text-center">
+                            <button
+                              onClick={() => openNotePopup(lead)}
+                              title="Click to view / add notes"
+                              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-bold text-xs transition-all ${
+                                hasNotes
+                                  ? 'bg-black text-white hover:bg-zinc-800'
+                                  : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200'
+                              }`}
+                            >
+                              <span>Note</span>
+                              {hasNotes && (
+                                <span className="w-4 h-4 rounded-full bg-white text-black text-[10px] font-extrabold flex items-center justify-center">
+                                  {(lead.notesList?.length || 0) + (lead.note ? 1 : 0)}
+                                </span>
+                              )}
+                            </button>
+                          </td>
+
+                          {/* Status badge */}
+                          <td className="py-3.5 px-4 text-center">
+                            {lead.callStatus === 'INTERESTED' ? (
+                              <span className="px-3 py-1 text-xs font-extrabold rounded-md bg-black text-white">Interested</span>
+                            ) : lead.callStatus === 'YES' ? (
+                              <span className="px-3 py-1 text-xs font-extrabold rounded-md bg-zinc-800 text-white">Warm</span>
+                            ) : lead.callStatus === 'NOT_INTERESTED' ? (
+                              <span className="px-3 py-1 text-xs font-extrabold rounded-md bg-zinc-200 text-zinc-800">Not Int.</span>
+                            ) : (
+                              <span className="text-zinc-400 italic text-xs">—</span>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+
 
       {/* ══════════════════════════════════════════════════════════════════════
           NOTE POPUP

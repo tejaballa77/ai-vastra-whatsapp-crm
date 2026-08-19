@@ -270,251 +270,238 @@ export function WhatsAppCrmModule() {
   };
 
   return (
-    <div className="w-screen h-screen flex overflow-hidden bg-[#f0f2f5] text-[#111b21] font-sans">
-      {/* 1. Main Left Navigation Bar (WhatsApp placed 1st on Top) */}
-      <aside className="w-64 bg-[#111b21] text-white flex flex-col justify-between p-4 flex-shrink-0 select-none">
+    <div className="w-screen h-screen flex overflow-hidden bg-white text-black">
+      <aside className="w-64 bg-[#000000] text-white flex flex-col justify-between p-4 flex-shrink-0 select-none border-r border-zinc-800">
         <div>
-          <div className="flex items-center gap-3 px-2 py-4 mb-6 border-b border-gray-800">
-            <div className="w-9 h-9 rounded-xl bg-[#00a884] flex items-center justify-center text-white font-bold text-lg shadow-md">
-              ⚡
-            </div>
+          <div className="flex items-center gap-3.5 px-2 py-4 mb-6 border-b border-zinc-800">
+            <img src="/ai_vastra_logo.png" alt="Ai Vastra Logo" className="w-10 h-10 object-contain rounded-xl shadow-md" />
             <div>
-              <h1 className="font-bold text-base tracking-wide text-white">AI Vastra CRM</h1>
-              <p className="text-xs text-gray-400">Multichannel Workspace</p>
+              <h1 className="font-bold text-lg tracking-wide text-white">Ai Vastra CRM</h1>
+              <p className="text-xs text-zinc-400">Multichannel Workspace</p>
             </div>
           </div>
 
-          <nav className="space-y-1.5">
-            {/* 1. WhatsApp placed first at the top */}
+          <nav className="space-y-2">
             <button
               onClick={() => setActiveNav('whatsapp')}
-              className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-sm font-medium transition-all ${
-                activeNav === 'whatsapp' ? 'bg-[#00a884] text-white shadow-sm' : 'text-gray-300 hover:bg-gray-800/60'
+              className={`w-full flex items-center gap-3.5 px-4 py-3 rounded-xl text-base font-semibold transition-all ${
+                activeNav === 'whatsapp' ? 'bg-white text-black shadow-md font-bold' : 'text-zinc-300 hover:bg-zinc-900'
               }`}
             >
-              <MessageSquare className="w-4 h-4" />
-              <span className="flex-1 text-left font-semibold">WhatsApp</span>
+              <MessageSquare className="w-5 h-5" />
+              <span className="flex-1 text-left">WhatsApp</span>
             </button>
 
-            {/* 2. Cold Calls */}
             <button
               onClick={() => setActiveNav('calls')}
-              className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-sm font-medium transition-all ${
-                activeNav === 'calls' ? 'bg-[#00a884] text-white shadow-sm' : 'text-gray-300 hover:bg-gray-800/60'
+              className={`w-full flex items-center gap-3.5 px-4 py-3 rounded-xl text-base font-semibold transition-all ${
+                activeNav === 'calls' ? 'bg-white text-black shadow-md font-bold' : 'text-zinc-300 hover:bg-zinc-900'
               }`}
             >
-              <PhoneCall className="w-4 h-4" />
-              <span className="font-semibold">Cold Calls</span>
+              <PhoneCall className="w-5 h-5" />
+              <span className="flex-1 text-left">Cold Calls</span>
             </button>
 
-            {/* 3. Emails */}
             <button
               onClick={() => setActiveNav('emails')}
-              className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-sm font-medium transition-all ${
-                activeNav === 'emails' ? 'bg-[#00a884] text-white shadow-sm' : 'text-gray-300 hover:bg-gray-800/60'
+              className={`w-full flex items-center gap-3.5 px-4 py-3 rounded-xl text-base font-semibold transition-all ${
+                activeNav === 'emails' ? 'bg-white text-black shadow-md font-bold' : 'text-zinc-300 hover:bg-zinc-900'
               }`}
             >
-              <Mail className="w-4 h-4" />
+              <Mail className="w-5 h-5" />
               <span>Emails</span>
-              <span className="ml-auto text-[10px] bg-gray-800 text-gray-400 px-1.5 py-0.5 rounded">Soon</span>
+              <span className="ml-auto text-xs bg-zinc-800 text-zinc-400 px-2 py-0.5 rounded-full font-normal">Soon</span>
             </button>
 
-            {/* 4. Settings & AI Agent */}
             <button
               onClick={() => setActiveNav('settings')}
-              className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-sm font-medium transition-all ${
-                activeNav === 'settings' ? 'bg-[#00a884] text-white shadow-sm' : 'text-gray-300 hover:bg-gray-800/60'
+              className={`w-full flex items-center gap-3.5 px-4 py-3 rounded-xl text-base font-semibold transition-all ${
+                activeNav === 'settings' ? 'bg-white text-black shadow-md font-bold' : 'text-zinc-300 hover:bg-zinc-900'
               }`}
             >
-              <Settings className="w-4 h-4" />
+              <Settings className="w-5 h-5" />
               <span>Settings & AI Agent</span>
             </button>
           </nav>
         </div>
 
-        <div className="p-3 rounded-xl bg-gray-900 border border-gray-800 text-xs text-gray-400">
-          <div className="flex items-center gap-2 mb-1 text-white font-medium">
-            <span className="w-2 h-2 rounded-full bg-[#25d366] animate-pulse"></span>
+        <div className="p-3.5 rounded-xl bg-zinc-900 border border-zinc-800 text-xs text-zinc-400">
+          <div className="flex items-center gap-2 mb-1 text-white font-semibold text-sm">
+            <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse"></span>
             WhatsApp Web Extension
           </div>
-          <p className="text-[11px] text-gray-400">Extension active on web.whatsapp.com</p>
+          <p className="text-xs text-zinc-400">Extension active on web.whatsapp.com</p>
         </div>
       </aside>
 
-      {/* 2. Main Workspace Content Area */}
-      <main className="flex-1 flex flex-col overflow-hidden bg-[#f0f2f5]">
-        {/* Top Header Bar */}
-        <header className="h-16 bg-white border-b border-gray-200 px-6 flex items-center justify-between flex-shrink-0 shadow-sm">
+      <main className="flex-1 flex flex-col overflow-hidden bg-white text-black">
+        <header className="h-16 bg-white border-b border-zinc-200 px-6 flex items-center justify-between flex-shrink-0">
           <div className="flex items-center gap-6">
-            <h2 className="text-xl font-bold text-[#111b21]">WhatsApp CRM Dashboard</h2>
+            <h2 className="text-2xl font-extrabold text-black tracking-tight">WhatsApp CRM Dashboard</h2>
           </div>
 
           <div className="flex items-center gap-3">
-            {/* Direct Launch WhatsApp Web Primary Button */}
             <button
               onClick={() => handleOpenSpecificChat()}
-              className="inline-flex items-center gap-2 px-4 py-2 bg-[#00a884] text-white font-semibold text-xs rounded-xl hover:bg-[#008f70] transition-all shadow-md active:scale-95"
+              className="px-4 py-2 bg-black hover:bg-zinc-800 text-white font-bold text-sm rounded-xl transition-all flex items-center gap-2 shadow-sm"
             >
-              <span>🚀 Launch WhatsApp Web</span>
-              <ExternalLink className="w-3.5 h-3.5" />
+              <span>Launch WhatsApp Web</span>
+              <ExternalLink className="w-4 h-4" />
             </button>
           </div>
         </header>
 
-        {/* Dynamic Dashboard Content */}
         {activeNav === 'whatsapp' && (
-          <div className="flex-1 overflow-y-auto p-6 space-y-6">
-            {/* Block 1: Executive Stat Cards (INTERESTED, WARM, NOT INTERESTED - DEFAULT 0) */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-5">
-              {/* Interested Card */}
+          <div className="flex-1 overflow-y-auto p-6 space-y-6 bg-zinc-50/50">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
               <div 
                 onClick={() => setModalCategory('INTERESTED')}
-                className="bg-white p-5 rounded-2xl border border-gray-200 shadow-sm flex items-center justify-between cursor-pointer hover:border-emerald-500 hover:shadow-md transition-all group"
+                className="bg-white p-5 rounded-2xl border border-zinc-200 shadow-sm hover:shadow-md hover:border-black transition-all cursor-pointer group"
               >
-                <div>
-                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Interested</p>
-                  <h3 className="text-2xl font-bold text-emerald-600">{interestedCount}</h3>
-                  <p className="text-[11px] text-emerald-600 font-medium mt-1 flex items-center gap-1 group-hover:underline">
-                    Click to view leads <ChevronRight className="w-3 h-3" />
-                  </p>
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-xs font-bold text-zinc-600 uppercase tracking-wider">INTERESTED</span>
+                  <div className="w-9 h-9 rounded-xl bg-zinc-100 flex items-center justify-center text-black">
+                    <ThumbsUp className="w-5 h-5" />
+                  </div>
                 </div>
-                <div className="w-12 h-12 rounded-xl bg-emerald-50 text-[#00a884] flex items-center justify-center">
-                  <ThumbsUp className="w-6 h-6" />
-                </div>
+                <div className="text-3xl font-extrabold text-black mb-1">{interestedCount}</div>
+                <span className="text-xs font-bold text-black group-hover:underline flex items-center gap-1">
+                  Click to view leads <ChevronRight className="w-3.5 h-3.5" />
+                </span>
               </div>
 
-              {/* Warm Card */}
               <div 
                 onClick={() => setModalCategory('WARM')}
-                className="bg-white p-5 rounded-2xl border border-gray-200 shadow-sm flex items-center justify-between cursor-pointer hover:border-amber-500 hover:shadow-md transition-all group"
+                className="bg-white p-5 rounded-2xl border border-zinc-200 shadow-sm hover:shadow-md hover:border-black transition-all cursor-pointer group"
               >
-                <div>
-                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Warm</p>
-                  <h3 className="text-2xl font-bold text-amber-600">{warmCount}</h3>
-                  <p className="text-[11px] text-amber-600 font-medium mt-1 flex items-center gap-1 group-hover:underline">
-                    Click to view leads <ChevronRight className="w-3 h-3" />
-                  </p>
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-xs font-bold text-zinc-600 uppercase tracking-wider">WARM</span>
+                  <div className="w-9 h-9 rounded-xl bg-zinc-100 flex items-center justify-center text-black">
+                    <Flame className="w-5 h-5" />
+                  </div>
                 </div>
-                <div className="w-12 h-12 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center">
-                  <Flame className="w-6 h-6" />
-                </div>
+                <div className="text-3xl font-extrabold text-black mb-1">{warmCount}</div>
+                <span className="text-xs font-bold text-black group-hover:underline flex items-center gap-1">
+                  Click to view leads <ChevronRight className="w-3.5 h-3.5" />
+                </span>
               </div>
 
-              {/* Not Interested Card */}
               <div 
                 onClick={() => setModalCategory('NOT_INTERESTED')}
-                className="bg-white p-5 rounded-2xl border border-gray-200 shadow-sm flex items-center justify-between cursor-pointer hover:border-rose-500 hover:shadow-md transition-all group"
+                className="bg-white p-5 rounded-2xl border border-zinc-200 shadow-sm hover:shadow-md hover:border-black transition-all cursor-pointer group"
               >
-                <div>
-                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Not Interested</p>
-                  <h3 className="text-2xl font-bold text-rose-600">{notInterestedCount}</h3>
-                  <p className="text-[11px] text-rose-600 font-medium mt-1 flex items-center gap-1 group-hover:underline">
-                    Click to view leads <ChevronRight className="w-3 h-3" />
-                  </p>
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-xs font-bold text-zinc-600 uppercase tracking-wider">NOT INTERESTED</span>
+                  <div className="w-9 h-9 rounded-xl bg-zinc-100 flex items-center justify-center text-black">
+                    <ThumbsDown className="w-5 h-5" />
+                  </div>
                 </div>
-                <div className="w-12 h-12 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center">
-                  <ThumbsDown className="w-6 h-6" />
-                </div>
+                <div className="text-3xl font-extrabold text-black mb-1">{notInterestedCount}</div>
+                <span className="text-xs font-bold text-black group-hover:underline flex items-center gap-1">
+                  Click to view leads <ChevronRight className="w-3.5 h-3.5" />
+                </span>
               </div>
 
-              {/* Calls & Follow-ups Card */}
               <div 
                 onClick={() => setModalCategory('FOLLOWUPS')}
-                className="bg-white p-5 rounded-2xl border border-gray-200 shadow-sm flex items-center justify-between cursor-pointer hover:border-purple-500 hover:shadow-md transition-all group"
+                className="bg-white p-5 rounded-2xl border border-zinc-200 shadow-sm hover:shadow-md hover:border-black transition-all cursor-pointer group"
               >
-                <div>
-                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Calls & Follow-ups</p>
-                  <h3 className="text-2xl font-bold text-purple-600">{callsYesCount + followUpsCount}</h3>
-                  <p className="text-[11px] text-purple-600 font-medium mt-1 flex items-center gap-1 group-hover:underline">
-                    Calls ({callsYesCount}) • Dates ({followUpsCount})
-                  </p>
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-xs font-bold text-zinc-600 uppercase tracking-wider">CALLS & FOLLOW-UPS</span>
+                  <div className="w-9 h-9 rounded-xl bg-zinc-100 flex items-center justify-center text-black">
+                    <Calendar className="w-5 h-5" />
+                  </div>
                 </div>
-                <div className="w-12 h-12 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center">
-                  <Calendar className="w-6 h-6" />
-                </div>
+                <div className="text-3xl font-extrabold text-black mb-1">{callsYesCount + followUpsCount}</div>
+                <span className="text-xs text-zinc-600 font-bold">
+                  Calls ({callsYesCount}) • Dates ({followUpsCount})
+                </span>
               </div>
             </div>
 
-            {/* Block 2: SAVED LEAD REGISTRY & FOLLOW-UP TABLE */}
-            <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm space-y-4">
+            <div className="bg-white p-6 rounded-2xl border border-zinc-200 shadow-sm space-y-5">
               <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
-                  <h3 className="text-base font-bold text-[#111b21] flex items-center gap-2">
-                    <FileText className="w-4 h-4 text-[#00a884]" />
-                    <span>Saved Lead Registry & Contact Settings</span>
+                  <h3 className="text-xl font-extrabold text-black flex items-center gap-2">
+                    <FileText className="w-6 h-6 text-black" />
+                    Saved Lead Registry & Contact Settings
                   </h3>
-                  <p className="text-xs text-gray-500 mt-0.5">
-                    Shows all chats where contact info (Status, Call Yes/No, Follow-up date, Notes) was entered on WhatsApp Web.
-                  </p>
                 </div>
 
-                {/* Sub-Filters & Search */}
-                <div className="flex flex-wrap items-center gap-2">
+                <div className="flex items-center gap-3 flex-wrap">
                   <div className="relative">
-                    <Search className="w-3.5 h-3.5 text-gray-400 absolute left-3 top-2.5" />
+                    <Search className="w-4 h-4 text-zinc-400 absolute left-3 top-1/2 -translate-y-1/2" />
                     <input
                       type="text"
+                      placeholder="Search name or number..."
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
-                      placeholder="Search name or number..."
-                      className="pl-8 pr-3 py-1.5 text-xs bg-gray-100 border border-gray-200 rounded-lg focus:outline-none focus:border-[#00a884]"
+                      className="pl-9 pr-4 py-2 bg-zinc-100 border border-zinc-300 rounded-xl text-sm font-medium text-black focus:outline-none focus:border-black w-56"
                     />
                   </div>
 
-                  <div className="flex items-center bg-gray-100 p-1 rounded-lg border border-gray-200">
+                  <div className="flex items-center gap-1 bg-zinc-100 p-1 rounded-xl border border-zinc-200">
                     <button
                       onClick={() => setTableFilter('ALL')}
-                      className={`px-3 py-1 text-xs font-semibold rounded-md transition-all ${
-                        tableFilter === 'ALL' ? 'bg-white text-[#111b21] shadow-sm' : 'text-gray-600'
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                        tableFilter === 'ALL' ? 'bg-black text-white shadow-sm' : 'text-zinc-700 hover:text-black'
                       }`}
                     >
                       All ({savedLeads.length})
                     </button>
                     <button
                       onClick={() => setTableFilter('INTERESTED')}
-                      className={`px-3 py-1 text-xs font-semibold rounded-md transition-all ${
-                        tableFilter === 'INTERESTED' ? 'bg-emerald-600 text-white shadow-sm' : 'text-gray-600'
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                        tableFilter === 'INTERESTED' ? 'bg-black text-white shadow-sm' : 'text-zinc-700 hover:text-black'
                       }`}
                     >
                       Interested ({interestedCount})
                     </button>
                     <button
                       onClick={() => setTableFilter('WARM')}
-                      className={`px-3 py-1 text-xs font-semibold rounded-md transition-all ${
-                        tableFilter === 'WARM' ? 'bg-amber-500 text-white shadow-sm' : 'text-gray-600'
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                        tableFilter === 'WARM' ? 'bg-black text-white shadow-sm' : 'text-zinc-700 hover:text-black'
                       }`}
                     >
                       Warm ({warmCount})
                     </button>
                     <button
                       onClick={() => setTableFilter('CALLS')}
-                      className={`px-3 py-1 text-xs font-semibold rounded-md transition-all ${
-                        tableFilter === 'CALLS' ? 'bg-purple-600 text-white shadow-sm' : 'text-gray-600'
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                        tableFilter === 'CALLS' ? 'bg-black text-white shadow-sm' : 'text-zinc-700 hover:text-black'
                       }`}
                     >
                       Calls ({callsYesCount})
                     </button>
                   </div>
+
+                  <button
+                    onClick={handleExportCsv}
+                    className="px-3.5 py-2 bg-zinc-100 hover:bg-zinc-200 border border-zinc-300 text-black text-xs font-bold rounded-xl transition-all flex items-center gap-1.5"
+                    title="Export Saved Leads to CSV file"
+                  >
+                    <Download className="w-4 h-4" />
+                    <span>Export CSV</span>
+                  </button>
                 </div>
               </div>
 
-              {/* Table */}
-              <div className="overflow-x-auto border border-gray-200 rounded-xl">
-                <table className="w-full text-left border-collapse text-xs">
+              <div className="overflow-x-auto border border-zinc-200 rounded-xl">
+                <table className="w-full text-left border-collapse text-sm">
                   <thead>
-                    <tr className="bg-[#f0f2f5] text-gray-600 font-bold border-b border-gray-200">
-                      <th className="p-3">Contact Name / Phone</th>
-                      <th className="p-3">Lead Status</th>
-                      <th className="p-3">Call Status</th>
-                      <th className="p-3">Follow-up Date</th>
-                      <th className="p-3">Latest CRM Notes</th>
-                      <th className="p-3 text-right">Actions</th>
+                    <tr className="bg-zinc-100 text-black font-extrabold border-b border-zinc-200 text-xs uppercase tracking-wider">
+                      <th className="p-4">Contact Name / Phone</th>
+                      <th className="p-4">Lead Status</th>
+                      <th className="p-4">Call Status</th>
+                      <th className="p-4">Follow-up Date</th>
+                      <th className="p-4">Latest CRM Notes</th>
+                      <th className="p-4 text-right">Actions</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-gray-200 bg-white">
+                  <tbody className="divide-y divide-zinc-200 bg-white font-medium">
                     {filteredTableLeads.length === 0 ? (
                       <tr>
-                        <td colSpan={6} className="p-8 text-center text-gray-400 italic">
+                        <td colSpan={6} className="p-10 text-center text-zinc-500 italic text-sm">
                           No saved contact settings found matching filter. Enter contact info on WhatsApp Web via Extension!
                         </td>
                       </tr>
@@ -523,84 +510,84 @@ export function WhatsAppCrmModule() {
                         const { displayName, formattedPhone, cleanPhone } = getCleanDisplayContact(chat);
 
                         return (
-                          <tr key={chat.jid} className="hover:bg-gray-50 transition-colors">
-                            <td className="p-3">
-                              <div className="font-bold text-[#111b21]">{displayName}</div>
-                              <div className="text-gray-500 font-medium text-[11px] flex items-center gap-1.5 mt-0.5">
+                          <tr key={chat.jid} className="hover:bg-zinc-50 transition-colors">
+                            <td className="p-4">
+                              <div className="font-extrabold text-black text-base">{displayName}</div>
+                              <div className="text-zinc-600 font-semibold text-xs flex items-center gap-1.5 mt-1">
                                 <span>📞 {formattedPhone}</span>
                                 <button
                                   onClick={() => handleCopyPhone(cleanPhone)}
-                                  className="text-gray-400 hover:text-gray-700"
+                                  className="text-zinc-400 hover:text-black"
                                   title="Copy Phone Number"
                                 >
                                   {copiedPhone === cleanPhone ? (
-                                    <Check className="w-3 h-3 text-emerald-600" />
+                                    <Check className="w-3.5 h-3.5 text-black" />
                                   ) : (
-                                    <Copy className="w-3 h-3" />
+                                    <Copy className="w-3.5 h-3.5" />
                                   )}
                                 </button>
                               </div>
                             </td>
 
-                            <td className="p-3">
+                            <td className="p-4">
                               {chat.leadStatus === 'INTERESTED' && (
-                                <span className="px-2.5 py-1 text-[11px] font-bold bg-emerald-100 text-emerald-800 rounded-full border border-emerald-200">
-                                  👍 Interested
+                                <span className="px-3 py-1 text-xs font-extrabold bg-black text-white rounded-md">
+                                  Interested
                                 </span>
                               )}
                               {chat.leadStatus === 'WARM_INTERESTED' && (
-                                <span className="px-2.5 py-1 text-[11px] font-bold bg-amber-100 text-amber-800 rounded-full border border-amber-200">
-                                  🔥 Warm
+                                <span className="px-3 py-1 text-xs font-extrabold bg-zinc-800 text-white rounded-md">
+                                  Warm
                                 </span>
                               )}
                               {chat.leadStatus === 'NOT_INTERESTED' && (
-                                <span className="px-2.5 py-1 text-[11px] font-bold bg-rose-100 text-rose-800 rounded-full border border-rose-200">
-                                  👎 Not Interested
+                                <span className="px-3 py-1 text-xs font-extrabold bg-zinc-200 text-zinc-800 rounded-md">
+                                  Not Interested
                                 </span>
                               )}
                               {(!chat.leadStatus || chat.leadStatus === 'UNASSIGNED') && (
-                                <span className="px-2 py-0.5 text-[10px] text-gray-400 italic">Unassigned</span>
+                                <span className="px-2 py-0.5 text-xs text-zinc-400 italic">Unassigned</span>
                               )}
                             </td>
 
-                            <td className="p-3">
+                            <td className="p-4">
                               {chat.callStatus === 'YES' ? (
-                                <span className="px-2 py-0.5 text-[11px] font-bold bg-purple-100 text-purple-700 rounded-full">
+                                <span className="px-3 py-1 text-xs font-extrabold bg-black text-white rounded-md">
                                   Call: Yes
                                 </span>
                               ) : (
-                                <span className="text-gray-400 text-[11px]">No</span>
+                                <span className="text-zinc-400 text-xs">No</span>
                               )}
                             </td>
 
-                            <td className="p-3">
+                            <td className="p-4">
                               {chat.followUpDate ? (
-                                <span className="px-2 py-0.5 text-[11px] font-bold bg-amber-100 text-amber-800 rounded-full flex items-center gap-1 w-max">
+                                <span className="px-3 py-1 text-xs font-extrabold bg-zinc-100 text-black border border-black rounded-md flex items-center gap-1 w-max">
                                   📅 {chat.followUpDate}
                                 </span>
                               ) : (
-                                <span className="text-gray-400 text-[11px]">None</span>
+                                <span className="text-zinc-400 text-xs">None</span>
                               )}
                             </td>
 
-                            <td className="p-3 max-w-xs">
+                            <td className="p-4 max-w-xs">
                               {chat.notesList && chat.notesList.length > 0 ? (
-                                <p className="truncate text-gray-700 italic" title={chat.notesList[0]}>
+                                <p className="truncate text-zinc-800 italic text-sm" title={chat.notesList[0]}>
                                   "{chat.notesList[0]}"
                                 </p>
                               ) : (
-                                <span className="text-gray-400 text-[11px]">No notes</span>
+                                <span className="text-zinc-400 text-xs">No notes</span>
                               )}
                             </td>
 
-                            <td className="p-3 text-right">
+                            <td className="p-4 text-right">
                               <button
                                 onClick={() => handleOpenSpecificChat(chat.phone || chat.jid)}
-                                className="px-3.5 py-1.5 bg-[#00a884] text-white font-bold text-[11px] rounded-lg hover:bg-[#008f70] transition-all inline-flex items-center gap-1.5 shadow-sm active:scale-95"
+                                className="px-4 py-2 bg-black hover:bg-zinc-800 text-white font-bold text-xs rounded-xl transition-all inline-flex items-center gap-1.5 shadow-sm active:scale-95"
                                 title={`Open Chat for ${chat.name || chat.phone} directly in WhatsApp Web`}
                               >
                                 <span>Open Chat</span>
-                                <ExternalLink className="w-3 h-3" />
+                                <ExternalLink className="w-3.5 h-3.5" />
                               </button>
                             </td>
                           </tr>
@@ -609,95 +596,6 @@ export function WhatsAppCrmModule() {
                     )}
                   </tbody>
                 </table>
-              </div>
-            </div>
-
-            {/* Block 3: Dynamic Live Lead Activity Feed for TODAY */}
-            <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm space-y-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2.5">
-                  <h3 className="text-base font-bold text-[#111b21]">Today's Live WhatsApp Activity Feed</h3>
-                  <span className="text-[11px] px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 font-bold border border-emerald-200">
-                    Live Today
-                  </span>
-                </div>
-                <span className="text-xs text-gray-500 font-medium">
-                  {todayActivityChats.length} conversation{todayActivityChats.length === 1 ? '' : 's'} today
-                </span>
-              </div>
-
-              <div className="divide-y divide-gray-100 border border-gray-100 rounded-xl overflow-hidden">
-                {todayActivityChats.length === 0 ? (
-                  <div className="w-full p-8 text-center text-xs text-gray-400 space-y-1">
-                    <p className="font-semibold text-gray-600 text-sm">No activity recorded today yet</p>
-                    <p className="text-gray-400">Live conversations and messages occurring today will automatically appear here.</p>
-                  </div>
-                ) : (
-                  todayActivityChats.slice(0, 15).map((chat) => {
-                    const { displayName, formattedPhone, cleanPhone } = getCleanDisplayContact(chat);
-
-                    return (
-                      <div 
-                        key={chat.jid} 
-                        className="p-3.5 hover:bg-gray-50/90 transition-all flex flex-col md:flex-row md:items-center justify-between gap-3 bg-white"
-                      >
-                        {/* Left: Avatar & Contact Details */}
-                        <div className="flex items-center gap-3 min-w-[240px]">
-                          <div className="w-9 h-9 rounded-full bg-[#00a884]/15 text-[#00a884] font-bold flex items-center justify-center text-xs flex-shrink-0">
-                            {displayName.charAt(0).toUpperCase()}
-                          </div>
-                          <div className="min-w-0">
-                            <h4 className="text-xs font-bold truncate text-[#111b21]" title={displayName}>
-                              {displayName}
-                            </h4>
-                            <p className="text-[11px] text-gray-500 font-medium">
-                              📞 {formattedPhone}
-                            </p>
-                          </div>
-                        </div>
-
-                      {/* Middle: Message Preview & Notes */}
-                      <div className="flex-1 min-w-0 flex items-center gap-2.5">
-                        <div className="bg-gray-50 px-3 py-1.5 rounded-lg border border-gray-200/60 text-xs text-gray-700 italic truncate flex-1">
-                          "{chat.lastMessagePreview || 'New inquiry received'}"
-                        </div>
-                        {chat.notesList && chat.notesList.length > 0 && (
-                          <span className="text-[11px] bg-purple-50 text-purple-700 px-2.5 py-1 rounded-md font-medium border border-purple-200 flex-shrink-0 truncate max-w-[200px]">
-                            📝 {chat.notesList[0]}
-                          </span>
-                        )}
-                      </div>
-
-                      {/* Right: Status Badge & Action */}
-                      <div className="flex items-center gap-2.5 flex-shrink-0 justify-end">
-                        {chat.leadStatus === 'INTERESTED' && (
-                          <span className="px-2.5 py-1 text-[11px] font-bold rounded-md bg-emerald-50 text-emerald-700 border border-emerald-200">
-                            👍 Interested
-                          </span>
-                        )}
-                        {chat.leadStatus === 'WARM_INTERESTED' && (
-                          <span className="px-2.5 py-1 text-[11px] font-bold rounded-md bg-amber-50 text-amber-700 border border-amber-200">
-                            🔥 Warm
-                          </span>
-                        )}
-                        {chat.leadStatus === 'NOT_INTERESTED' && (
-                          <span className="px-2.5 py-1 text-[11px] font-bold rounded-md bg-rose-50 text-rose-700 border border-rose-200">
-                            👎 Not Interested
-                          </span>
-                        )}
-
-                        <button
-                          onClick={() => handleOpenSpecificChat(chat.phone || chat.jid)}
-                          className="px-3 py-1.5 text-xs font-semibold text-[#00a884] bg-[#00a884]/10 hover:bg-[#00a884]/20 rounded-lg flex items-center gap-1.5 transition-all"
-                        >
-                          <span>Open Chat</span>
-                          <ExternalLink className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })
-              )}
               </div>
             </div>
           </div>

@@ -305,17 +305,17 @@ export function WhatsAppCrmModule() {
 
   return (
     <div className="w-screen h-screen flex overflow-hidden bg-white text-black">
-      <aside className="w-64 bg-[#000000] text-white flex flex-col justify-between p-4 flex-shrink-0 select-none border-r border-zinc-800">
+      <aside className="w-64 bg-white text-black flex flex-col justify-between p-4 flex-shrink-0 select-none border-r border-zinc-200">
         <div>
-          <div className="px-2 py-4 mb-6 border-b border-zinc-800 flex items-center justify-center">
-            <img src="/ai_vastra_logo.png" alt="Ai Vastra" className="w-full h-auto max-h-12 object-contain" />
+          <div className="px-3 py-3 mb-6 bg-black rounded-2xl flex items-center justify-center shadow-sm">
+            <img src="/ai_vastra_logo.png" alt="Ai Vastra" className="w-full h-auto max-h-10 object-contain" />
           </div>
 
           <nav className="space-y-2">
             <button
               onClick={() => setActiveNav('whatsapp')}
-              className={`w-full flex items-center gap-3.5 px-4 py-3 rounded-xl text-base font-semibold transition-all ${
-                activeNav === 'whatsapp' ? 'bg-white text-black shadow-md font-bold' : 'text-zinc-300 hover:bg-zinc-900'
+              className={`w-full flex items-center gap-3.5 px-4 py-3 rounded-xl text-base transition-all ${
+                activeNav === 'whatsapp' ? 'bg-black text-white shadow-md font-extrabold' : 'text-zinc-700 hover:bg-zinc-100 hover:text-black font-semibold'
               }`}
             >
               <MessageSquare className="w-5 h-5" />
@@ -324,8 +324,8 @@ export function WhatsAppCrmModule() {
 
             <button
               onClick={() => setActiveNav('calls')}
-              className={`w-full flex items-center gap-3.5 px-4 py-3 rounded-xl text-base font-semibold transition-all ${
-                activeNav === 'calls' ? 'bg-white text-black shadow-md font-bold' : 'text-zinc-300 hover:bg-zinc-900'
+              className={`w-full flex items-center gap-3.5 px-4 py-3 rounded-xl text-base transition-all ${
+                activeNav === 'calls' ? 'bg-black text-white shadow-md font-extrabold' : 'text-zinc-700 hover:bg-zinc-100 hover:text-black font-semibold'
               }`}
             >
               <PhoneCall className="w-5 h-5" />
@@ -334,19 +334,19 @@ export function WhatsAppCrmModule() {
 
             <button
               onClick={() => setActiveNav('emails')}
-              className={`w-full flex items-center gap-3.5 px-4 py-3 rounded-xl text-base font-semibold transition-all ${
-                activeNav === 'emails' ? 'bg-white text-black shadow-md font-bold' : 'text-zinc-300 hover:bg-zinc-900'
+              className={`w-full flex items-center gap-3.5 px-4 py-3 rounded-xl text-base transition-all ${
+                activeNav === 'emails' ? 'bg-black text-white shadow-md font-extrabold' : 'text-zinc-700 hover:bg-zinc-100 hover:text-black font-semibold'
               }`}
             >
               <Mail className="w-5 h-5" />
               <span>Emails</span>
-              <span className="ml-auto text-xs bg-zinc-800 text-zinc-400 px-2 py-0.5 rounded-full font-normal">Soon</span>
+              <span className="ml-auto text-xs bg-zinc-100 text-zinc-500 border border-zinc-200 px-2 py-0.5 rounded-full font-semibold">Soon</span>
             </button>
 
             <button
               onClick={() => setActiveNav('settings')}
-              className={`w-full flex items-center gap-3.5 px-4 py-3 rounded-xl text-base font-semibold transition-all ${
-                activeNav === 'settings' ? 'bg-white text-black shadow-md font-bold' : 'text-zinc-300 hover:bg-zinc-900'
+              className={`w-full flex items-center gap-3.5 px-4 py-3 rounded-xl text-base transition-all ${
+                activeNav === 'settings' ? 'bg-black text-white shadow-md font-extrabold' : 'text-zinc-700 hover:bg-zinc-100 hover:text-black font-semibold'
               }`}
             >
               <Settings className="w-5 h-5" />
@@ -356,28 +356,28 @@ export function WhatsAppCrmModule() {
         </div>
 
         {/* Bottom Sidebar: Admin Profile Block + Logout Icon Button */}
-        <div className="pt-4 border-t border-zinc-800 flex items-center justify-between gap-2 mt-auto">
+        <div className="pt-4 border-t border-zinc-200 flex items-center justify-between gap-2 mt-auto">
           <button
             onClick={() => setShowAdminModal(true)}
-            className="flex-1 flex items-center gap-3 p-2.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 transition-all text-left group overflow-hidden"
+            className="flex-1 flex items-center gap-3 p-2.5 rounded-xl bg-zinc-100 hover:bg-zinc-200/80 border border-zinc-200 transition-all text-left group overflow-hidden"
             title="Open Admin Profile Settings"
           >
-            <div className="w-9 h-9 rounded-full bg-white text-black font-bold flex items-center justify-center text-xs flex-shrink-0 overflow-hidden border border-zinc-700">
+            <div className="w-9 h-9 rounded-full bg-black text-white font-bold flex items-center justify-center text-xs flex-shrink-0 overflow-hidden border border-zinc-300">
               {adminAvatar ? (
                 <img src={adminAvatar} alt="Admin" className="w-full h-full object-cover" />
               ) : (
-                <UserIcon className="w-5 h-5 text-black" />
+                <UserIcon className="w-5 h-5 text-white" />
               )}
             </div>
             <div className="flex-1 min-w-0">
-              <h4 className="text-sm font-bold text-white truncate">{adminDisplayName}</h4>
-              <p className="text-[11px] text-zinc-400 font-semibold truncate">@{adminUsername}</p>
+              <h4 className="text-sm font-extrabold text-black truncate">{adminDisplayName}</h4>
+              <p className="text-[11px] text-zinc-500 font-semibold truncate">@{adminUsername}</p>
             </div>
           </button>
 
           <button
             onClick={() => setShowLogoutModal(true)}
-            className="p-2.5 rounded-xl bg-zinc-900 hover:bg-rose-900/60 hover:text-rose-400 text-zinc-400 border border-zinc-800 transition-all flex-shrink-0"
+            className="p-2.5 rounded-xl bg-zinc-100 hover:bg-rose-50 hover:text-rose-600 text-zinc-600 border border-zinc-200 transition-all flex-shrink-0"
             title="Log Out of CRM"
           >
             <LogOut className="w-5 h-5" />

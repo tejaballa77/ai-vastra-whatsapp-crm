@@ -9,9 +9,9 @@
 }
 
 body {
-  color: #111b21;
-  background: #f0f2f5;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  color: #000000;
+  background: #ffffff;
+  font-family: 'Segoe UI', Aptos, Calibri, Arial, sans-serif !important;
   overflow: hidden;
   user-select: text !important;
   -webkit-user-select: text !important;

@@ -667,10 +667,17 @@ export function ColdCallsModule({
           return normF === selectedDate || (Boolean(l.followUpDate) && selectedDate === new Date().toISOString().slice(0, 10));
         });
 
-        // Recent calls list (for selected date, or all recent leads sorted by timestamp)
-        const displayCallsList = [...(dateLeads.length > 0 ? dateLeads : leads)].sort((a, b) => {
-          const tA = a.callTimestamp || a.updatedAt || a.createdAt || 0;
-          const tB = b.callTimestamp || b.updatedAt || b.createdAt || 0;
+        // Recent calls list strictly for calls logged or updated on selectedDate
+        const displayCallsList = leads.filter(l => {
+          const isCalledOrUpdated = Boolean(l.calledBy) || l.callChoice === 'YES' || l.callChoice === 'NO' || (l.callStatus && l.callStatus !== 'PENDING');
+          if (!isCalledOrUpdated) return false;
+          const timestamp = l.callTimestamp || l.updatedAt;
+          if (!timestamp) return false;
+          const dStr = new Date(timestamp).toISOString().slice(0, 10);
+          return dStr === selectedDate;
+        }).sort((a, b) => {
+          const tA = a.callTimestamp || a.updatedAt || 0;
+          const tB = b.callTimestamp || b.updatedAt || 0;
           return tB - tA;
         });
 
@@ -840,41 +847,35 @@ export function ColdCallsModule({
                             })
                           : 'Today';
 
-                        const outcome = lead.callStatus || 'PENDING';
+                        const outcome = lead.callStatus || (lead.callChoice === 'NO' ? 'NOT_CONNECTED' : 'PENDING');
                         let outcomeBadge = (
                           <span className="px-2.5 py-1 bg-zinc-100 text-zinc-700 border border-zinc-300 rounded-lg text-xs font-bold">
                             Pending
                           </span>
                         );
 
-                        if (outcome === 'INTERESTED' || outcome === 'YES') {
+                        if (outcome === 'INTERESTED') {
                           outcomeBadge = (
                             <span className="px-2.5 py-1 bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-lg text-xs font-extrabold">
                               Interested
                             </span>
                           );
-                        } else if (outcome === 'NOT_INTERESTED' || outcome === 'NO') {
+                        } else if (outcome === 'WARM' || outcome === 'YES') {
+                          outcomeBadge = (
+                            <span className="px-2.5 py-1 bg-amber-100 text-amber-800 border border-amber-300 rounded-lg text-xs font-extrabold">
+                              Warm
+                            </span>
+                          );
+                        } else if (outcome === 'NOT_INTERESTED') {
                           outcomeBadge = (
                             <span className="px-2.5 py-1 bg-rose-100 text-rose-800 border border-rose-300 rounded-lg text-xs font-extrabold">
                               Not Interested
                             </span>
                           );
-                        } else if (outcome === 'BUSY') {
-                          outcomeBadge = (
-                            <span className="px-2.5 py-1 bg-amber-100 text-amber-800 border border-amber-300 rounded-lg text-xs font-extrabold">
-                              Busy
-                            </span>
-                          );
-                        } else if (outcome === 'NO_ANSWER') {
+                        } else if (outcome === 'NOT_CONNECTED' || outcome === 'NO') {
                           outcomeBadge = (
                             <span className="px-2.5 py-1 bg-zinc-100 text-zinc-700 border border-zinc-300 rounded-lg text-xs font-extrabold">
-                              No Answer
-                            </span>
-                          );
-                        } else if (outcome === 'CALLBACK_REQUESTED' || outcome === 'CONNECTED') {
-                          outcomeBadge = (
-                            <span className="px-2.5 py-1 bg-blue-100 text-blue-800 border border-blue-300 rounded-lg text-xs font-extrabold">
-                              Callback / Connected
+                              Not Connected
                             </span>
                           );
                         }

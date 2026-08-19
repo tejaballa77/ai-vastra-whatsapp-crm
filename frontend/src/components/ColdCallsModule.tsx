@@ -381,15 +381,7 @@ export function ColdCallsModule({
     }
   };
 
-  // ── Clear All ─────────────────────────────────────────────────────────────────
-  const handleClearAll = async () => {
-    if (!confirm('Remove all cold call leads? This cannot be undone.')) return;
-    await fetch(`${getBackendUrl()}/api/cold-calls`, { method: 'DELETE' });
-    setLeads([]);
-    setEditedRows(new Map());
-  };
-
-  // ── Filter & Dynamic Sort (Latest Updated / Created FLOATS TO TOP) ───────────
+  // ── Filter & Dynamic Sort ───────────────────────────────────────────────────
   const filteredLeads = leads.filter(l => {
     const q = searchQuery.toLowerCase();
     const match =
@@ -406,8 +398,15 @@ export function ColdCallsModule({
     return true;
   });
 
-  // DYNAMIC SORT: Leads updated or added most recently come FIRST!
+  // DYNAMIC SORT:
+  // 1. Leads with existing notes float to the TOP!
+  // 2. Within rows with notes (or without notes), sort by updatedAt descending!
   const sortedLeads = [...filteredLeads].sort((a, b) => {
+    const hasNotesA = Boolean(a.note || (a.notesList && a.notesList.length > 0));
+    const hasNotesB = Boolean(b.note || (b.notesList && b.notesList.length > 0));
+    if (hasNotesA && !hasNotesB) return -1;
+    if (!hasNotesA && hasNotesB) return 1;
+
     const timeA = typeof a.updatedAt === 'number' ? a.updatedAt : (a.updatedAt ? new Date(a.updatedAt).getTime() : (a.createdAt || 0));
     const timeB = typeof b.updatedAt === 'number' ? b.updatedAt : (b.updatedAt ? new Date(b.updatedAt).getTime() : (b.createdAt || 0));
     return timeB - timeA;
@@ -683,7 +682,7 @@ export function ColdCallsModule({
                 className="inline-flex items-center gap-2 px-4 py-2.5 bg-zinc-100 hover:bg-zinc-200 border border-zinc-300 text-black font-bold text-xs rounded-xl transition-all shadow-sm active:scale-95"
               >
                 <Plus className="w-3.5 h-3.5" />
-                <span>+ Add Data</span>
+                <span>Add Data</span>
               </button>
 
               {/* Upload Excel */}
@@ -696,17 +695,6 @@ export function ColdCallsModule({
                 <FileSpreadsheet className="w-3.5 h-3.5" />
                 <span>{isUploading ? 'Uploading...' : 'Upload Excel'}</span>
               </button>
-
-              {/* Clear All */}
-              {leads.length > 0 && (
-                <button
-                  onClick={handleClearAll}
-                  className="p-2.5 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 rounded-xl transition-all border border-zinc-300"
-                  title="Clear all leads"
-                >
-                  <Trash2 className="w-4 h-4 text-black" />
-                </button>
-              )}
             </div>
           </div>
 
@@ -754,7 +742,7 @@ export function ColdCallsModule({
                               leadId={lead.id}
                               field="businessName"
                               value={lead.businessName || ''}
-                              placeholder="Business name"
+                              placeholder=""
                             />
                           </td>
 
@@ -764,7 +752,7 @@ export function ColdCallsModule({
                               leadId={lead.id}
                               field="personName"
                               value={lead.personName || lead.name || ''}
-                              placeholder="Person name"
+                              placeholder=""
                             />
                           </td>
 
@@ -774,7 +762,7 @@ export function ColdCallsModule({
                               leadId={lead.id}
                               field="phone"
                               value={lead.phone || ''}
-                              placeholder="Phone number"
+                              placeholder=""
                             />
                           </td>
 
@@ -827,44 +815,42 @@ export function ColdCallsModule({
           NOTE POPUP
       ══════════════════════════════════════════════════════════════════════ */}
       {notePopupLead && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white w-full max-w-xl rounded-2xl shadow-2xl border border-gray-200 flex flex-col max-h-[90vh]">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[9999] flex items-center justify-center p-4 text-black font-sans">
+          <div className="bg-white w-full max-w-xl rounded-2xl shadow-2xl border border-gray-200 flex flex-col max-h-[90vh] overflow-hidden">
 
             {/* Header */}
-            <div className="px-5 py-4 border-b border-gray-200 flex items-center justify-between bg-[#f0f2f5] rounded-t-2xl">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-[#00a884]/15 text-[#00a884] font-bold flex items-center justify-center text-sm flex-shrink-0">
-                  {((notePopupLead.personName || notePopupLead.businessName || 'C').charAt(0)).toUpperCase()}
-                </div>
-                <div>
-                  <h3 className="text-sm font-bold text-[#111b21]">
-                    {notePopupLead.businessName || notePopupLead.personName || 'Contact'}
-                  </h3>
-                  <p className="text-[11px] text-gray-500">
-                    {notePopupLead.personName || ''}{notePopupLead.phone ? ` · 📞 ${notePopupLead.phone}` : ''}
+            <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between bg-[#f8f9fa] rounded-t-2xl">
+              <div>
+                <h3 className="text-lg font-extrabold text-black tracking-tight">
+                  {notePopupLead.businessName || notePopupLead.personName || 'Contact Details'}
+                </h3>
+                {(notePopupLead.personName || notePopupLead.phone) && (
+                  <p className="text-xs font-semibold text-zinc-500 mt-0.5">
+                    {notePopupLead.businessName && notePopupLead.personName ? notePopupLead.personName : ''}
+                    {notePopupLead.phone ? `${notePopupLead.businessName && notePopupLead.personName ? ' · ' : ''}📞 ${notePopupLead.phone}` : ''}
                   </p>
-                </div>
+                )}
               </div>
               <button
                 onClick={() => setNotePopupLead(null)}
-                className="w-8 h-8 rounded-full bg-white hover:bg-gray-200 flex items-center justify-center text-gray-600 transition-all shadow-sm"
+                className="w-8 h-8 rounded-full bg-white hover:bg-gray-200 flex items-center justify-center text-gray-600 transition-all shadow-sm border border-gray-200"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
             {/* Body */}
-            <div className="overflow-y-auto flex-1 p-5 space-y-5">
+            <div className="overflow-y-auto flex-1 p-6 space-y-5">
 
               {/* ── Call Status ───────────────────────────────────────────── */}
               <div>
-                <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block mb-2">Lead Status</label>
+                <label className="text-[10px] font-extrabold text-zinc-500 uppercase tracking-wider block mb-2">Lead Status</label>
                 <div className="flex gap-2 flex-wrap">
                   {([
                     ['INTERESTED', '👍 Interested', 'bg-emerald-600'],
                     ['YES', '🔥 Warm', 'bg-amber-500'],
                     ['NOT_INTERESTED', '👎 Not Interested', 'bg-rose-600'],
-                    ['PENDING', '⏳ Pending', 'bg-gray-700'],
+                    ['PENDING', '⏳ Pending', 'bg-black'],
                   ] as [string, string, string][]).map(([val, label, activeClass]) => (
                     <button
                       key={val}
@@ -884,27 +870,26 @@ export function ColdCallsModule({
 
               {/* ── Follow-up Date ────────────────────────────────────────── */}
               <div>
-                <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block mb-2">Follow-up Date</label>
+                <label className="text-[10px] font-extrabold text-zinc-500 uppercase tracking-wider block mb-2">Follow-up Date</label>
                 <input
                   type="date"
                   value={notePopupLead.followUpDate || ''}
                   onChange={e => handlePopupFieldEdit('followUpDate', e.target.value)}
-                  className="w-full px-3 py-2 text-xs rounded-xl border border-gray-200 bg-gray-50 focus:bg-white focus:border-[#00a884] focus:outline-none transition-all"
+                  className="w-full px-3 py-2 text-xs font-semibold rounded-xl border border-gray-200 bg-gray-50 focus:bg-white focus:border-black focus:outline-none transition-all"
                 />
               </div>
 
               {/* ── Notes Section ─────────────────────────────────────────── */}
               <div className="space-y-3">
-                <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block">Notes</label>
+                <label className="text-[10px] font-extrabold text-zinc-500 uppercase tracking-wider block">Notes</label>
 
-                {/* Original note from Excel */}
+                {/* Original note */}
                 {notePopupLead.note && (
                   <div className="p-3 rounded-xl bg-blue-50 border border-blue-200 text-xs">
-                    <div className="text-[10px] font-bold text-blue-400 uppercase mb-1">From Excel</div>
                     <input
                       value={notePopupLead.note}
                       onChange={e => handlePopupFieldEdit('note', e.target.value)}
-                      className="w-full bg-transparent text-blue-900 outline-none text-xs"
+                      className="w-full bg-transparent text-blue-900 font-semibold outline-none text-xs"
                     />
                   </div>
                 )}

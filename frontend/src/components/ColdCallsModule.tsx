@@ -624,6 +624,10 @@ export function ColdCallsModule({
           return tB - tA;
         });
 
+        const todayYYYYMMDD = new Date().toISOString().slice(0, 10);
+        const isToday = selectedDate === todayYYYYMMDD;
+        const isPast = selectedDate < todayYYYYMMDD;
+
         return (
           <div className="space-y-6">
             {/* Top Toolbar Header with Date Filter */}
@@ -636,22 +640,37 @@ export function ColdCallsModule({
               </div>
 
               <div className="flex items-center gap-3">
-                {/* Date Selection Filter (Defaults to Today) */}
+                {/* Date Selection Filter (Max set to Today to disable future dates) */}
                 <div className="flex items-center gap-2 bg-zinc-50 px-3.5 py-2 rounded-xl border border-zinc-200 shadow-inner">
                   <Calendar className="w-4 h-4 text-zinc-500" />
                   <span className="text-xs font-bold text-zinc-600 uppercase tracking-wider">Date Filter:</span>
                   <input
                     type="date"
-                    value={selectedDate}
-                    onChange={(e) => setSelectedDate(e.target.value)}
+                    max={todayYYYYMMDD}
+                    value={selectedDate > todayYYYYMMDD ? todayYYYYMMDD : selectedDate}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      if (val && val > todayYYYYMMDD) {
+                        setSelectedDate(todayYYYYMMDD);
+                      } else {
+                        setSelectedDate(val);
+                      }
+                    }}
                     className="bg-transparent text-xs font-extrabold text-black outline-none cursor-pointer"
                   />
                 </div>
+
+                {/* Dynamic Today / Past Button */}
                 <button
-                  onClick={() => setSelectedDate(new Date().toISOString().slice(0, 10))}
-                  className="px-3 py-2 bg-zinc-100 hover:bg-zinc-200 text-black text-xs font-bold rounded-xl border border-zinc-200 transition-all"
+                  onClick={() => setSelectedDate(todayYYYYMMDD)}
+                  className={`px-3.5 py-2 text-xs font-extrabold rounded-xl border transition-all flex items-center gap-1.5 ${
+                    isToday
+                      ? 'bg-black text-white border-black shadow-sm'
+                      : 'bg-amber-100 text-amber-900 border-amber-300 hover:bg-amber-200'
+                  }`}
+                  title={isPast ? 'Click to reset back to Today' : 'Viewing Today'}
                 >
-                  Today
+                  {isPast ? '📅 Past' : 'Today'}
                 </button>
               </div>
             </div>

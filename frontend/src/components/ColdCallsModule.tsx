@@ -183,6 +183,11 @@ export function ColdCallsModule({
   const [showAddPopup, setShowAddPopup] = useState(false);
   const [addForm, setAddForm] = useState<Partial<ColdCallLead & { phoneError: string }>>({});
 
+  // Dashboard Card Popups
+  const [showStatusModal, setShowStatusModal] = useState(false);
+  const [showInterestedModal, setShowInterestedModal] = useState(false);
+  const [showFollowupsModal, setShowFollowupsModal] = useState(false);
+
   // Upload
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -619,19 +624,48 @@ export function ColdCallsModule({
           PAGE 1: ANALYTICS & RECENT CALLS DASHBOARD
       ══════════════════════════════════════════════════════════════════════ */}
       {subPage === 'analytics' && (() => {
+        const normalizeDateStr = (dStr?: string) => {
+          if (!dStr) return '';
+          const s = dStr.trim();
+          if (s.includes('-') && s.split('-')[0].length === 2) {
+            const [dd, mm, yyyy] = s.split('-');
+            return `${yyyy}-${mm}-${dd}`;
+          }
+          return s;
+        };
+
         // Filter leads based on selectedDate
         const dateLeads = leads.filter(l => {
           const timestamp = l.callTimestamp || l.updatedAt || l.createdAt;
-          if (!timestamp) return false;
-          const dStr = new Date(timestamp).toISOString().slice(0, 10);
-          return dStr === selectedDate;
+          const dStr = timestamp ? new Date(timestamp).toISOString().slice(0, 10) : '';
+          const fStr = normalizeDateStr(l.followUpDate);
+          return dStr === selectedDate || fStr === selectedDate;
         });
 
-        // Metrics calculations
-        const totalCalls = dateLeads.length > 0 ? dateLeads.length : leads.length;
-        const connectedCalls = dateLeads.filter(l => l.callStatus === 'CONNECTED' || l.callStatus === 'INTERESTED' || l.callStatus === 'YES' || l.callStatus === 'NOT_INTERESTED' || l.callStatus === 'BUSY' || l.callStatus === 'CALLBACK_REQUESTED').length;
-        const conversations = dateLeads.filter(l => l.callStatus === 'INTERESTED' || l.callStatus === 'YES' || l.callStatus === 'NOT_INTERESTED' || (l.notesList && l.notesList.length > 0)).length;
-        const interestedLeads = dateLeads.filter(l => l.callStatus === 'INTERESTED' || l.callStatus === 'YES').length;
+        // 1. Total Calls — contacts marked "Yes" in Call column
+        const totalCallsLeads = leads.filter(l => {
+          const isYes = l.callChoice === 'YES' || l.callStatus === 'YES' || l.callStatus === 'INTERESTED' || l.callStatus === 'WARM';
+          const timestamp = l.callTimestamp || l.updatedAt || l.createdAt;
+          const dStr = timestamp ? new Date(timestamp).toISOString().slice(0, 10) : '';
+          return isYes && (dStr === selectedDate || !selectedDate);
+        });
+        const totalCallsCount = totalCallsLeads.length > 0 ? totalCallsLeads.length : leads.filter(l => l.callChoice === 'YES' || l.callStatus === 'YES' || l.callStatus === 'INTERESTED' || l.callStatus === 'WARM').length;
+
+        // 2. Status Breakdown — all leads with call choice / status recorded
+        const statusLeads = leads.filter(l => l.callChoice === 'YES' || l.callChoice === 'NO' || (l.callStatus && l.callStatus !== 'PENDING'));
+        const countInterested = statusLeads.filter(l => l.callStatus === 'INTERESTED').length;
+        const countWarm = statusLeads.filter(l => l.callStatus === 'WARM' || l.callStatus === 'YES').length;
+        const countNotInterested = statusLeads.filter(l => l.callStatus === 'NOT_INTERESTED').length;
+        const countNotConnected = statusLeads.filter(l => l.callStatus === 'NOT_CONNECTED' || l.callChoice === 'NO').length;
+
+        // 3. Conversations (Interested Contacts)
+        const interestedLeadsList = leads.filter(l => l.callStatus === 'INTERESTED' || (l.callChoice === 'YES' && (l.callStatus === 'WARM' || l.callStatus === 'YES' || !l.callStatus)));
+
+        // 4. Follow-ups Today
+        const followupLeadsList = leads.filter(l => {
+          const normF = normalizeDateStr(l.followUpDate);
+          return normF === selectedDate || (Boolean(l.followUpDate) && selectedDate === new Date().toISOString().slice(0, 10));
+        });
 
         // Recent calls list (for selected date, or all recent leads sorted by timestamp)
         const displayCallsList = [...(dateLeads.length > 0 ? dateLeads : leads)].sort((a, b) => {
@@ -691,53 +725,74 @@ export function ColdCallsModule({
               </div>
             </div>
 
-            {/* 4 Modern Metric Cards matching the reference design */}
+            {/* 4 Modern Metric Cards with Interactive Click Modals */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
               {/* Card 1: Total Calls */}
-              <div className="bg-[#eff6ff] p-5 rounded-2xl border border-blue-200/80 shadow-sm flex items-center gap-4 transition-all hover:shadow-md">
+              <div className="bg-[#eff6ff] p-5 rounded-2xl border border-blue-200/80 shadow-sm flex items-center gap-4 transition-all">
                 <div className="w-12 h-12 rounded-2xl bg-blue-500 text-white flex items-center justify-center flex-shrink-0 shadow-md">
                   <Phone className="w-6 h-6" />
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="text-xs font-bold text-blue-700 uppercase tracking-wider">Total Calls</div>
-                  <div className="text-3xl font-black text-blue-950 tracking-tight">{totalCalls.toLocaleString()}</div>
-                  <div className="text-[11px] font-semibold text-blue-600/90 mt-0.5">Logs for {selectedDate}</div>
+                  <div className="text-3xl font-black text-blue-950 tracking-tight">{totalCallsCount.toLocaleString()}</div>
+                  <div className="text-[11px] font-semibold text-blue-600/90 mt-0.5">Calls marked "Yes" on {selectedDate}</div>
                 </div>
               </div>
 
-              {/* Card 2: Connected Calls */}
-              <div className="bg-[#ecfdf5] p-5 rounded-2xl border border-emerald-200/80 shadow-sm flex items-center gap-4 transition-all hover:shadow-md">
-                <div className="w-12 h-12 rounded-2xl bg-emerald-500 text-white flex items-center justify-center flex-shrink-0 shadow-md">
+              {/* Card 2: Status Breakdown */}
+              <div
+                onClick={() => setShowStatusModal(true)}
+                className="bg-[#ecfdf5] p-5 rounded-2xl border border-emerald-200/80 shadow-sm flex items-center gap-4 transition-all hover:shadow-md hover:border-emerald-400 cursor-pointer active:scale-98 group"
+                title="Click to view detailed status breakdown"
+              >
+                <div className="w-12 h-12 rounded-2xl bg-emerald-500 text-white flex items-center justify-center flex-shrink-0 shadow-md group-hover:scale-105 transition-transform">
                   <PhoneCall className="w-6 h-6" />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <div className="text-xs font-bold text-emerald-700 uppercase tracking-wider">Connected Calls</div>
-                  <div className="text-3xl font-black text-emerald-950 tracking-tight">{connectedCalls.toLocaleString()}</div>
-                  <div className="text-[11px] font-semibold text-emerald-600/90 mt-0.5">Answered by clients</div>
+                  <div className="text-xs font-bold text-emerald-700 uppercase tracking-wider flex items-center justify-between">
+                    <span>Status</span>
+                    <span className="text-[10px] text-emerald-600 bg-emerald-100 px-1.5 py-0.5 rounded font-black">POPUP ↗</span>
+                  </div>
+                  <div className="text-3xl font-black text-emerald-950 tracking-tight">{statusLeads.length.toLocaleString()}</div>
+                  <div className="text-[11px] font-semibold text-emerald-600/90 mt-0.5">Click for status breakdown</div>
                 </div>
               </div>
 
-              {/* Card 3: Conversations */}
-              <div className="bg-[#f5f3ff] p-5 rounded-2xl border border-purple-200/80 shadow-sm flex items-center gap-4 transition-all hover:shadow-md">
-                <div className="w-12 h-12 rounded-2xl bg-purple-500 text-white flex items-center justify-center flex-shrink-0 shadow-md">
+              {/* Card 3: Conversations (Interested Contacts) */}
+              <div
+                onClick={() => setShowInterestedModal(true)}
+                className="bg-[#f5f3ff] p-5 rounded-2xl border border-purple-200/80 shadow-sm flex items-center gap-4 transition-all hover:shadow-md hover:border-purple-400 cursor-pointer active:scale-98 group"
+                title="Click to view interested contacts info"
+              >
+                <div className="w-12 h-12 rounded-2xl bg-purple-500 text-white flex items-center justify-center flex-shrink-0 shadow-md group-hover:scale-105 transition-transform">
                   <User className="w-6 h-6" />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <div className="text-xs font-bold text-purple-700 uppercase tracking-wider">Conversations</div>
-                  <div className="text-3xl font-black text-purple-950 tracking-tight">{conversations.toLocaleString()}</div>
-                  <div className="text-[11px] font-semibold text-purple-600/90 mt-0.5">Detailed notes logged</div>
+                  <div className="text-xs font-bold text-purple-700 uppercase tracking-wider flex items-center justify-between">
+                    <span>Conversations</span>
+                    <span className="text-[10px] text-purple-600 bg-purple-100 px-1.5 py-0.5 rounded font-black">POPUP ↗</span>
+                  </div>
+                  <div className="text-3xl font-black text-purple-950 tracking-tight">{interestedLeadsList.length.toLocaleString()}</div>
+                  <div className="text-[11px] font-semibold text-purple-600/90 mt-0.5">Interested contacts (click to inspect)</div>
                 </div>
               </div>
 
-              {/* Card 4: Interested Leads */}
-              <div className="bg-[#fffbeb] p-5 rounded-2xl border border-amber-200/80 shadow-sm flex items-center gap-4 transition-all hover:shadow-md">
-                <div className="w-12 h-12 rounded-2xl bg-amber-500 text-white flex items-center justify-center flex-shrink-0 shadow-md">
+              {/* Card 4: Follow-ups Today */}
+              <div
+                onClick={() => setShowFollowupsModal(true)}
+                className="bg-[#fffbeb] p-5 rounded-2xl border border-amber-200/80 shadow-sm flex items-center gap-4 transition-all hover:shadow-md hover:border-amber-400 cursor-pointer active:scale-98 group"
+                title="Click to inspect today's follow-up leads"
+              >
+                <div className="w-12 h-12 rounded-2xl bg-amber-500 text-white flex items-center justify-center flex-shrink-0 shadow-md group-hover:scale-105 transition-transform">
                   <Briefcase className="w-6 h-6" />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <div className="text-xs font-bold text-amber-700 uppercase tracking-wider">Interested Leads</div>
-                  <div className="text-3xl font-black text-amber-950 tracking-tight">{interestedLeads.toLocaleString()}</div>
-                  <div className="text-[11px] font-semibold text-amber-600/90 mt-0.5">High potential leads</div>
+                  <div className="text-xs font-bold text-amber-700 uppercase tracking-wider flex items-center justify-between">
+                    <span>Follow-ups Today</span>
+                    <span className="text-[10px] text-amber-600 bg-amber-100 px-1.5 py-0.5 rounded font-black">POPUP ↗</span>
+                  </div>
+                  <div className="text-3xl font-black text-amber-950 tracking-tight">{followupLeadsList.length.toLocaleString()}</div>
+                  <div className="text-[11px] font-semibold text-amber-600/90 mt-0.5">Scheduled for follow-up today</div>
                 </div>
               </div>
             </div>
@@ -1622,6 +1677,205 @@ export function ColdCallsModule({
               >
                 <Plus className="w-4 h-4" />
                 <span>Add Contact</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── STATUS BREAKDOWN POPUP MODAL ── */}
+      {showStatusModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[9999] flex items-center justify-center p-4 text-black font-sans">
+          <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl border border-gray-200 flex flex-col overflow-hidden animate-in fade-in zoom-in duration-150">
+            {/* Header */}
+            <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between bg-emerald-50/50">
+              <div>
+                <h3 className="text-lg font-black text-emerald-950 flex items-center gap-2">
+                  <PhoneCall className="w-5 h-5 text-emerald-600" />
+                  Status Breakdown
+                </h3>
+                <p className="text-xs font-semibold text-emerald-700 mt-0.5">Summary of call statuses on {selectedDate}</p>
+              </div>
+              <button onClick={() => setShowStatusModal(false)} className="w-8 h-8 rounded-full bg-white hover:bg-gray-200 flex items-center justify-center text-gray-700 transition-all border border-gray-200 shadow-sm">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            {/* Body */}
+            <div className="p-6 space-y-4">
+              {([
+                ['Interested', leads.filter(l => l.callStatus === 'INTERESTED').length, 'bg-emerald-500', 'text-emerald-800', 'bg-emerald-50', 'border-emerald-200', '👍'],
+                ['Warm', leads.filter(l => l.callStatus === 'WARM' || l.callStatus === 'YES').length, 'bg-amber-500', 'text-amber-800', 'bg-amber-50', 'border-amber-200', '🔥'],
+                ['Not Interested', leads.filter(l => l.callStatus === 'NOT_INTERESTED').length, 'bg-rose-500', 'text-rose-800', 'bg-rose-50', 'border-rose-200', '👎'],
+                ['Not Connected / Pending', leads.filter(l => l.callStatus === 'NOT_CONNECTED' || l.callChoice === 'NO' || !l.callStatus || l.callStatus === 'PENDING').length, 'bg-zinc-500', 'text-zinc-800', 'bg-zinc-50', 'border-zinc-200', '⏳'],
+              ] as [string, number, string, string, string, string, string][]).map(([label, count, barBg, textColor, cardBg, cardBorder, emoji]) => {
+                const total = leads.length || 1;
+                const pct = Math.round((count / total) * 100);
+                return (
+                  <div key={label} className={`p-4 rounded-xl border ${cardBg} ${cardBorder} space-y-2`}>
+                    <div className="flex items-center justify-between text-xs font-bold">
+                      <span className={`flex items-center gap-1.5 ${textColor}`}>
+                        <span>{emoji}</span>
+                        <span>{label}</span>
+                      </span>
+                      <span className="font-extrabold text-black text-sm">{count} ({pct}%)</span>
+                    </div>
+                    <div className="w-full h-2 rounded-full bg-white/80 overflow-hidden border border-black/5">
+                      <div className={`h-full ${barBg} rounded-full transition-all duration-500`} style={{ width: `${pct}%` }} />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            {/* Footer */}
+            <div className="px-6 py-3 border-t border-gray-200 bg-gray-50 flex justify-end">
+              <button onClick={() => setShowStatusModal(false)} className="px-5 py-2 bg-black hover:bg-zinc-800 text-white font-bold text-xs rounded-xl transition-all shadow-sm">
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── INTERESTED CONTACTS POPUP MODAL ── */}
+      {showInterestedModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[9999] flex items-center justify-center p-4 text-black font-sans">
+          <div className="bg-white w-full max-w-3xl rounded-2xl shadow-2xl border border-gray-200 flex flex-col max-h-[85vh] overflow-hidden animate-in fade-in zoom-in duration-150">
+            {/* Header */}
+            <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between bg-purple-50/60">
+              <div>
+                <h3 className="text-lg font-black text-purple-950 flex items-center gap-2">
+                  <User className="w-5 h-5 text-purple-600" />
+                  Interested Leads ({leads.filter(l => l.callStatus === 'INTERESTED' || (l.callChoice === 'YES' && (l.callStatus === 'WARM' || l.callStatus === 'YES' || !l.callStatus))).length})
+                </h3>
+                <p className="text-xs font-semibold text-purple-700 mt-0.5">High potential clients logged for {selectedDate}</p>
+              </div>
+              <button onClick={() => setShowInterestedModal(false)} className="w-8 h-8 rounded-full bg-white hover:bg-gray-200 flex items-center justify-center text-gray-700 transition-all border border-gray-200 shadow-sm">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            {/* Table Body */}
+            <div className="overflow-y-auto flex-1 p-6">
+              {leads.filter(l => l.callStatus === 'INTERESTED' || (l.callChoice === 'YES' && (l.callStatus === 'WARM' || l.callStatus === 'YES' || !l.callStatus))).length === 0 ? (
+                <div className="p-12 text-center text-xs text-gray-400 font-semibold bg-gray-50 rounded-xl border border-gray-200">
+                  No interested contacts recorded for selected date ({selectedDate}).
+                </div>
+              ) : (
+                <div className="border border-gray-200 rounded-xl overflow-hidden">
+                  <table className="w-full text-left border-collapse text-xs">
+                    <thead>
+                      <tr className="bg-gray-100 text-gray-700 font-extrabold border-b border-gray-200 uppercase tracking-wider">
+                        <th className="p-3">#</th>
+                        <th className="p-3">Business Name</th>
+                        <th className="p-3">Person Name</th>
+                        <th className="p-3">Phone</th>
+                        <th className="p-3 text-center">Status</th>
+                        <th className="p-3">Note</th>
+                        <th className="p-3 text-right">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-200 bg-white font-medium">
+                      {leads.filter(l => l.callStatus === 'INTERESTED' || (l.callChoice === 'YES' && (l.callStatus === 'WARM' || l.callStatus === 'YES' || !l.callStatus))).map((lead, idx) => (
+                        <tr key={lead.id} className="hover:bg-purple-50/30 transition-colors">
+                          <td className="p-3 text-gray-400 font-mono font-bold">{idx + 1}</td>
+                          <td className="p-3 font-extrabold text-black">{lead.businessName || '—'}</td>
+                          <td className="p-3 font-semibold text-gray-700">{lead.personName || lead.name || '—'}</td>
+                          <td className="p-3 font-extrabold text-[#00a884]">{lead.phone || '—'}</td>
+                          <td className="p-3 text-center">
+                            <span className="px-2.5 py-0.5 text-xs font-bold rounded bg-emerald-100 text-emerald-800 border border-emerald-300">
+                              {lead.callStatus || 'Interested'}
+                            </span>
+                          </td>
+                          <td className="p-3 text-gray-600 truncate max-w-[150px]">{lead.note || lead.notesList?.[0]?.text || '—'}</td>
+                          <td className="p-3 text-right">
+                            <button
+                              onClick={() => { setShowInterestedModal(false); openNotePopup(lead); }}
+                              className="px-3 py-1 bg-purple-100 hover:bg-purple-200 text-purple-900 font-bold text-xs rounded-lg transition-all border border-purple-300"
+                            >
+                              Notes
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+            {/* Footer */}
+            <div className="px-6 py-3 border-t border-gray-200 bg-gray-50 flex justify-end">
+              <button onClick={() => setShowInterestedModal(false)} className="px-5 py-2 bg-black hover:bg-zinc-800 text-white font-bold text-xs rounded-xl transition-all shadow-sm">
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── FOLLOW-UPS TODAY POPUP MODAL ── */}
+      {showFollowupsModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[9999] flex items-center justify-center p-4 text-black font-sans">
+          <div className="bg-white w-full max-w-3xl rounded-2xl shadow-2xl border border-gray-200 flex flex-col max-h-[85vh] overflow-hidden animate-in fade-in zoom-in duration-150">
+            {/* Header */}
+            <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between bg-amber-50/60">
+              <div>
+                <h3 className="text-lg font-black text-amber-950 flex items-center gap-2">
+                  <Briefcase className="w-5 h-5 text-amber-600" />
+                  Follow-ups Scheduled ({leads.filter(l => Boolean(l.followUpDate)).length})
+                </h3>
+                <p className="text-xs font-semibold text-amber-700 mt-0.5">Contacts scheduled for follow-up on or around {selectedDate}</p>
+              </div>
+              <button onClick={() => setShowFollowupsModal(false)} className="w-8 h-8 rounded-full bg-white hover:bg-gray-200 flex items-center justify-center text-gray-700 transition-all border border-gray-200 shadow-sm">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            {/* Table Body */}
+            <div className="overflow-y-auto flex-1 p-6">
+              {leads.filter(l => Boolean(l.followUpDate)).length === 0 ? (
+                <div className="p-12 text-center text-xs text-gray-400 font-semibold bg-gray-50 rounded-xl border border-gray-200">
+                  No scheduled follow-up contacts found for selected date ({selectedDate}).
+                </div>
+              ) : (
+                <div className="border border-gray-200 rounded-xl overflow-hidden">
+                  <table className="w-full text-left border-collapse text-xs">
+                    <thead>
+                      <tr className="bg-gray-100 text-gray-700 font-extrabold border-b border-gray-200 uppercase tracking-wider">
+                        <th className="p-3">#</th>
+                        <th className="p-3">Business Name</th>
+                        <th className="p-3">Person Name</th>
+                        <th className="p-3">Phone</th>
+                        <th className="p-3 font-extrabold text-amber-700">Follow-up Date</th>
+                        <th className="p-3">Note</th>
+                        <th className="p-3 text-right">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-200 bg-white font-medium">
+                      {leads.filter(l => Boolean(l.followUpDate)).map((lead, idx) => (
+                        <tr key={lead.id} className="hover:bg-amber-50/30 transition-colors">
+                          <td className="p-3 text-gray-400 font-mono font-bold">{idx + 1}</td>
+                          <td className="p-3 font-extrabold text-black">{lead.businessName || '—'}</td>
+                          <td className="p-3 font-semibold text-gray-700">{lead.personName || lead.name || '—'}</td>
+                          <td className="p-3 font-extrabold text-[#00a884]">{lead.phone || '—'}</td>
+                          <td className="p-3 font-extrabold text-amber-800 bg-amber-50/80 rounded">{lead.followUpDate || '—'}</td>
+                          <td className="p-3 text-gray-600 truncate max-w-[150px]">{lead.note || lead.notesList?.[0]?.text || '—'}</td>
+                          <td className="p-3 text-right">
+                            <button
+                              onClick={() => { setShowFollowupsModal(false); openNotePopup(lead); }}
+                              className="px-3 py-1 bg-amber-100 hover:bg-amber-200 text-amber-900 font-bold text-xs rounded-lg transition-all border border-amber-300"
+                            >
+                              Notes
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+            {/* Footer */}
+            <div className="px-6 py-3 border-t border-gray-200 bg-gray-50 flex justify-end">
+              <button onClick={() => setShowFollowupsModal(false)} className="px-5 py-2 bg-black hover:bg-zinc-800 text-white font-bold text-xs rounded-xl transition-all shadow-sm">
+                Close
               </button>
             </div>
           </div>

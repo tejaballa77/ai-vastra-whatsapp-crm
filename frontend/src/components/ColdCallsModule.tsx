@@ -708,12 +708,11 @@ export function ColdCallsModule({
           return normF === selectedDate || (Boolean(l.followUpDate) && selectedDate === todayLocalStr);
         });
 
-        // Recent calls list: ANY lead with user activity, dynamically sorted with most recent edits AT THE TOP
+        // Recent calls list: ONLY leads where a call choice (YES/NO) or explicit status (Interested/Warm/etc.) has been logged
         const displayCallsList = leads.filter(l => {
-          const hasUserCall = Boolean(l.calledBy) && l.calledBy !== 'Staff' && l.calledBy !== 'Executive User';
           const hasCallChoice = l.callChoice === 'YES' || l.callChoice === 'NO';
-          const hasStatus = Boolean(l.callStatus) && l.callStatus !== 'PENDING';
-          if (!hasUserCall && !hasCallChoice && !hasStatus) return false;
+          const hasLoggedStatus = Boolean(l.callStatus) && l.callStatus !== 'PENDING';
+          if (!hasCallChoice && !hasLoggedStatus) return false;
 
           const ts = l.callTimestamp || l.updatedAt;
           if (ts) {

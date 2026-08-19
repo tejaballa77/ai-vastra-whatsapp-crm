@@ -678,10 +678,11 @@ export function ColdCallsModule({
           return normF === selectedDate || (Boolean(l.followUpDate) && selectedDate === new Date().toISOString().slice(0, 10));
         });
 
-        // Recent calls list: Any lead with call activity, status, or note updated by a user
+        // Recent calls list: ONLY leads where a logged-in user actively logged a call update
         const displayCallsList = leads.filter(l => {
-          const hasActivity = Boolean(l.calledBy) || l.callChoice === 'YES' || l.callChoice === 'NO' || (l.callStatus && l.callStatus !== 'PENDING') || (l.notesList && l.notesList.length > 0) || Boolean(l.note);
-          if (!hasActivity) return false;
+          const hasUserCall = Boolean(l.calledBy) && l.calledBy !== 'Staff' && l.calledBy !== 'Executive User';
+          const hasCallChoice = l.callChoice === 'YES' || l.callChoice === 'NO';
+          if (!hasUserCall && !hasCallChoice) return false;
 
           const ts = l.callTimestamp || l.updatedAt;
           if (ts) {
@@ -690,8 +691,8 @@ export function ColdCallsModule({
           }
           return true;
         }).sort((a, b) => {
-          const tA = a.callTimestamp || a.updatedAt || a.createdAt || 0;
-          const tB = b.callTimestamp || b.updatedAt || b.createdAt || 0;
+          const tA = a.callTimestamp || a.updatedAt || 0;
+          const tB = b.callTimestamp || b.updatedAt || 0;
           return tB - tA;
         });
 

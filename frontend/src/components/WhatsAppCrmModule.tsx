@@ -274,12 +274,8 @@ export function WhatsAppCrmModule() {
     <div className="w-screen h-screen flex overflow-hidden bg-white text-black">
       <aside className="w-64 bg-[#000000] text-white flex flex-col justify-between p-4 flex-shrink-0 select-none border-r border-zinc-800">
         <div>
-          <div className="flex items-center gap-3.5 px-2 py-4 mb-6 border-b border-zinc-800">
-            <img src="/ai_vastra_logo.png" alt="Ai Vastra Logo" className="w-10 h-10 object-contain rounded-xl shadow-md" />
-            <div>
-              <h1 className="font-bold text-lg tracking-wide text-white">Ai Vastra CRM</h1>
-              <p className="text-xs text-zinc-400">Multichannel Workspace</p>
-            </div>
+          <div className="px-2 py-4 mb-6 border-b border-zinc-800 flex items-center justify-center">
+            <img src="/ai_vastra_logo.png" alt="Ai Vastra" className="w-full h-auto max-h-12 object-contain" />
           </div>
 
           <nav className="space-y-2">
@@ -324,14 +320,6 @@ export function WhatsAppCrmModule() {
               <span>Settings & AI Agent</span>
             </button>
           </nav>
-        </div>
-
-        <div className="p-3.5 rounded-xl bg-zinc-900 border border-zinc-800 text-xs text-zinc-400">
-          <div className="flex items-center gap-2 mb-1 text-white font-semibold text-sm">
-            <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse"></span>
-            WhatsApp Web Extension
-          </div>
-          <p className="text-xs text-zinc-400">Extension active on web.whatsapp.com</p>
         </div>
       </aside>
 
@@ -513,15 +501,6 @@ export function WhatsAppCrmModule() {
                       Calls ({callsYesCount})
                     </button>
                   </div>
-
-                  <button
-                    onClick={handleExportCsv}
-                    className="px-3.5 py-2 bg-zinc-100 hover:bg-zinc-200 border border-zinc-300 text-black text-xs font-bold rounded-xl transition-all flex items-center gap-1.5"
-                    title="Export Saved Leads to CSV file"
-                  >
-                    <Download className="w-4 h-4" />
-                    <span>Export CSV</span>
-                  </button>
                 </div>
               </div>
 

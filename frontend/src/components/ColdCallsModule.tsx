@@ -656,6 +656,15 @@ export function ColdCallsModule({
           PAGE 1: ANALYTICS & RECENT CALLS DASHBOARD
       ══════════════════════════════════════════════════════════════════════ */}
       {subPage === 'analytics' && (() => {
+        const getLocalYYYYMMDD = (ts?: number | string) => {
+          const d = ts ? new Date(ts) : new Date();
+          const yyyy = d.getFullYear();
+          const mm = String(d.getMonth() + 1).padStart(2, '0');
+          const dd = String(d.getDate()).padStart(2, '0');
+          return `${yyyy}-${mm}-${dd}`;
+        };
+        const todayLocalStr = getLocalYYYYMMDD();
+
         const normalizeDateStr = (dStr?: string) => {
           if (!dStr) return '';
           const s = dStr.trim();
@@ -669,7 +678,7 @@ export function ColdCallsModule({
         // Filter leads based on selectedDate
         const dateLeads = leads.filter(l => {
           const timestamp = l.callTimestamp || l.updatedAt || l.createdAt;
-          const dStr = timestamp ? new Date(timestamp).toISOString().slice(0, 10) : '';
+          const dStr = timestamp ? getLocalYYYYMMDD(timestamp) : '';
           const fStr = normalizeDateStr(l.followUpDate);
           return dStr === selectedDate || fStr === selectedDate;
         });
@@ -678,7 +687,7 @@ export function ColdCallsModule({
         const totalCallsLeads = leads.filter(l => {
           const isYes = l.callChoice === 'YES' || l.callStatus === 'YES' || l.callStatus === 'INTERESTED' || l.callStatus === 'WARM';
           const timestamp = l.callTimestamp || l.updatedAt || l.createdAt;
-          const dStr = timestamp ? new Date(timestamp).toISOString().slice(0, 10) : '';
+          const dStr = timestamp ? getLocalYYYYMMDD(timestamp) : '';
           return isYes && (dStr === selectedDate || !selectedDate);
         });
         const totalCallsCount = totalCallsLeads.length > 0 ? totalCallsLeads.length : leads.filter(l => l.callChoice === 'YES' || l.callStatus === 'YES' || l.callStatus === 'INTERESTED' || l.callStatus === 'WARM').length;
@@ -696,24 +705,25 @@ export function ColdCallsModule({
         // 4. Follow-ups Today
         const followupLeadsList = leads.filter(l => {
           const normF = normalizeDateStr(l.followUpDate);
-          return normF === selectedDate || (Boolean(l.followUpDate) && selectedDate === new Date().toISOString().slice(0, 10));
+          return normF === selectedDate || (Boolean(l.followUpDate) && selectedDate === todayLocalStr);
         });
 
-        // Recent calls list: ONLY leads where a logged-in user actively logged a call update
+        // Recent calls list: ANY lead with user activity, dynamically sorted with most recent edits AT THE TOP
         const displayCallsList = leads.filter(l => {
           const hasUserCall = Boolean(l.calledBy) && l.calledBy !== 'Staff' && l.calledBy !== 'Executive User';
           const hasCallChoice = l.callChoice === 'YES' || l.callChoice === 'NO';
-          if (!hasUserCall && !hasCallChoice) return false;
+          const hasStatus = Boolean(l.callStatus) && l.callStatus !== 'PENDING';
+          if (!hasUserCall && !hasCallChoice && !hasStatus) return false;
 
           const ts = l.callTimestamp || l.updatedAt;
           if (ts) {
-            const dStr = new Date(ts).toISOString().slice(0, 10);
-            return dStr === selectedDate || selectedDate === new Date().toISOString().slice(0, 10);
+            const dStr = getLocalYYYYMMDD(ts);
+            return dStr === selectedDate || selectedDate === todayLocalStr;
           }
           return true;
         }).sort((a, b) => {
-          const tA = a.callTimestamp || a.updatedAt || 0;
-          const tB = b.callTimestamp || b.updatedAt || 0;
+          const tA = typeof a.callTimestamp === 'number' ? a.callTimestamp : (typeof a.updatedAt === 'number' ? a.updatedAt : (a.updatedAt ? new Date(a.updatedAt).getTime() : 0));
+          const tB = typeof b.callTimestamp === 'number' ? b.callTimestamp : (typeof b.updatedAt === 'number' ? b.updatedAt : (b.updatedAt ? new Date(b.updatedAt).getTime() : 0));
           return tB - tA;
         });
 

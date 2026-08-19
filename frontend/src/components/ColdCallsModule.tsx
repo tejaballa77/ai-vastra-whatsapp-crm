@@ -669,8 +669,8 @@ export function ColdCallsModule({
 
         // Recent calls list strictly for calls logged or updated on selectedDate
         const displayCallsList = leads.filter(l => {
-          const isCalledOrUpdated = Boolean(l.calledBy) || l.callChoice === 'YES' || l.callChoice === 'NO' || (l.callStatus && l.callStatus !== 'PENDING');
-          if (!isCalledOrUpdated) return false;
+          const isActualCallLogged = (l.callChoice === 'YES' || l.callChoice === 'NO') && Boolean(l.calledBy) && l.callStatus !== 'PENDING';
+          if (!isActualCallLogged) return false;
           const timestamp = l.callTimestamp || l.updatedAt;
           if (!timestamp) return false;
           const dStr = new Date(timestamp).toISOString().slice(0, 10);

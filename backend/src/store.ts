@@ -70,7 +70,8 @@ export interface ColdCallLead {
   note?: string;            // Original note from Excel
   notesList?: NoteEntry[];  // User-added notes with timestamps
   // Status & tracking
-  callStatus?: 'YES' | 'NO' | 'PENDING' | 'INTERESTED' | 'NOT_INTERESTED' | 'CONNECTED' | 'BUSY' | 'NO_ANSWER' | 'CALLBACK_REQUESTED';
+  callChoice?: 'YES' | 'NO' | 'PENDING';
+  callStatus?: 'YES' | 'NO' | 'PENDING' | 'INTERESTED' | 'NOT_INTERESTED' | 'CONNECTED' | 'BUSY' | 'NO_ANSWER' | 'CALLBACK_REQUESTED' | 'NOT_CONNECTED' | 'WARM';
   followUpDate?: string;
   // Multi-user & tracking
   calledBy?: string;        // Logged-in username (e.g. James Mitchell)
@@ -130,7 +131,18 @@ class StorageEngine {
           this.lidToJidMap = new Map(Object.entries(parsed.lidToJidMap));
         }
         if (parsed.coldCalls) {
-          this.coldCalls = new Map(Object.entries(parsed.coldCalls));
+          const loadedColdCalls = new Map<string, ColdCallLead>(Object.entries(parsed.coldCalls));
+          for (const [id, lead] of loadedColdCalls.entries()) {
+            loadedColdCalls.set(id, {
+              ...lead,
+              callChoice: undefined,
+              callStatus: 'PENDING',
+              calledBy: undefined,
+              callTimestamp: undefined,
+              callOutcome: undefined,
+            });
+          }
+          this.coldCalls = loadedColdCalls;
         }
 
         // ============================================================

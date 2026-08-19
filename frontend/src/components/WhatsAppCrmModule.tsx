@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import { getBackendUrl } from '../config';
 import { 
   Users, 
   MessageSquare, 
@@ -59,6 +60,13 @@ export function WhatsAppCrmModule() {
       setAdminDisplayName(user);
       setAdminUsername(user.toLowerCase().replace(/\s+/g, '_'));
       setAdminAvatar(localStorage.getItem('crm_admin_avatar') || '');
+
+      // Register active user in backend on component mount
+      fetch(`${getBackendUrl()}/api/users/active`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: user }),
+      }).catch(() => {});
     }
   };
 

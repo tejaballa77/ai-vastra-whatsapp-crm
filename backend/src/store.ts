@@ -96,7 +96,11 @@ class StorageEngine {
 
   public registerActiveUser(username: string) {
     if (username && username !== 'Staff' && username !== 'Executive User' && username.trim().length > 0) {
-      this.activeUsers.add(username.trim());
+      const clean = username.trim();
+      if (!this.activeUsers.has(clean)) {
+        this.activeUsers.add(clean);
+        this.saveData();
+      }
     }
   }
 
@@ -160,6 +164,9 @@ class StorageEngine {
             });
           }
           this.coldCalls = loadedColdCalls;
+        }
+        if (parsed.activeUsers && Array.isArray(parsed.activeUsers)) {
+          this.activeUsers = new Set(parsed.activeUsers);
         }
 
         // ============================================================
@@ -263,6 +270,7 @@ class StorageEngine {
         messages: Object.fromEntries(this.messages),
         lidToJidMap: Object.fromEntries(this.lidToJidMap),
         coldCalls: Object.fromEntries(this.coldCalls),
+        activeUsers: Array.from(this.activeUsers),
       };
       fs.writeFileSync(this.dataFilePath, JSON.stringify(obj, null, 2), 'utf-8');
     } catch (err) {

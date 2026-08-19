@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Bot, Save, Sparkles, Check, Send, Key, FileText, Upload, Trash2, Database, RefreshCw, User, MessageSquare } from 'lucide-react';
 import { getBackendUrl } from '../config';
+import { useSocket } from '../context/SocketContext';
 
 interface TestChatMessage {
   sender: 'user' | 'ai';
@@ -12,6 +13,7 @@ interface TestChatMessage {
 }
 
 export function SettingsAiAgent() {
+  const { socket } = useSocket();
   const [kb, setKb] = useState<any>({
     enabled: false, // Default to OFF so switch never flashes ON before API fetch
     openAiApiKey: '',
@@ -32,6 +34,40 @@ export function SettingsAiAgent() {
     : 'Executive User';
 
   const [activeUsersList, setActiveUsersList] = useState<string[]>([currentUser]);
+
+  useEffect(() => {
+    if (!socket) return;
+    const handleUsersUpdated = (usersList: string[]) => {
+      if (Array.isArray(usersList)) {
+        const setUsers = new Set<string>(usersList);
+        if (currentUser) setUsers.add(currentUser);
+        setActiveUsersList(Array.from(setUsers));
+      }
+    };
+    socket.on('users_updated', handleUsersUpdated);
+    return () => {
+      socket.off('users_updated', handleUsersUpdated);
+    };
+  }, [socket, currentUser]);
+
+  useEffect(() => {
+    const fetchActiveUsers = () => {
+      fetch(`${getBackendUrl()}/api/users/active`)
+        .then(res => res.json())
+        .then(data => {
+          if (data.success && Array.isArray(data.activeUsers)) {
+            const setUsers = new Set<string>(data.activeUsers);
+            if (currentUser) setUsers.add(currentUser);
+            setActiveUsersList(Array.from(setUsers));
+          }
+        })
+        .catch(err => console.error(err));
+    };
+
+    fetchActiveUsers();
+    const interval = setInterval(fetchActiveUsers, 3000);
+    return () => clearInterval(interval);
+  }, [currentUser]);
 
   const [isUploading, setIsUploading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);

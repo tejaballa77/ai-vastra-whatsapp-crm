@@ -153,6 +153,45 @@ export function ColdCallsModule({
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // ── Column Width Resizing State ─────────────────────────────────────────────
+  const [colWidths, setColWidths] = useState<Record<string, number>>({
+    index: 48,
+    businessName: 220,
+    personName: 220,
+    phone: 160,
+    followUpDate: 150,
+    note: 100,
+    status: 120,
+  });
+
+  const isResizingRef = useRef<{ field: string; startX: number; startWidth: number } | null>(null);
+
+  const handleMouseDownResize = (field: string, e: React.MouseEvent) => {
+    e.preventDefault();
+    isResizingRef.current = {
+      field,
+      startX: e.clientX,
+      startWidth: colWidths[field] || 150,
+    };
+
+    const handleMouseMove = (moveEvt: MouseEvent) => {
+      if (!isResizingRef.current) return;
+      const diff = moveEvt.clientX - isResizingRef.current.startX;
+      const newW = Math.max(60, isResizingRef.current.startWidth + diff);
+      const fieldName = isResizingRef.current.field;
+      setColWidths(prev => ({ ...prev, [fieldName]: newW }));
+    };
+
+    const handleMouseUp = () => {
+      isResizingRef.current = null;
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+  };
+
   // ── Fetch ───────────────────────────────────────────────────────────────────
   const fetchLeads = useCallback(async () => {
     try {
@@ -718,14 +757,64 @@ export function ColdCallsModule({
               <div className="overflow-x-auto">
                 <table className="w-full text-left border-collapse border border-gray-300 text-sm">
                   {/* Excel Headers */}
+                  {/* Excel Headers with Column Resizer Handles */}
                   <thead>
-                    <tr className="bg-[#f3f4f6] text-gray-700 font-bold border-b border-gray-300 text-xs uppercase tracking-wider">
-                      <th className="py-2.5 px-3 w-12 text-center border border-gray-300 bg-[#e5e7eb] text-gray-800">#</th>
-                      <th className="py-2.5 px-3 border border-gray-300">BUSINESS NAME</th>
-                      <th className="py-2.5 px-3 border border-gray-300">PERSON NAME</th>
-                      <th className="py-2.5 px-3 border border-gray-300">PHONE NUMBER</th>
-                      <th className="py-2.5 px-3 border border-gray-300 text-center">NOTE</th>
-                      <th className="py-2.5 px-3 border border-gray-300 text-center">STATUS</th>
+                    <tr className="bg-[#f3f4f6] text-gray-700 font-bold border-b border-gray-300 text-xs uppercase tracking-wider select-none">
+                      <th className="py-2.5 px-3 border border-gray-300 bg-[#e5e7eb] text-gray-800 text-center" style={{ width: `${colWidths.index}px` }}>#</th>
+                      
+                      <th className="py-2.5 px-3 border border-gray-300 relative group" style={{ width: `${colWidths.businessName}px` }}>
+                        <span>BUSINESS NAME</span>
+                        <div
+                          onMouseDown={(e) => handleMouseDownResize('businessName', e)}
+                          className="absolute top-0 right-0 bottom-0 w-2.5 cursor-col-resize hover:bg-black/30 transition-colors z-20"
+                          title="Drag to resize column width"
+                        />
+                      </th>
+
+                      <th className="py-2.5 px-3 border border-gray-300 relative group" style={{ width: `${colWidths.personName}px` }}>
+                        <span>PERSON NAME</span>
+                        <div
+                          onMouseDown={(e) => handleMouseDownResize('personName', e)}
+                          className="absolute top-0 right-0 bottom-0 w-2.5 cursor-col-resize hover:bg-black/30 transition-colors z-20"
+                          title="Drag to resize column width"
+                        />
+                      </th>
+
+                      <th className="py-2.5 px-3 border border-gray-300 relative group" style={{ width: `${colWidths.phone}px` }}>
+                        <span>PHONE NUMBER</span>
+                        <div
+                          onMouseDown={(e) => handleMouseDownResize('phone', e)}
+                          className="absolute top-0 right-0 bottom-0 w-2.5 cursor-col-resize hover:bg-black/30 transition-colors z-20"
+                          title="Drag to resize column width"
+                        />
+                      </th>
+
+                      <th className="py-2.5 px-3 border border-gray-300 relative group" style={{ width: `${colWidths.followUpDate}px` }}>
+                        <span>FOLLOW-UP DATE</span>
+                        <div
+                          onMouseDown={(e) => handleMouseDownResize('followUpDate', e)}
+                          className="absolute top-0 right-0 bottom-0 w-2.5 cursor-col-resize hover:bg-black/30 transition-colors z-20"
+                          title="Drag to resize column width"
+                        />
+                      </th>
+
+                      <th className="py-2.5 px-3 border border-gray-300 text-center relative group" style={{ width: `${colWidths.note}px` }}>
+                        <span>NOTE</span>
+                        <div
+                          onMouseDown={(e) => handleMouseDownResize('note', e)}
+                          className="absolute top-0 right-0 bottom-0 w-2.5 cursor-col-resize hover:bg-black/30 transition-colors z-20"
+                          title="Drag to resize column width"
+                        />
+                      </th>
+
+                      <th className="py-2.5 px-3 border border-gray-300 text-center relative group" style={{ width: `${colWidths.status}px` }}>
+                        <span>STATUS</span>
+                        <div
+                          onMouseDown={(e) => handleMouseDownResize('status', e)}
+                          className="absolute top-0 right-0 bottom-0 w-2.5 cursor-col-resize hover:bg-black/30 transition-colors z-20"
+                          title="Drag to resize column width"
+                        />
+                      </th>
                     </tr>
                   </thead>
                   <tbody className="bg-white text-gray-900 font-normal">
@@ -739,7 +828,7 @@ export function ColdCallsModule({
                           </td>
 
                           {/* Business Name Cell */}
-                          <td className="py-2 px-3 border border-gray-300 font-semibold text-black">
+                          <td className="py-2 px-3 border border-gray-300 font-semibold text-black" style={{ width: `${colWidths.businessName}px` }}>
                             <EditableCell
                               leadId={lead.id}
                               field="businessName"
@@ -749,7 +838,7 @@ export function ColdCallsModule({
                           </td>
 
                           {/* Person Name Cell */}
-                          <td className="py-2 px-3 border border-gray-300 font-semibold text-black">
+                          <td className="py-2 px-3 border border-gray-300 font-semibold text-black" style={{ width: `${colWidths.personName}px` }}>
                             <EditableCell
                               leadId={lead.id}
                               field="personName"
@@ -759,7 +848,7 @@ export function ColdCallsModule({
                           </td>
 
                           {/* Phone Number Cell */}
-                          <td className="py-2 px-3 border border-gray-300 font-semibold text-black">
+                          <td className="py-2 px-3 border border-gray-300 font-semibold text-black" style={{ width: `${colWidths.phone}px` }}>
                             <EditableCell
                               leadId={lead.id}
                               field="phone"
@@ -768,8 +857,18 @@ export function ColdCallsModule({
                             />
                           </td>
 
+                          {/* Follow-up Date Cell */}
+                          <td className="py-2 px-3 border border-gray-300 font-semibold text-black" style={{ width: `${colWidths.followUpDate}px` }}>
+                            <EditableCell
+                              leadId={lead.id}
+                              field="followUpDate"
+                              value={lead.followUpDate || ''}
+                              placeholder=""
+                            />
+                          </td>
+
                           {/* Note Cell */}
-                          <td className="py-2 px-3 border border-gray-300 text-center">
+                          <td className="py-2 px-3 border border-gray-300 text-center" style={{ width: `${colWidths.note}px` }}>
                             <button
                               onClick={() => openNotePopup(lead)}
                               title="Click to view / add notes"
@@ -789,7 +888,7 @@ export function ColdCallsModule({
                           </td>
 
                           {/* Status Cell */}
-                          <td className="py-2 px-3 border border-gray-300 text-center">
+                          <td className="py-2 px-3 border border-gray-300 text-center" style={{ width: `${colWidths.status}px` }}>
                             {lead.callStatus === 'INTERESTED' ? (
                               <span className="px-2.5 py-0.5 text-xs font-bold rounded bg-emerald-100 text-emerald-800 border border-emerald-300">Interested</span>
                             ) : lead.callStatus === 'YES' ? (
@@ -936,13 +1035,13 @@ export function ColdCallsModule({
           <div className="bg-white w-full max-w-xl rounded-2xl shadow-2xl border border-gray-200 flex flex-col max-h-[90vh] overflow-hidden">
 
             {/* Header */}
-            <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between bg-[#f8f9fa] rounded-t-2xl">
+            <div className="px-6 py-5 border-b border-gray-200 flex items-center justify-between bg-[#f8f9fa] rounded-t-2xl">
               <div>
-                <h3 className="text-lg font-extrabold text-black tracking-tight">
+                <h3 className="text-2xl font-black text-black tracking-tight">
                   {notePopupLead.businessName || notePopupLead.personName || 'Contact Details'}
                 </h3>
                 {(notePopupLead.personName || notePopupLead.phone) && (
-                  <p className="text-xs font-semibold text-zinc-500 mt-0.5">
+                  <p className="text-xs font-bold text-zinc-500 mt-1">
                     {notePopupLead.businessName && notePopupLead.personName ? notePopupLead.personName : ''}
                     {notePopupLead.phone ? `${notePopupLead.businessName && notePopupLead.personName ? ' · ' : ''}📞 ${notePopupLead.phone}` : ''}
                   </p>
@@ -950,18 +1049,18 @@ export function ColdCallsModule({
               </div>
               <button
                 onClick={() => setNotePopupLead(null)}
-                className="w-8 h-8 rounded-full bg-white hover:bg-gray-200 flex items-center justify-center text-gray-600 transition-all shadow-sm border border-gray-200"
+                className="w-9 h-9 rounded-full bg-white hover:bg-gray-200 flex items-center justify-center text-gray-700 transition-all shadow-sm border border-gray-200"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
             {/* Body */}
-            <div className="overflow-y-auto flex-1 p-6 space-y-5">
+            <div className="overflow-y-auto flex-1 p-6 space-y-6">
 
               {/* ── Call Status ───────────────────────────────────────────── */}
               <div>
-                <label className="text-[10px] font-extrabold text-zinc-500 uppercase tracking-wider block mb-2">Lead Status</label>
+                <label className="text-xs font-black text-black uppercase tracking-wider block mb-2">Lead Status</label>
                 <div className="flex gap-2 flex-wrap">
                   {([
                     ['INTERESTED', '👍 Interested', 'bg-emerald-600'],
@@ -973,7 +1072,7 @@ export function ColdCallsModule({
                       key={val}
                       type="button"
                       onClick={() => handlePopupFieldEdit('callStatus', val as any)}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all border ${
+                      className={`px-3.5 py-2 rounded-xl text-xs font-extrabold transition-all border ${
                         notePopupLead.callStatus === val
                           ? `${activeClass} text-white border-transparent shadow-sm`
                           : 'bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100'
@@ -987,18 +1086,18 @@ export function ColdCallsModule({
 
               {/* ── Follow-up Date ────────────────────────────────────────── */}
               <div>
-                <label className="text-[10px] font-extrabold text-zinc-500 uppercase tracking-wider block mb-2">Follow-up Date</label>
+                <label className="text-xs font-black text-black uppercase tracking-wider block mb-2">Follow-up Date</label>
                 <input
                   type="date"
                   value={notePopupLead.followUpDate || ''}
                   onChange={e => handlePopupFieldEdit('followUpDate', e.target.value)}
-                  className="w-full px-3 py-2 text-xs font-semibold rounded-xl border border-gray-200 bg-gray-50 focus:bg-white focus:border-black focus:outline-none transition-all"
+                  className="w-full px-4 py-2.5 text-xs font-bold rounded-xl border border-gray-300 bg-gray-50 focus:bg-white focus:border-black focus:outline-none transition-all"
                 />
               </div>
 
               {/* ── Notes Section ─────────────────────────────────────────── */}
               <div className="space-y-3">
-                <label className="text-[10px] font-extrabold text-zinc-500 uppercase tracking-wider block">Notes</label>
+                <label className="text-xs font-black text-black uppercase tracking-wider block">Notes</label>
 
                 {/* Original note */}
                 {notePopupLead.note && (

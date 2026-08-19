@@ -121,14 +121,17 @@ const mapExcelRow = (row: Record<string, any>, idx: number): Partial<ColdCallLea
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export function ColdCallsModule() {
+export function ColdCallsModule({
+  subPage = 'analytics',
+  onSubPageChange,
+}: {
+  subPage?: 'analytics' | 'sheet' | 'database';
+  onSubPageChange?: (page: 'analytics' | 'sheet' | 'database') => void;
+}) {
   const [leads, setLeads] = useState<ColdCallLead[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterTab, setFilterTab] = useState<'ALL' | 'INTERESTED' | 'WARM' | 'NOT_INTERESTED' | 'PENDING' | 'FOLLOWUPS'>('ALL');
-
-  // Global edit mode — like Excel: one toggle to enable / disable editing entire table
-  const [isEditMode, setIsEditMode] = useState(false);
 
   // Inline edit tracking: Map<leadId, partial changes>
   const [editedRows, setEditedRows] = useState<Map<string, Partial<ColdCallLead>>>(new Map());
@@ -202,15 +205,16 @@ export function ColdCallsModule() {
     reader.readAsBinaryString(file);
   };
 
-  // ── Inline Edit ──────────────────────────────────────────────────────────────
+  // ── Inline Edit (Always-On Excel Editing) ───────────────────────────────────
   const handleCellEdit = (leadId: string, field: keyof ColdCallLead, value: string) => {
+    const now = Date.now();
     setEditedRows(prev => {
       const next = new Map(prev);
-      next.set(leadId, { ...(next.get(leadId) || {}), [field]: value });
+      next.set(leadId, { ...(next.get(leadId) || {}), [field]: value, updatedAt: now });
       return next;
     });
-    // Optimistically update displayed leads
-    setLeads(prev => prev.map(l => l.id === leadId ? { ...l, [field]: value } : l));
+    // Optimistically update displayed leads and bring the edited lead TO THE TOP!
+    setLeads(prev => prev.map(l => l.id === leadId ? { ...l, [field]: value, updatedAt: now } : l));
   };
 
   // ── Save All Edits ────────────────────────────────────────────────────────────
@@ -229,9 +233,8 @@ export function ColdCallsModule() {
         );
         setEditedRows(new Map());
       }
-      // Exit edit mode on save
-      setIsEditMode(false);
       triggerSaveToast('saved');
+      fetchLeads();
     } catch (e) {
       console.error('Save error', e);
       setSaveStatus('idle');
@@ -245,7 +248,6 @@ export function ColdCallsModule() {
 
   // ── Note Popup ───────────────────────────────────────────────────────────────
   const openNotePopup = (lead: ColdCallLead) => {
-    // Merge any inline edits
     const edited = editedRows.get(lead.id) || {};
     setNotePopupLead({ ...lead, ...edited });
     setNoteInput('');
@@ -261,11 +263,53 @@ export function ColdCallsModule() {
     setNoteInput('');
   };
 
-  const handleDeleteNoteFromPopup = (idx: number) => {
-    setNotePopupLead(prev => {
-      if (!prev) return null;
-      return { ...prev, notesList: (prev.notesList || []).filter((_, i) => i !== idx) };
-    });
+  const handleSaveNotePopup = async () => {
+    if (!notePopupLead) return;
+    setNoteSaving(true);
+    try {
+      const trimmedNote = noteInput.trim();
+      let updatedNotesList = [...(notePopupLead.notesList || [])];
+      if (trimmedNote) {
+        const newEntry: NoteEntry = {
+          text: trimmedNote,
+          date: getTodayDate(),
+        };
+        updatedNotesList.unshift(newEntry);
+      }
+
+      const partial: Partial<ColdCallLead> = {
+        businessName: notePopupLead.businessName,
+        personName: notePopupLead.personName,
+        phone: notePopupLead.phone,
+        businessWebsite: notePopupLead.businessWebsite,
+        role: notePopupLead.role,
+        email: notePopupLead.email,
+        linkedinProfile: notePopupLead.linkedinProfile,
+        facebookProfile: notePopupLead.facebookProfile,
+        instaProfile: notePopupLead.instaProfile,
+        note: trimmedNote || notePopupLead.note,
+        notesList: updatedNotesList,
+        callStatus: notePopupLead.callStatus,
+        followUpDate: notePopupLead.followUpDate,
+        updatedAt: Date.now(),
+      };
+
+      const res = await fetch(`${getBackendUrl()}/api/cold-calls/${notePopupLead.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(partial),
+      });
+      const data = await res.json();
+      if (data.success && data.lead) {
+        setLeads(prev => prev.map(l => l.id === data.lead.id ? data.lead : l));
+        triggerSaveToast('saved');
+        setNotePopupLead(null);
+      }
+    } catch (e) {
+      console.error('Note save error', e);
+    } finally {
+      setNoteSaving(false);
+    }
   };
 
   const handleEditNoteText = (idx: number, text: string) => {
@@ -277,73 +321,48 @@ export function ColdCallsModule() {
     });
   };
 
-  // Fields inside popup that can be edited
+  const handleDeleteNoteFromPopup = (idx: number) => {
+    setNotePopupLead(prev => {
+      if (!prev) return null;
+      return { ...prev, notesList: (prev.notesList || []).filter((_, i) => i !== idx) };
+    });
+  };
+
   const handlePopupFieldEdit = (field: keyof ColdCallLead, value: string) => {
+    if (!notePopupLead) return;
     setNotePopupLead(prev => prev ? { ...prev, [field]: value } : null);
   };
 
-  const handleSaveNotePopup = async () => {
-    if (!notePopupLead) return;
-    setNoteSaving(true);
-    try {
-      const payload: Partial<ColdCallLead> = {
-        businessName:     notePopupLead.businessName,
-        personName:       notePopupLead.personName,
-        phone:            notePopupLead.phone,
-        businessWebsite:  notePopupLead.businessWebsite,
-        role:             notePopupLead.role,
-        email:            notePopupLead.email,
-        linkedinProfile:  notePopupLead.linkedinProfile,
-        facebookProfile:  notePopupLead.facebookProfile,
-        instaProfile:     notePopupLead.instaProfile,
-        note:             notePopupLead.note,
-        notesList:        notePopupLead.notesList || [],
-        callStatus:       notePopupLead.callStatus,
-        followUpDate:     notePopupLead.followUpDate,
-      };
-      const res = await fetch(`${getBackendUrl()}/api/cold-calls/${notePopupLead.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-      const data = await res.json();
-      if (data.success && data.lead) {
-        setLeads(prev => prev.map(l => l.id === notePopupLead.id ? data.lead : l));
-        // Remove from edited rows since saved
-        setEditedRows(prev => { const n = new Map(prev); n.delete(notePopupLead.id); return n; });
-        triggerSaveToast('saved');
-        setNotePopupLead(null);
-      }
-    } catch (e) {
-      console.error('Save note error', e);
-      alert('Failed to save. Check your connection.');
-    } finally {
-      setNoteSaving(false);
-    }
-  };
-
-  // ── Add Data Popup ────────────────────────────────────────────────────────────
+  // ── Add Data Handler ──────────────────────────────────────────────────────────
   const handleAddData = async () => {
-    if (!addForm.phone || addForm.phone.replace(/\D/g, '').length < 8) {
-      setAddForm(f => ({ ...f, phoneError: 'Phone number is required!' }));
+    const rawPhone = (addForm.phone || '').trim();
+    if (!rawPhone) {
+      setAddForm(f => ({ ...f, phoneError: 'Phone number is required.' }));
       return;
     }
-    const phoneDigits = (addForm.phone || '').replace(/\D/g, '');
+    const cleanPhone = rawPhone.replace(/\D/g, '');
+    if (cleanPhone.length < 7) {
+      setAddForm(f => ({ ...f, phoneError: 'Please enter a valid phone number.' }));
+      return;
+    }
+
+    const now = Date.now();
     const newLead: Partial<ColdCallLead> = {
-      id: phoneDigits || `lead_${Date.now()}`,
-      businessName:    addForm.businessName    || '',
-      personName:      addForm.personName      || '',
-      phone:           addForm.phone           || '',
-      businessWebsite: addForm.businessWebsite || '',
-      role:            addForm.role            || '',
-      email:           addForm.email           || '',
-      linkedinProfile: addForm.linkedinProfile || '',
-      facebookProfile: addForm.facebookProfile || '',
-      instaProfile:    addForm.instaProfile    || '',
-      note:            addForm.note            || '',
-      notesList:       [],
-      callStatus:      'PENDING',
+      businessName: (addForm.businessName || '').trim(),
+      personName: (addForm.personName || '').trim(),
+      phone: cleanPhone,
+      businessWebsite: (addForm.businessWebsite || '').trim(),
+      role: (addForm.role || '').trim(),
+      email: (addForm.email || '').trim(),
+      linkedinProfile: (addForm.linkedinProfile || '').trim(),
+      facebookProfile: (addForm.facebookProfile || '').trim(),
+      instaProfile: (addForm.instaProfile || '').trim(),
+      note: (addForm.note || '').trim(),
+      callStatus: 'PENDING',
+      createdAt: now,
+      updatedAt: now,
     };
+
     try {
       const res = await fetch(`${getBackendUrl()}/api/cold-calls/import`, {
         method: 'POST',
@@ -370,7 +389,7 @@ export function ColdCallsModule() {
     setEditedRows(new Map());
   };
 
-  // ── Filter ────────────────────────────────────────────────────────────────────
+  // ── Filter & Dynamic Sort (Latest Updated / Created FLOATS TO TOP) ───────────
   const filteredLeads = leads.filter(l => {
     const q = searchQuery.toLowerCase();
     const match =
@@ -387,13 +406,16 @@ export function ColdCallsModule() {
     return true;
   });
 
-
-
-  const [activePage, setActivePage] = useState<'analytics' | 'registry'>('analytics');
+  // DYNAMIC SORT: Leads updated or added most recently come FIRST!
+  const sortedLeads = [...filteredLeads].sort((a, b) => {
+    const timeA = typeof a.updatedAt === 'number' ? a.updatedAt : (a.updatedAt ? new Date(a.updatedAt).getTime() : (a.createdAt || 0));
+    const timeB = typeof b.updatedAt === 'number' ? b.updatedAt : (b.updatedAt ? new Date(b.updatedAt).getTime() : (b.createdAt || 0));
+    return timeB - timeA;
+  });
 
   // Calculate Today's Scheduled Follow-ups
   const todayStr = getTodayDate();
-  const followUpsDueTodayLeads = leads.filter(l => {
+  const followUpsDueTodayLeads = sortedLeads.filter(l => {
     if (!l.followUpDate) return false;
     const fDate = l.followUpDate.trim();
     return fDate === todayStr || fDate === new Date().toISOString().slice(0, 10);
@@ -421,16 +443,15 @@ export function ColdCallsModule() {
     callsToday: callsMadeTodayCount,
   };
 
-  // ── Editable Cell Component ───────────────────────────────────────────────────
+  // ── Editable Cell Component (Always Live Excel Editable) ──────────────────────
   const EditableCell = ({
-    leadId, field, value, placeholder = '', className = '', editMode = false
+    leadId, field, value, placeholder = '', className = ''
   }: {
     leadId: string;
     field: keyof ColdCallLead;
     value: string;
     placeholder?: string;
     className?: string;
-    editMode?: boolean;
   }) => {
     const [localVal, setLocalVal] = useState(value);
 
@@ -440,24 +461,35 @@ export function ColdCallsModule() {
       if (val !== value) handleCellEdit(leadId, field, val);
     };
 
-    if (editMode) {
-      return (
-        <input
-          value={localVal}
-          onChange={e => { setLocalVal(e.target.value); commit(e.target.value); }}
-          onKeyDown={e => { if (e.key === 'Escape') setLocalVal(value); }}
-          className={`w-full px-2 py-1.5 text-sm border border-black rounded-lg outline-none bg-zinc-50 focus:bg-white transition-all font-semibold text-black ${className}`}
-          placeholder={placeholder || '—'}
-        />
-      );
-    }
-    // View mode — plain text, no icons
     return (
-      <span className={`text-sm font-semibold ${value ? 'text-black' : 'text-zinc-400'} ${className}`}>
-        {value || ''}
-      </span>
+      <input
+        value={localVal}
+        onChange={e => { setLocalVal(e.target.value); commit(e.target.value); }}
+        onKeyDown={e => { if (e.key === 'Escape') setLocalVal(value); }}
+        className={`w-full px-2 py-1.5 text-sm border border-transparent hover:border-zinc-400 focus:border-black focus:bg-white bg-transparent outline-none transition-all font-semibold text-black ${className}`}
+        placeholder={placeholder || '—'}
+      />
     );
   };
+
+  const InfoField = ({ icon, label, value, onChange, isLink }: { icon: React.ReactNode, label: string, value: string | undefined, onChange: (v: string) => void, isLink?: boolean }) => (
+    <div className="bg-gray-50 p-3 rounded-xl border border-gray-100 flex items-center gap-3">
+      {icon}
+      <div className="flex-1">
+        <label className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">{label}</label>
+        <input
+          value={value || ''}
+          onChange={e => onChange(e.target.value)}
+          className="w-full bg-transparent text-xs font-bold text-gray-800 outline-none"
+        />
+      </div>
+      {isLink && value && (
+        <a href={value.startsWith('http') ? value : `https://${value}`} target="_blank" rel="noreferrer" className="text-zinc-400 hover:text-black">
+          <ExternalLink className="w-3.5 h-3.5" />
+        </a>
+      )}
+    </div>
+  );
 
   // ─── Render ───────────────────────────────────────────────────────────────────
   return (
@@ -477,40 +509,10 @@ export function ColdCallsModule() {
         </div>
       )}
 
-      {/* ── MODULE HEADER & PAGE SWITCHER TABS ─────────────────────────────────── */}
-      <div className="bg-white rounded-2xl border border-zinc-200 shadow-sm p-4 space-y-4">
-        {/* PAGE 1 vs PAGE 2 SUB-PAGE SWITCHER */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setActivePage('analytics')}
-              className={`px-5 py-2.5 rounded-xl text-sm font-extrabold transition-all border ${
-                activePage === 'analytics'
-                  ? 'bg-black text-white border-black shadow-sm'
-                  : 'bg-zinc-100 text-zinc-700 border-zinc-200 hover:bg-zinc-200 hover:text-black'
-              }`}
-            >
-              📊 Page 1: Analytics & Today's Follow-ups
-            </button>
-
-            <button
-              onClick={() => setActivePage('registry')}
-              className={`px-5 py-2.5 rounded-xl text-sm font-extrabold transition-all border ${
-                activePage === 'registry'
-                  ? 'bg-black text-white border-black shadow-sm'
-                  : 'bg-zinc-100 text-zinc-700 border-zinc-200 hover:bg-zinc-200 hover:text-black'
-              }`}
-            >
-              📋 Page 2: Cold Calls Excel Table ({leads.length})
-            </button>
-          </div>
-        </div>
-      </div>
-
       {/* ══════════════════════════════════════════════════════════════════════
           PAGE 1: ANALYTICS & TODAY'S FOLLOW-UPS
       ══════════════════════════════════════════════════════════════════════ */}
-      {activePage === 'analytics' && (
+      {subPage === 'analytics' && (
         <div className="space-y-6">
           {/* 5 Count Boxes */}
           <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
@@ -618,11 +620,11 @@ export function ColdCallsModule() {
       )}
 
       {/* ══════════════════════════════════════════════════════════════════════
-          PAGE 2: COLD CALLS EXCEL SPREADSHEET TABLE
+          PAGE 2: COLD CALLS EXCEL SPREADSHEET SHEET
       ══════════════════════════════════════════════════════════════════════ */}
-      {activePage === 'registry' && (
+      {subPage === 'sheet' && (
         <div className="space-y-4">
-          {/* Row 1: Filter pills */}
+          {/* Filter Pills */}
           <div className="bg-white rounded-xl border border-zinc-200 p-3 flex items-center justify-between gap-4">
             <div className="flex items-center gap-2 overflow-x-auto">
               {([
@@ -643,52 +645,27 @@ export function ColdCallsModule() {
             </div>
           </div>
 
-          {/* Row 2: TOOLBAR - Edit Table + Search Box BESIDE IT on left | Action Buttons on right */}
+          {/* TOOLBAR - Search Box on left | Save, Add Data, Upload Excel, Clear on right */}
           <div className="bg-white rounded-xl border border-zinc-200 p-3 flex flex-col md:flex-row md:items-center justify-between gap-4">
-            {/* Left Side: Edit Table Button + Search Box EXACTLY BESIDE IT */}
-            <div className="flex items-center gap-3 flex-1">
-              <button
-                onClick={() => {
-                  if (isEditMode) {
-                    handleSaveAll();
-                  } else {
-                    setIsEditMode(true);
-                  }
-                }}
-                className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl font-extrabold text-xs transition-all shadow-sm flex-shrink-0 ${
-                  isEditMode
-                    ? 'bg-black text-white hover:bg-zinc-800'
-                    : 'bg-zinc-100 text-black border border-zinc-300 hover:bg-zinc-200'
-                }`}
-                title={isEditMode ? 'Exit edit mode' : 'Enable edit mode'}
-              >
-                {isEditMode ? (
-                  <><X className="w-4 h-4" /><span>Done Editing</span></>
-                ) : (
-                  <><Pencil className="w-4 h-4" /><span>Edit Table</span></>
-                )}
-              </button>
-
-              {/* Search Box EXACTLY BESIDE Edit Table button */}
-              <div className="relative min-w-[280px] flex-1 max-w-md">
-                <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" />
-                <input
-                  type="text"
-                  value={searchQuery}
-                  onChange={e => setSearchQuery(e.target.value)}
-                  placeholder="Search name, phone, business..."
-                  className="w-full pl-9 pr-4 py-2 text-sm font-medium rounded-xl border border-zinc-300 bg-zinc-50 focus:bg-white focus:border-black focus:outline-none transition-all text-black"
-                />
-              </div>
+            {/* Left Side: Search Box */}
+            <div className="relative min-w-[300px] flex-1 max-w-md">
+              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+                placeholder="Search name, phone, business..."
+                className="w-full pl-9 pr-4 py-2 text-sm font-medium rounded-xl border border-zinc-300 bg-zinc-50 focus:bg-white focus:border-black focus:outline-none transition-all text-black"
+              />
             </div>
 
-            {/* Right Side: Save, Add Data, Upload Excel, Clear buttons */}
+            {/* Right Side: Action Buttons */}
             <div className="flex items-center gap-2 flex-wrap flex-shrink-0">
               {/* Save Button */}
               <button
                 onClick={handleSaveAll}
                 disabled={saveStatus === 'saving'}
-                className="inline-flex items-center gap-2 px-4 py-2 bg-black hover:bg-zinc-800 text-white font-bold text-xs rounded-xl transition-all shadow-sm active:scale-95 disabled:opacity-60"
+                className="inline-flex items-center gap-2 px-5 py-2.5 bg-black hover:bg-zinc-800 text-white font-bold text-xs rounded-xl transition-all shadow-sm active:scale-95 disabled:opacity-60"
               >
                 {saveStatus === 'saving' ? (
                   <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
@@ -703,7 +680,7 @@ export function ColdCallsModule() {
               {/* Add Data Button */}
               <button
                 onClick={() => { setAddForm({}); setShowAddPopup(true); }}
-                className="inline-flex items-center gap-2 px-4 py-2 bg-zinc-100 hover:bg-zinc-200 border border-zinc-300 text-black font-bold text-xs rounded-xl transition-all shadow-sm active:scale-95"
+                className="inline-flex items-center gap-2 px-4 py-2.5 bg-zinc-100 hover:bg-zinc-200 border border-zinc-300 text-black font-bold text-xs rounded-xl transition-all shadow-sm active:scale-95"
               >
                 <Plus className="w-3.5 h-3.5" />
                 <span>+ Add Data</span>
@@ -714,7 +691,7 @@ export function ColdCallsModule() {
               <button
                 onClick={() => fileInputRef.current?.click()}
                 disabled={isUploading}
-                className="inline-flex items-center gap-2 px-4 py-2 bg-zinc-100 hover:bg-zinc-200 border border-zinc-300 text-black font-bold text-xs rounded-xl transition-all shadow-sm active:scale-95 disabled:opacity-60"
+                className="inline-flex items-center gap-2 px-4 py-2.5 bg-zinc-100 hover:bg-zinc-200 border border-zinc-300 text-black font-bold text-xs rounded-xl transition-all shadow-sm active:scale-95 disabled:opacity-60"
               >
                 <FileSpreadsheet className="w-3.5 h-3.5" />
                 <span>{isUploading ? 'Uploading...' : 'Upload Excel'}</span>
@@ -724,7 +701,7 @@ export function ColdCallsModule() {
               {leads.length > 0 && (
                 <button
                   onClick={handleClearAll}
-                  className="p-2 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 rounded-xl transition-all border border-zinc-300"
+                  className="p-2.5 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 rounded-xl transition-all border border-zinc-300"
                   title="Clear all leads"
                 >
                   <Trash2 className="w-4 h-4 text-black" />
@@ -733,11 +710,11 @@ export function ColdCallsModule() {
             </div>
           </div>
 
-          {/* ── EXACT EXCEL FILE UI SPREADSHEET TABLE ───────────────────────────── */}
+          {/* EXACT EXCEL SPREADSHEET TABLE WITH LIVE EDITING & DYNAMIC SORTING */}
           <div className="bg-white rounded-xl border border-gray-300 shadow-sm overflow-hidden font-sans">
             {loading ? (
               <div className="p-16 text-center text-sm text-gray-500 font-semibold">Loading spreadsheet...</div>
-            ) : filteredLeads.length === 0 ? (
+            ) : sortedLeads.length === 0 ? (
               <div className="p-16 text-center space-y-3 bg-white">
                 <div className="w-12 h-12 rounded-2xl bg-gray-100 text-gray-500 flex items-center justify-center mx-auto border border-gray-300">
                   <FileSpreadsheet className="w-6 h-6 text-gray-700" />
@@ -750,7 +727,7 @@ export function ColdCallsModule() {
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-left border-collapse border border-gray-300 text-sm">
-                  {/* Excel Column Headers: #, BUSINESS NAME, PERSON NAME, PHONE NUMBER, NOTE, STATUS */}
+                  {/* Excel Headers */}
                   <thead>
                     <tr className="bg-[#f3f4f6] text-gray-700 font-bold border-b border-gray-300 text-xs uppercase tracking-wider">
                       <th className="py-2.5 px-3 w-12 text-center border border-gray-300 bg-[#e5e7eb] text-gray-800">#</th>
@@ -762,11 +739,11 @@ export function ColdCallsModule() {
                     </tr>
                   </thead>
                   <tbody className="bg-white text-gray-900 font-normal">
-                    {filteredLeads.map((lead, idx) => {
+                    {sortedLeads.map((lead, idx) => {
                       const hasNotes = (lead.notesList && lead.notesList.length > 0) || Boolean(lead.note);
                       return (
                         <tr key={lead.id} className="hover:bg-blue-50/40 transition-colors">
-                          {/* Row Index Column (Excel 1, 2, 3...) */}
+                          {/* Row Index Column (1, 2, 3...) */}
                           <td className="py-2 px-3 text-center bg-[#f3f4f6] text-gray-500 font-mono text-xs font-semibold border border-gray-300 select-none">
                             {idx + 1}
                           </td>
@@ -778,18 +755,16 @@ export function ColdCallsModule() {
                               field="businessName"
                               value={lead.businessName || ''}
                               placeholder="Business name"
-                              editMode={isEditMode}
                             />
                           </td>
 
-                          {/* Person Name Cell (PLAIN TEXT NO AVATAR) */}
+                          {/* Person Name Cell */}
                           <td className="py-2 px-3 border border-gray-300 font-semibold text-black">
                             <EditableCell
                               leadId={lead.id}
                               field="personName"
                               value={lead.personName || lead.name || ''}
                               placeholder="Person name"
-                              editMode={isEditMode}
                             />
                           </td>
 
@@ -800,7 +775,6 @@ export function ColdCallsModule() {
                               field="phone"
                               value={lead.phone || ''}
                               placeholder="Phone number"
-                              editMode={isEditMode}
                             />
                           </td>
 

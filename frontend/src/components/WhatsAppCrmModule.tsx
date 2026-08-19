@@ -28,6 +28,7 @@ import { ColdCallsModule } from './ColdCallsModule';
 
 export function WhatsAppCrmModule() {
   const [activeNav, setActiveNav] = useState<'whatsapp' | 'calls' | 'emails' | 'settings'>('whatsapp');
+  const [coldCallsSubPage, setColdCallsSubPage] = useState<'analytics' | 'sheet' | 'database'>('analytics');
   const [tableFilter, setTableFilter] = useState<'ALL' | 'INTERESTED' | 'WARM' | 'NOT_INTERESTED' | 'CALLS' | 'FOLLOWUPS'>('ALL');
   const [modalCategory, setModalCategory] = useState<'INTERESTED' | 'WARM' | 'NOT_INTERESTED' | 'CALLS' | 'FOLLOWUPS' | null>(null);
   const [copiedPhone, setCopiedPhone] = useState<string | null>(null);
@@ -337,7 +338,45 @@ export function WhatsAppCrmModule() {
       <main className="flex-1 flex flex-col overflow-hidden bg-white text-black">
         <header className="h-16 bg-white border-b border-zinc-200 px-6 flex items-center justify-between flex-shrink-0">
           <div className="flex items-center gap-6">
-            <h2 className="text-2xl font-extrabold text-black tracking-tight">WhatsApp CRM Dashboard</h2>
+            <h2 className="text-2xl font-extrabold text-black tracking-tight">
+              {activeNav === 'whatsapp' ? 'WhatsApp CRM Dashboard' : activeNav === 'calls' ? 'Cold Calls Dashboard' : 'Settings & AI Agent'}
+            </h2>
+
+            {/* COLD CALLS 3-PAGE SELECTOR PILL BAR IN TOP HEADER */}
+            {activeNav === 'calls' && (
+              <div className="flex items-center gap-1.5 bg-zinc-100 p-1 rounded-xl border border-zinc-200">
+                <button
+                  onClick={() => setColdCallsSubPage('analytics')}
+                  className={`px-3.5 py-1.5 rounded-lg text-xs font-extrabold transition-all ${
+                    coldCallsSubPage === 'analytics'
+                      ? 'bg-black text-white shadow-sm'
+                      : 'text-zinc-700 hover:text-black hover:bg-zinc-200'
+                  }`}
+                >
+                  📊 1. Dashboard
+                </button>
+                <button
+                  onClick={() => setColdCallsSubPage('sheet')}
+                  className={`px-3.5 py-1.5 rounded-lg text-xs font-extrabold transition-all ${
+                    coldCallsSubPage === 'sheet'
+                      ? 'bg-black text-white shadow-sm'
+                      : 'text-zinc-700 hover:text-black hover:bg-zinc-200'
+                  }`}
+                >
+                  📋 2. Cold Calls List
+                </button>
+                <button
+                  onClick={() => setColdCallsSubPage('database')}
+                  className={`px-3.5 py-1.5 rounded-lg text-xs font-extrabold transition-all ${
+                    coldCallsSubPage === 'database'
+                      ? 'bg-black text-white shadow-sm'
+                      : 'text-zinc-700 hover:text-black hover:bg-zinc-200'
+                  }`}
+                >
+                  🗄️ 3. Database
+                </button>
+              </div>
+            )}
           </div>
 
           <div className="flex items-center gap-3">
@@ -602,7 +641,7 @@ export function WhatsAppCrmModule() {
         )}
 
         {activeNav === 'calls' && (
-          <ColdCallsModule />
+          <ColdCallsModule subPage={coldCallsSubPage} onSubPageChange={setColdCallsSubPage} />
         )}
 
         {activeNav === 'settings' && (

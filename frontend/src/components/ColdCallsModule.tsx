@@ -54,7 +54,8 @@ export interface ColdCallLead {
   name?: string;
   company?: string;
   customFields?: Record<string, any>;
-  callStatus?: 'YES' | 'NO' | 'PENDING' | 'INTERESTED' | 'NOT_INTERESTED' | 'CONNECTED' | 'BUSY' | 'NO_ANSWER' | 'CALLBACK_REQUESTED';
+  callChoice?: 'YES' | 'NO' | 'PENDING';
+  callStatus?: 'YES' | 'NO' | 'PENDING' | 'INTERESTED' | 'NOT_INTERESTED' | 'CONNECTED' | 'BUSY' | 'NO_ANSWER' | 'CALLBACK_REQUESTED' | 'NOT_CONNECTED' | 'WARM';
   followUpDate?: string;
   calledBy?: string;        // Logged-in username (e.g. James Mitchell)
   callTimestamp?: number;   // Timestamp of last call/note update
@@ -105,6 +106,19 @@ const mapExcelRow = (row: Record<string, any>, idx: number): Partial<ColdCallLea
   const facebookProfile = get('facebook', 'facebookprofile', 'fb') || '';
   const instaProfile  = get('insta', 'instagram', 'instaprofile') || '';
   const note          = get('note', 'notes', 'remark', 'comment', 'description') || '';
+  const callChoice    = get('call', 'callchoice') || 'PENDING';
+  const followUpDate  = get('followupdate', 'followup', 'date') || '';
+
+  // Collect any remaining extra columns into customFields
+  const customFields: Record<string, string> = {};
+  const standardKeywords = ['business', 'company', 'person', 'name', 'phone', 'website', 'role', 'email', 'linkedin', 'facebook', 'insta', 'note', 'call', 'status', 'followup'];
+  for (const [k, v] of Object.entries(row)) {
+    const cleanKey = k.toLowerCase().replace(/[\s_-]/g, '');
+    const isStandard = standardKeywords.some(sk => cleanKey.includes(sk));
+    if (!isStandard && v !== undefined && v !== null && String(v).trim() !== '') {
+      customFields[k] = String(v).trim();
+    }
+  }
 
   const phoneDigits = phone.replace(/\D/g, '');
   const id = phoneDigits.length >= 8 ? phoneDigits : `lead_${Date.now()}_${idx}`;
@@ -123,6 +137,8 @@ const mapExcelRow = (row: Record<string, any>, idx: number): Partial<ColdCallLea
     note,
     notesList: [],
     callStatus: 'PENDING',
+    followUpDate,
+    customFields,
     createdAt: Date.now(),
     updatedAt: Date.now(),
   };
@@ -948,6 +964,27 @@ export function ColdCallsModule({
                 <Plus className="w-3.5 h-3.5" />
                 <span>Add Data</span>
               </button>
+
+              {/* Upload Excel Button */}
+              <input
+                type="file"
+                ref={fileInputRef}
+                onChange={handleFileUpload}
+                accept=".xlsx, .xls, .csv"
+                className="hidden"
+              />
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                disabled={isUploading}
+                className="inline-flex items-center gap-2 px-4 py-2.5 bg-[#00a884] hover:bg-[#008f70] text-white font-bold text-xs rounded-xl transition-all shadow-sm active:scale-95 disabled:opacity-60"
+              >
+                {isUploading ? (
+                  <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                ) : (
+                  <FileSpreadsheet className="w-3.5 h-3.5" />
+                )}
+                <span>{isUploading ? 'Uploading...' : 'Upload Excel'}</span>
+              </button>
             </div>
           </div>
 
@@ -972,9 +1009,9 @@ export function ColdCallsModule({
                   {/* Excel Headers with Column Resizer Handles */}
                   <thead>
                     <tr className="bg-[#f3f4f6] text-gray-700 font-bold border-b border-gray-300 text-xs uppercase tracking-wider select-none">
-                      <th className="py-2.5 px-3 border border-gray-300 bg-[#e5e7eb] text-gray-800 text-center" style={{ width: `${colWidths.index}px` }}>#</th>
+                      <th className="py-2.5 px-3 border border-gray-300 bg-[#e5e7eb] text-gray-800 text-center" style={{ width: `${colWidths.index || 48}px` }}>#</th>
                       
-                      <th className="py-2.5 px-3 border border-gray-300 relative group" style={{ width: `${colWidths.businessName}px` }}>
+                      <th className="py-2.5 px-3 border border-gray-300 relative group" style={{ width: `${colWidths.businessName || 200}px` }}>
                         <span>BUSINESS NAME</span>
                         <div
                           onMouseDown={(e) => handleMouseDownResize('businessName', e)}
@@ -983,7 +1020,7 @@ export function ColdCallsModule({
                         />
                       </th>
 
-                      <th className="py-2.5 px-3 border border-gray-300 relative group" style={{ width: `${colWidths.personName}px` }}>
+                      <th className="py-2.5 px-3 border border-gray-300 relative group" style={{ width: `${colWidths.personName || 200}px` }}>
                         <span>PERSON NAME</span>
                         <div
                           onMouseDown={(e) => handleMouseDownResize('personName', e)}
@@ -992,7 +1029,7 @@ export function ColdCallsModule({
                         />
                       </th>
 
-                      <th className="py-2.5 px-3 border border-gray-300 relative group" style={{ width: `${colWidths.phone}px` }}>
+                      <th className="py-2.5 px-3 border border-gray-300 relative group" style={{ width: `${colWidths.phone || 150}px` }}>
                         <span>PHONE NUMBER</span>
                         <div
                           onMouseDown={(e) => handleMouseDownResize('phone', e)}
@@ -1001,16 +1038,25 @@ export function ColdCallsModule({
                         />
                       </th>
 
-                      <th className="py-2.5 px-3 border border-gray-300 relative group" style={{ width: `${colWidths.followUpDate}px` }}>
-                        <span>FOLLOW-UP DATE</span>
+                      <th className="py-2.5 px-3 border border-gray-300 text-center relative group" style={{ width: `${colWidths.callChoice || 110}px` }}>
+                        <span>CALL</span>
                         <div
-                          onMouseDown={(e) => handleMouseDownResize('followUpDate', e)}
+                          onMouseDown={(e) => handleMouseDownResize('callChoice', e)}
                           className="absolute top-0 right-0 bottom-0 w-2.5 cursor-col-resize hover:bg-black/30 transition-colors z-20"
                           title="Drag to resize column width"
                         />
                       </th>
 
-                      <th className="py-2.5 px-3 border border-gray-300 text-center relative group" style={{ width: `${colWidths.note}px` }}>
+                      <th className="py-2.5 px-3 border border-gray-300 text-center relative group" style={{ width: `${colWidths.status || 150}px` }}>
+                        <span>STATUS</span>
+                        <div
+                          onMouseDown={(e) => handleMouseDownResize('status', e)}
+                          className="absolute top-0 right-0 bottom-0 w-2.5 cursor-col-resize hover:bg-black/30 transition-colors z-20"
+                          title="Drag to resize column width"
+                        />
+                      </th>
+
+                      <th className="py-2.5 px-3 border border-gray-300 text-center relative group" style={{ width: `${colWidths.note || 100}px` }}>
                         <span>NOTE</span>
                         <div
                           onMouseDown={(e) => handleMouseDownResize('note', e)}
@@ -1019,10 +1065,10 @@ export function ColdCallsModule({
                         />
                       </th>
 
-                      <th className="py-2.5 px-3 border border-gray-300 text-center relative group" style={{ width: `${colWidths.status}px` }}>
-                        <span>STATUS</span>
+                      <th className="py-2.5 px-3 border border-gray-300 relative group" style={{ width: `${colWidths.followUpDate || 150}px` }}>
+                        <span>FOLLOW-UP DATE</span>
                         <div
-                          onMouseDown={(e) => handleMouseDownResize('status', e)}
+                          onMouseDown={(e) => handleMouseDownResize('followUpDate', e)}
                           className="absolute top-0 right-0 bottom-0 w-2.5 cursor-col-resize hover:bg-black/30 transition-colors z-20"
                           title="Drag to resize column width"
                         />
@@ -1032,6 +1078,8 @@ export function ColdCallsModule({
                   <tbody className="bg-white text-gray-900 font-normal">
                     {sortedLeads.map((lead, idx) => {
                       const hasNotes = (lead.notesList && lead.notesList.length > 0) || Boolean(lead.note);
+                      const currentCallChoice = lead.callChoice || (lead.callStatus === 'NOT_CONNECTED' ? 'NO' : (lead.callStatus && lead.callStatus !== 'PENDING' ? 'YES' : 'PENDING'));
+
                       return (
                         <tr key={lead.id} className="hover:bg-blue-50/40 transition-colors">
                           {/* Row Index Column (1, 2, 3...) */}
@@ -1040,7 +1088,7 @@ export function ColdCallsModule({
                           </td>
 
                           {/* Business Name Cell */}
-                          <td className="py-2 px-3 border border-gray-300 font-semibold text-black" style={{ width: `${colWidths.businessName}px` }}>
+                          <td className="py-2 px-3 border border-gray-300 font-semibold text-black" style={{ width: `${colWidths.businessName || 200}px` }}>
                             <EditableCell
                               leadId={lead.id}
                               field="businessName"
@@ -1050,7 +1098,7 @@ export function ColdCallsModule({
                           </td>
 
                           {/* Person Name Cell */}
-                          <td className="py-2 px-3 border border-gray-300 font-semibold text-black" style={{ width: `${colWidths.personName}px` }}>
+                          <td className="py-2 px-3 border border-gray-300 font-semibold text-black" style={{ width: `${colWidths.personName || 200}px` }}>
                             <EditableCell
                               leadId={lead.id}
                               field="personName"
@@ -1060,7 +1108,7 @@ export function ColdCallsModule({
                           </td>
 
                           {/* Phone Number Cell (Green Font - Mandatory) */}
-                          <td className="py-2 px-3 border border-gray-300 font-extrabold text-[#00a884]" style={{ width: `${colWidths.phone}px` }}>
+                          <td className="py-2 px-3 border border-gray-300 font-extrabold text-[#00a884]" style={{ width: `${colWidths.phone || 150}px` }}>
                             <EditableCell
                               leadId={lead.id}
                               field="phone"
@@ -1070,15 +1118,53 @@ export function ColdCallsModule({
                             />
                           </td>
 
-                          {/* Follow-up Date Cell (Green Font - Mandatory) */}
-                          <td className="py-2 px-3 border border-gray-300 font-extrabold text-[#00a884]" style={{ width: `${colWidths.followUpDate}px` }}>
-                            <EditableCell
-                              leadId={lead.id}
-                              field="followUpDate"
-                              value={lead.followUpDate || ''}
-                              placeholder=""
-                              className="text-[#00a884] font-extrabold"
-                            />
+                          {/* Call Cell (Yes / No / Pending) */}
+                          <td className="py-2 px-2 border border-gray-300 text-center" style={{ width: `${colWidths.callChoice || 110}px` }}>
+                            <select
+                              value={currentCallChoice}
+                              onChange={(e) => {
+                                const val = e.target.value as 'YES' | 'NO' | 'PENDING';
+                                let newStatus = lead.callStatus;
+                                if (val === 'YES') {
+                                  if (!newStatus || newStatus === 'PENDING' || newStatus === 'NOT_CONNECTED') {
+                                    newStatus = 'INTERESTED';
+                                  }
+                                } else if (val === 'NO') {
+                                  newStatus = 'NOT_CONNECTED';
+                                } else {
+                                  newStatus = 'PENDING';
+                                }
+                                handleCellEdit(lead.id, 'callChoice', val);
+                                handleCellEdit(lead.id, 'callStatus', newStatus);
+                              }}
+                              className="w-full px-2 py-1 bg-transparent hover:bg-zinc-100 rounded text-xs font-extrabold text-black outline-none cursor-pointer border border-transparent hover:border-zinc-300"
+                            >
+                              <option value="PENDING">Pending</option>
+                              <option value="YES">Yes</option>
+                              <option value="NO">No</option>
+                            </select>
+                          </td>
+
+                          {/* Status Cell (Conditional based on Call choice) */}
+                          <td className="py-2 px-2 border border-gray-300 text-center" style={{ width: `${colWidths.status || 150}px` }}>
+                            {currentCallChoice === 'YES' ? (
+                              <select
+                                value={lead.callStatus || 'INTERESTED'}
+                                onChange={(e) => handleCellEdit(lead.id, 'callStatus', e.target.value as any)}
+                                className="w-full px-2 py-1 bg-emerald-50 text-emerald-900 border border-emerald-300 rounded text-xs font-extrabold outline-none cursor-pointer"
+                              >
+                                <option value="INTERESTED">Interested</option>
+                                <option value="NOT_INTERESTED">Not Interested</option>
+                                <option value="WARM">Warm</option>
+                                <option value="PENDING">Pending</option>
+                              </select>
+                            ) : currentCallChoice === 'NO' ? (
+                              <div className="px-2 py-1 bg-zinc-100 text-zinc-700 rounded border border-zinc-300 text-xs font-extrabold text-center select-none">
+                                Not Connected
+                              </div>
+                            ) : (
+                              <span className="text-zinc-400 italic text-xs block text-center">—</span>
+                            )}
                           </td>
 
                           {/* Note Cell */}
@@ -1101,17 +1187,15 @@ export function ColdCallsModule({
                             </button>
                           </td>
 
-                          {/* Status Cell */}
-                          <td className="py-2 px-3 border border-gray-300 text-center" style={{ width: `${colWidths.status}px` }}>
-                            {lead.callStatus === 'INTERESTED' ? (
-                              <span className="px-2.5 py-0.5 text-xs font-bold rounded bg-emerald-100 text-emerald-800 border border-emerald-300">Interested</span>
-                            ) : lead.callStatus === 'YES' ? (
-                              <span className="px-2.5 py-0.5 text-xs font-bold rounded bg-amber-100 text-amber-800 border border-amber-300">Warm</span>
-                            ) : lead.callStatus === 'NOT_INTERESTED' ? (
-                              <span className="px-2.5 py-0.5 text-xs font-bold rounded bg-rose-100 text-rose-800 border border-rose-300">Not Int.</span>
-                            ) : (
-                              <span className="text-gray-400 italic text-xs">—</span>
-                            )}
+                          {/* Follow-up Date Cell (Green Font - Mandatory) */}
+                          <td className="py-2 px-3 border border-gray-300 font-extrabold text-[#00a884]" style={{ width: `${colWidths.followUpDate || 150}px` }}>
+                            <EditableCell
+                              leadId={lead.id}
+                              field="followUpDate"
+                              value={lead.followUpDate || ''}
+                              placeholder=""
+                              className="text-[#00a884] font-extrabold"
+                            />
                           </td>
                         </tr>
                       );
@@ -1453,6 +1537,19 @@ export function ColdCallsModule({
                       onChange={v => handlePopupFieldEdit('instaProfile', v)}
                       isLink
                     />
+
+                    {/* Extra Columns from uploaded Excel file */}
+                    {notePopupLead.customFields && Object.keys(notePopupLead.customFields).length > 0 && (
+                      <div className="border-t border-gray-200 pt-3 mt-3 space-y-2">
+                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-wider">Extra Excel Columns</p>
+                        {Object.entries(notePopupLead.customFields).map(([k, v]) => (
+                          <div key={k} className="flex items-center gap-3 bg-gray-50 p-2.5 rounded-xl border border-gray-200 text-xs">
+                            <span className="font-bold text-gray-600 min-w-[110px]">{k}:</span>
+                            <span className="font-semibold text-black flex-1 truncate">{String(v)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -1518,16 +1615,11 @@ export function ColdCallsModule({
                 {addForm.phoneError && <p className="text-rose-600 text-xs font-bold mt-1">{addForm.phoneError}</p>}
               </div>
 
-              {/* Other optional fields */}
+              {/* Only 4 optional fields: Business Name, Person Name, Email, Note */}
               {([
                 ['businessName', 'Business Name', 'e.g. RnB Fashion'],
                 ['personName', 'Person Name', 'e.g. Rambhibai Bhatiya'],
-                ['businessWebsite', 'Business Website', 'https://...'],
-                ['role', 'Role / Designation', 'e.g. Owner, CEO'],
                 ['email', 'Email', 'e.g. info@example.com'],
-                ['linkedinProfile', 'LinkedIn Profile', 'https://linkedin.com/in/...'],
-                ['facebookProfile', 'Facebook Profile', 'https://facebook.com/...'],
-                ['instaProfile', 'Instagram Profile', 'https://instagram.com/...'],
                 ['note', 'Note', 'Any initial note or remark...'],
               ] as [string, string, string][]).map(([field, label, ph]) => (
                 <div key={field}>

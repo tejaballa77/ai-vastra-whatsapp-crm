@@ -276,9 +276,28 @@ app.post('/api/cold-calls/import', (req, res) => {
   res.json({ success: true, count: imported.length, leads: imported });
 });
 
+// Get active CRM users
+app.get('/api/users/active', (req, res) => {
+  res.json({ success: true, activeUsers: db.getActiveUsers() });
+});
+
+// Register active CRM user login
+app.post('/api/users/active', (req, res) => {
+  const { username } = req.body;
+  if (username) {
+    db.registerActiveUser(username);
+    io.emit('users_updated', db.getActiveUsers());
+  }
+  res.json({ success: true, activeUsers: db.getActiveUsers() });
+});
+
 // Update cold call lead (Notes, Follow-up Date, Call Status, etc.)
 app.put('/api/cold-calls/:id', (req, res) => {
   const { id } = req.params;
+  if (req.body.calledBy) {
+    db.registerActiveUser(req.body.calledBy);
+    io.emit('users_updated', db.getActiveUsers());
+  }
   const updated = db.updateColdCall(id, req.body);
   if (!updated) {
     return res.status(404).json({ error: 'Cold call lead not found' });

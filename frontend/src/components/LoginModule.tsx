@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import { Lock, User, Eye, EyeOff, ArrowRight } from 'lucide-react';
+import { getBackendUrl } from '../config';
 
 interface LoginModuleProps {
   onLoginSuccess: () => void;
@@ -36,6 +37,14 @@ export function LoginModule({ onLoginSuccess }: LoginModuleProps) {
         localStorage.setItem('crm_authenticated', 'true');
         localStorage.setItem('crm_user_name', trimmedUser);
         localStorage.setItem('crm_user_display', trimmedUser);
+
+        // Register active user in backend database & emit updates
+        fetch(`${getBackendUrl()}/api/users/active`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username: trimmedUser }),
+        }).catch(err => console.error(err));
+
         onLoginSuccess();
       } else {
         setError('Invalid password. Please enter correct password.');

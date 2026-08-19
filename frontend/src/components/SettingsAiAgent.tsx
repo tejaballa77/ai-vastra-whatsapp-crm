@@ -71,21 +71,20 @@ export function SettingsAiAgent() {
       })
       .catch((err) => console.error('Error fetching KB:', err));
 
-    fetch(`${getBackendUrl()}/api/cold-calls`)
-      .then(res => res.json())
-      .then(data => {
-        if (data.success && data.leads) {
-          const userSet = new Set<string>();
-          if (currentUser) userSet.add(currentUser);
-          data.leads.forEach((l: any) => {
-            if (l.calledBy && l.calledBy !== 'Staff' && l.calledBy !== 'Executive User') {
-              userSet.add(l.calledBy);
-            }
-          });
-          setActiveUsersList(Array.from(userSet));
-        }
-      })
-      .catch(err => console.error(err));
+    const fetchActiveUsers = () => {
+      fetch(`${getBackendUrl()}/api/users/active`)
+        .then(res => res.json())
+        .then(data => {
+          if (data.success && Array.isArray(data.activeUsers)) {
+            const setUsers = new Set<string>(data.activeUsers);
+            if (currentUser) setUsers.add(currentUser);
+            setActiveUsersList(Array.from(setUsers));
+          }
+        })
+        .catch(err => console.error(err));
+    };
+
+    fetchActiveUsers();
 
     fetchDocuments();
   }, [currentUser]);

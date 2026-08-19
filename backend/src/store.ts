@@ -92,6 +92,23 @@ class StorageEngine {
   public messages: Map<string, CRMMessage[]> = new Map(); // chatJid -> CRMMessage[]
   public lidToJidMap: Map<string, string> = new Map(); // LID JID -> Phone JID
   public coldCalls: Map<string, ColdCallLead> = new Map(); // Lead ID -> ColdCallLead
+  public activeUsers: Set<string> = new Set();
+
+  public registerActiveUser(username: string) {
+    if (username && username !== 'Staff' && username !== 'Executive User' && username.trim().length > 0) {
+      this.activeUsers.add(username.trim());
+    }
+  }
+
+  public getActiveUsers(): string[] {
+    const userSet = new Set<string>(this.activeUsers);
+    for (const lead of this.coldCalls.values()) {
+      if (lead.calledBy && lead.calledBy !== 'Staff' && lead.calledBy !== 'Executive User') {
+        userSet.add(lead.calledBy.trim());
+      }
+    }
+    return Array.from(userSet);
+  }
 
   constructor() {
     const dataDir = path.join(__dirname, '../data');
@@ -927,6 +944,9 @@ class StorageEngine {
     updated.name = updated.personName || updated.name || '';
     updated.company = updated.businessName || updated.company || '';
 
+    if (updated.calledBy) {
+      this.registerActiveUser(updated.calledBy);
+    }
     this.coldCalls.set(id, updated);
     this.saveData();
     return updated;

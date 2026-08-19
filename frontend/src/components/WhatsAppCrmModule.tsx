@@ -28,9 +28,11 @@ import { useSocket } from '../context/SocketContext';
 import { SettingsAiAgent } from './SettingsAiAgent';
 import { ColdCallsModule } from './ColdCallsModule';
 import { AdminProfileModal } from './AdminProfileModal';
+import { CustomModal } from './CustomModal';
 
 export function WhatsAppCrmModule() {
   const [showAdminModal, setShowAdminModal] = useState<boolean>(false);
+  const [showLogoutModal, setShowLogoutModal] = useState<boolean>(false);
   const [adminDisplayName, setAdminDisplayName] = useState<string>(() => {
     if (typeof window !== 'undefined') {
       return localStorage.getItem('crm_admin_display_name') || 'Admin';
@@ -374,12 +376,7 @@ export function WhatsAppCrmModule() {
           </button>
 
           <button
-            onClick={() => {
-              if (confirm('Are you sure you want to log out of Ai Vastra CRM?')) {
-                localStorage.removeItem('crm_authenticated');
-                window.location.reload();
-              }
-            }}
+            onClick={() => setShowLogoutModal(true)}
             className="p-2.5 rounded-xl bg-zinc-900 hover:bg-rose-900/60 hover:text-rose-400 text-zinc-400 border border-zinc-800 transition-all flex-shrink-0"
             title="Log Out of CRM"
           >
@@ -779,6 +776,21 @@ export function WhatsAppCrmModule() {
           onSaveSuccess={refreshAdminProfile}
         />
       )}
+
+      {/* Sleek Custom Middle-Screen Logout Confirmation Modal */}
+      <CustomModal
+        isOpen={showLogoutModal}
+        type="danger"
+        title="Log Out of Ai Vastra CRM?"
+        message="Are you sure you want to log out of your session? You will need to enter your username and password again to sign back in."
+        confirmText="Log Out Now"
+        cancelText="Cancel"
+        onClose={() => setShowLogoutModal(false)}
+        onConfirm={() => {
+          localStorage.removeItem('crm_authenticated');
+          window.location.reload();
+        }}
+      />
     </div>
   );
 }

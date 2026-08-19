@@ -121,7 +121,7 @@ const mapExcelRow = (row: Record<string, any>, idx: number): Partial<ColdCallLea
   }
 
   const phoneDigits = phone.replace(/\D/g, '');
-  const id = phoneDigits.length >= 8 ? phoneDigits : `lead_${Date.now()}_${idx}`;
+  const id = `lead_${Date.now()}_${idx}_${Math.random().toString(36).substring(2, 6)}`;
 
   return {
     id,

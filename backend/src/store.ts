@@ -881,7 +881,7 @@ class StorageEngine {
       // Allow entry if any identifying info is present
       if (!lead.businessName && !lead.personName && !lead.phone && !lead.name) continue;
       const phoneDigits = (lead.phone || '').replace(/\D/g, '');
-      const id = lead.id || (phoneDigits.length >= 8 ? phoneDigits : `lead_${now}_${Math.random().toString(36).substring(2, 7)}`);
+      const id = lead.id || `lead_${now}_${Math.random().toString(36).substring(2, 8)}`;
 
       const existing = this.coldCalls.get(id);
       const entry: ColdCallLead = {

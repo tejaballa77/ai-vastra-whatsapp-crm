@@ -13,7 +13,7 @@ interface TestChatMessage {
 
 export function SettingsAiAgent() {
   const [kb, setKb] = useState<any>({
-    enabled: true,
+    enabled: false, // Default to OFF so switch never flashes ON before API fetch
     openAiApiKey: '',
     openAiModel: 'gpt-4o-mini',
     companyName: 'Nice Digitals',
@@ -42,6 +42,7 @@ export function SettingsAiAgent() {
   const [testInput, setTestInput] = useState('');
   const [isThinking, setIsThinking] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
+  const isInitialChatMount = useRef(true);
 
   const fetchDocuments = () => {
     fetch(`${getBackendUrl()}/api/ai/documents`)
@@ -67,7 +68,12 @@ export function SettingsAiAgent() {
     fetchDocuments();
   }, []);
 
+  // ONLY scroll chat sandbox when a new user message is sent or AI is thinking (NOT on initial page load)
   useEffect(() => {
+    if (isInitialChatMount.current) {
+      isInitialChatMount.current = false;
+      return;
+    }
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [chatMessages, isThinking]);
 

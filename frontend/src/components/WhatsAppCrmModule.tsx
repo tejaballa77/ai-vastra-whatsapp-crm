@@ -645,7 +645,7 @@ export function WhatsAppCrmModule() {
         )}
 
         {activeNav === 'settings' && (
-          <div className="flex-1 overflow-y-auto">
+          <div className="flex-1 overflow-y-auto" ref={el => { if (el) el.scrollTop = 0; }}>
             <SettingsAiAgent />
           </div>
         )}

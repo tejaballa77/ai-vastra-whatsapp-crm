@@ -506,8 +506,8 @@ export function ColdCallsModule({
         value={localVal}
         onChange={e => { setLocalVal(e.target.value); commit(e.target.value); }}
         onKeyDown={e => { if (e.key === 'Escape') setLocalVal(value); }}
-        className={`w-full px-2 py-1.5 text-sm border border-transparent hover:border-zinc-400 focus:border-black focus:bg-white bg-transparent outline-none transition-all font-semibold text-black ${className}`}
-        placeholder={placeholder || '—'}
+        className={`w-full px-2 py-1.5 text-sm border border-transparent hover:border-zinc-400 focus:border-black focus:bg-white bg-transparent outline-none transition-all font-semibold ${className || 'text-black'}`}
+        placeholder={placeholder}
       />
     );
   };
@@ -847,23 +847,25 @@ export function ColdCallsModule({
                             />
                           </td>
 
-                          {/* Phone Number Cell */}
-                          <td className="py-2 px-3 border border-gray-300 font-semibold text-black" style={{ width: `${colWidths.phone}px` }}>
+                          {/* Phone Number Cell (Green Font - Mandatory) */}
+                          <td className="py-2 px-3 border border-gray-300 font-extrabold text-[#00a884]" style={{ width: `${colWidths.phone}px` }}>
                             <EditableCell
                               leadId={lead.id}
                               field="phone"
                               value={lead.phone || ''}
                               placeholder=""
+                              className="text-[#00a884] font-extrabold"
                             />
                           </td>
 
-                          {/* Follow-up Date Cell */}
-                          <td className="py-2 px-3 border border-gray-300 font-semibold text-black" style={{ width: `${colWidths.followUpDate}px` }}>
+                          {/* Follow-up Date Cell (Green Font - Mandatory) */}
+                          <td className="py-2 px-3 border border-gray-300 font-extrabold text-[#00a884]" style={{ width: `${colWidths.followUpDate}px` }}>
                             <EditableCell
                               leadId={lead.id}
                               field="followUpDate"
                               value={lead.followUpDate || ''}
                               placeholder=""
+                              className="text-[#00a884] font-extrabold"
                             />
                           </td>
 
@@ -1273,32 +1275,35 @@ export function ColdCallsModule({
           ADD DATA POPUP
       ══════════════════════════════════════════════════════════════════════ */}
       {showAddPopup && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl border border-gray-200 flex flex-col max-h-[90vh]">
-            <div className="px-5 py-4 border-b border-gray-200 flex items-center justify-between bg-[#f0f2f5] rounded-t-2xl">
-              <h3 className="text-sm font-bold text-[#111b21] flex items-center gap-2">
-                <Plus className="w-4 h-4 text-[#00a884]" />
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[9999] flex items-center justify-center p-4 text-black font-sans">
+          <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl border border-gray-200 flex flex-col max-h-[90vh] overflow-hidden">
+            
+            {/* Header */}
+            <div className="px-6 py-5 border-b border-gray-200 flex items-center justify-between bg-[#f8f9fa] rounded-t-2xl">
+              <h3 className="text-2xl font-black text-black tracking-tight flex items-center gap-2">
+                <Plus className="w-5 h-5 text-[#00a884]" />
                 Add New Contact
               </h3>
-              <button onClick={() => setShowAddPopup(false)} className="w-8 h-8 rounded-full bg-white hover:bg-gray-200 flex items-center justify-center text-gray-600 transition-all">
+              <button onClick={() => setShowAddPopup(false)} className="w-9 h-9 rounded-full bg-white hover:bg-gray-200 flex items-center justify-center text-gray-700 transition-all shadow-sm border border-gray-200">
                 <X className="w-4 h-4" />
               </button>
             </div>
 
-            <div className="overflow-y-auto flex-1 p-5 space-y-3">
-              {/* Phone — mandatory */}
+            {/* Body */}
+            <div className="overflow-y-auto flex-1 p-6 space-y-4">
+              {/* Phone — mandatory (GREEN) */}
               <div>
-                <label className="text-[10px] font-bold text-gray-700 uppercase tracking-wider block mb-1">
-                  Phone Number <span className="text-rose-600">*</span>
+                <label className="text-xs font-black text-black uppercase tracking-wider block mb-1.5">
+                  Phone Number <span className="text-[#00a884] font-black">* (Mandatory)</span>
                 </label>
                 <input
                   type="tel"
                   value={addForm.phone || ''}
                   onChange={e => setAddForm(f => ({ ...f, phone: e.target.value, phoneError: '' }))}
                   placeholder="e.g. 9773266714"
-                  className={`w-full px-3 py-2 text-xs rounded-xl border ${addForm.phoneError ? 'border-rose-400 bg-rose-50' : 'border-gray-200 bg-gray-50'} focus:bg-white focus:border-[#00a884] focus:outline-none transition-all`}
+                  className={`w-full px-4 py-2.5 text-xs font-extrabold text-[#00a884] rounded-xl border ${addForm.phoneError ? 'border-rose-400 bg-rose-50' : 'border-gray-300 bg-gray-50'} focus:bg-white focus:border-[#00a884] focus:outline-none transition-all`}
                 />
-                {addForm.phoneError && <p className="text-rose-600 text-[10px] mt-1">{addForm.phoneError}</p>}
+                {addForm.phoneError && <p className="text-rose-600 text-xs font-bold mt-1">{addForm.phoneError}</p>}
               </div>
 
               {/* Other optional fields */}
@@ -1314,29 +1319,30 @@ export function ColdCallsModule({
                 ['note', 'Note', 'Any initial note or remark...'],
               ] as [string, string, string][]).map(([field, label, ph]) => (
                 <div key={field}>
-                  <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block mb-1">
-                    {label} <span className="text-gray-400 font-normal normal-case">(optional)</span>
+                  <label className="text-xs font-black text-black uppercase tracking-wider block mb-1.5">
+                    {label} <span className="text-gray-400 font-semibold normal-case">(optional)</span>
                   </label>
                   <input
                     type="text"
                     value={(addForm as any)[field] || ''}
                     onChange={e => setAddForm(f => ({ ...f, [field]: e.target.value }))}
                     placeholder={ph}
-                    className="w-full px-3 py-2 text-xs rounded-xl border border-gray-200 bg-gray-50 focus:bg-white focus:border-[#00a884] focus:outline-none transition-all"
+                    className="w-full px-4 py-2.5 text-xs font-semibold rounded-xl border border-gray-200 bg-gray-50 focus:bg-white focus:border-black focus:outline-none transition-all"
                   />
                 </div>
               ))}
             </div>
 
-            <div className="px-5 py-4 border-t border-gray-200 bg-[#f0f2f5] rounded-b-2xl flex items-center justify-between">
-              <button onClick={() => setShowAddPopup(false)} className="px-4 py-2 text-xs font-semibold text-gray-600 hover:text-gray-900 transition-colors">
+            {/* Footer */}
+            <div className="px-6 py-4 border-t border-gray-200 bg-[#f8f9fa] rounded-b-2xl flex items-center justify-between">
+              <button onClick={() => setShowAddPopup(false)} className="px-4 py-2 text-xs font-extrabold text-gray-700 hover:text-black transition-colors">
                 Cancel
               </button>
               <button
                 onClick={handleAddData}
-                className="inline-flex items-center gap-2 px-5 py-2.5 bg-[#00a884] hover:bg-[#008f70] text-white font-bold text-xs rounded-xl transition-all shadow-md active:scale-95"
+                className="inline-flex items-center gap-2 px-6 py-2.5 bg-[#00a884] hover:bg-[#008f70] text-white font-extrabold text-xs rounded-xl transition-all shadow-md active:scale-95"
               >
-                <Plus className="w-3.5 h-3.5" />
+                <Plus className="w-4 h-4" />
                 <span>Add Contact</span>
               </button>
             </div>

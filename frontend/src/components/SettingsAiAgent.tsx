@@ -27,6 +27,12 @@ export function SettingsAiAgent() {
   });
 
   const [documents, setDocuments] = useState<any[]>([]);
+  const currentUser = typeof window !== 'undefined'
+    ? (localStorage.getItem('crm_user_name') || localStorage.getItem('crm_admin_display_name') || 'Executive User')
+    : 'Executive User';
+
+  const [activeUsersList, setActiveUsersList] = useState<string[]>([currentUser]);
+
   const [isUploading, setIsUploading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
@@ -65,8 +71,24 @@ export function SettingsAiAgent() {
       })
       .catch((err) => console.error('Error fetching KB:', err));
 
+    fetch(`${getBackendUrl()}/api/cold-calls`)
+      .then(res => res.json())
+      .then(data => {
+        if (data.success && data.leads) {
+          const userSet = new Set<string>();
+          if (currentUser) userSet.add(currentUser);
+          data.leads.forEach((l: any) => {
+            if (l.calledBy && l.calledBy !== 'Staff' && l.calledBy !== 'Executive User') {
+              userSet.add(l.calledBy);
+            }
+          });
+          setActiveUsersList(Array.from(userSet));
+        }
+      })
+      .catch(err => console.error(err));
+
     fetchDocuments();
-  }, []);
+  }, [currentUser]);
 
   // ONLY scroll chat sandbox when a new user message is sent or AI is thinking (NOT on initial page load)
   useEffect(() => {
@@ -252,6 +274,30 @@ export function SettingsAiAgent() {
               </>
             )}
           </button>
+        </div>
+      </div>
+
+      {/* Active Logged-In CRM Users Card */}
+      <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm space-y-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2.5 text-[#111b21] font-bold text-sm">
+            <User className="w-5 h-5 text-[#00a884]" />
+            <span>Active Logged-In CRM Users</span>
+          </div>
+          <span className="px-3.5 py-1 bg-[#00a884] text-white text-xs font-black rounded-full">
+            {activeUsersList.length} Active User{activeUsersList.length === 1 ? '' : 's'}
+          </span>
+        </div>
+        <p className="text-xs text-gray-500 font-medium">
+          Team members currently logged into the CRM session or actively logging call entries.
+        </p>
+        <div className="flex items-center gap-2 flex-wrap pt-1">
+          {activeUsersList.map((usr, i) => (
+            <span key={i} className="px-3.5 py-1.5 bg-emerald-50 border border-emerald-200 rounded-xl text-xs font-bold text-emerald-900 flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+              <span>👤 {usr}</span>
+            </span>
+          ))}
         </div>
       </div>
 

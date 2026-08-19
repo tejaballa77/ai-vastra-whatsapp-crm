@@ -187,6 +187,27 @@ export function ColdCallsModule({
   const [showStatusModal, setShowStatusModal] = useState(false);
   const [showInterestedModal, setShowInterestedModal] = useState(false);
   const [showFollowupsModal, setShowFollowupsModal] = useState(false);
+  const [deleteConfirmLead, setDeleteConfirmLead] = useState<ColdCallLead | null>(null);
+
+  const handleConfirmRemoveCall = (lead: ColdCallLead) => {
+    const clearedLeadPartial: Partial<ColdCallLead> = {
+      callChoice: undefined,
+      callStatus: 'PENDING',
+      calledBy: undefined,
+      callTimestamp: undefined,
+      callOutcome: undefined,
+    };
+
+    setLeads(prev => prev.map(l => l.id === lead.id ? { ...l, ...clearedLeadPartial } : l));
+
+    fetch(`${getBackendUrl()}/api/cold-calls/${lead.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(clearedLeadPartial),
+    }).catch(err => console.error('Error clearing call entry:', err));
+
+    setDeleteConfirmLead(null);
+  };
 
   // Upload
   const [isUploading, setIsUploading] = useState(false);
@@ -954,6 +975,13 @@ export function ColdCallsModule({
                                   className="px-3 py-1.5 bg-zinc-100 hover:bg-zinc-200 text-black border border-zinc-300 font-bold text-xs rounded-lg transition-all cursor-pointer"
                                 >
                                   Notes
+                                </button>
+                                <button
+                                  onClick={() => setDeleteConfirmLead(lead)}
+                                  className="p-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 rounded-lg transition-all cursor-pointer"
+                                  title="Remove call log entry"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
                                 </button>
                               </div>
                             </td>
@@ -1770,6 +1798,43 @@ export function ColdCallsModule({
             <div className="px-6 py-3 border-t border-gray-200 bg-gray-50 flex justify-end">
               <button onClick={() => setShowFollowupsModal(false)} className="px-5 py-2 bg-black hover:bg-zinc-800 text-white font-bold text-xs rounded-xl transition-all shadow-sm">
                 Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── DELETE CONFIRMATION POPUP MODAL ── */}
+      {deleteConfirmLead && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[9999] flex items-center justify-center p-4 text-black font-sans">
+          <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl border border-gray-200 overflow-hidden animate-in fade-in zoom-in duration-150 p-6 space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-rose-100 flex items-center justify-center flex-shrink-0">
+                <Trash2 className="w-5 h-5 text-rose-600" />
+              </div>
+              <div>
+                <h3 className="text-base font-extrabold text-black">Remove Call Log?</h3>
+                <p className="text-xs text-rose-600 font-bold mt-0.5">Do you really want to remove this?</p>
+              </div>
+            </div>
+
+            <p className="text-xs text-zinc-600 font-medium bg-zinc-50 p-3 rounded-xl border border-zinc-200">
+              This will clear the logged call entry, outcome, and user assignment for <strong className="text-black">{deleteConfirmLead.businessName || deleteConfirmLead.personName || deleteConfirmLead.phone}</strong>. The contact details and original notes will not be deleted.
+            </p>
+
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <button
+                onClick={() => setDeleteConfirmLead(null)}
+                className="px-4 py-2 bg-zinc-100 hover:bg-zinc-200 text-zinc-800 font-bold text-xs rounded-xl transition-all cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => handleConfirmRemoveCall(deleteConfirmLead)}
+                className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-xl transition-all shadow-sm flex items-center gap-1.5 cursor-pointer"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Yes, Remove</span>
               </button>
             </div>
           </div>

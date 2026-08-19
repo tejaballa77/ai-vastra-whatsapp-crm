@@ -20,13 +20,44 @@ import {
   Copy,
   Check,
   Search,
-  FileText
+  FileText,
+  LogOut,
+  User as UserIcon
 } from 'lucide-react';
 import { useSocket } from '../context/SocketContext';
 import { SettingsAiAgent } from './SettingsAiAgent';
 import { ColdCallsModule } from './ColdCallsModule';
+import { AdminProfileModal } from './AdminProfileModal';
 
 export function WhatsAppCrmModule() {
+  const [showAdminModal, setShowAdminModal] = useState<boolean>(false);
+  const [adminDisplayName, setAdminDisplayName] = useState<string>(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('crm_admin_display_name') || 'Admin';
+    }
+    return 'Admin';
+  });
+  const [adminUsername, setAdminUsername] = useState<string>(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('crm_admin_username') || 'admin';
+    }
+    return 'admin';
+  });
+  const [adminAvatar, setAdminAvatar] = useState<string>(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('crm_admin_avatar') || '';
+    }
+    return '';
+  });
+
+  const refreshAdminProfile = () => {
+    if (typeof window !== 'undefined') {
+      setAdminDisplayName(localStorage.getItem('crm_admin_display_name') || 'Admin');
+      setAdminUsername(localStorage.getItem('crm_admin_username') || 'admin');
+      setAdminAvatar(localStorage.getItem('crm_admin_avatar') || '');
+    }
+  };
+
   const [activeNav, setActiveNav] = useState<'whatsapp' | 'calls' | 'emails' | 'settings'>('whatsapp');
   const [coldCallsSubPage, setColdCallsSubPage] = useState<'analytics' | 'sheet' | 'database'>('analytics');
   const [tableFilter, setTableFilter] = useState<'ALL' | 'INTERESTED' | 'WARM' | 'NOT_INTERESTED' | 'CALLS' | 'FOLLOWUPS'>('ALL');
@@ -320,6 +351,40 @@ export function WhatsAppCrmModule() {
               <span>Settings & AI Agent</span>
             </button>
           </nav>
+        </div>
+
+        {/* Bottom Sidebar: Admin Profile Block + Logout Icon Button */}
+        <div className="pt-4 border-t border-zinc-800 flex items-center justify-between gap-2 mt-auto">
+          <button
+            onClick={() => setShowAdminModal(true)}
+            className="flex-1 flex items-center gap-3 p-2.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 transition-all text-left group overflow-hidden"
+            title="Open Admin Profile Settings"
+          >
+            <div className="w-9 h-9 rounded-full bg-white text-black font-bold flex items-center justify-center text-xs flex-shrink-0 overflow-hidden border border-zinc-700">
+              {adminAvatar ? (
+                <img src={adminAvatar} alt="Admin" className="w-full h-full object-cover" />
+              ) : (
+                <UserIcon className="w-5 h-5 text-black" />
+              )}
+            </div>
+            <div className="flex-1 min-w-0">
+              <h4 className="text-sm font-bold text-white truncate">{adminDisplayName}</h4>
+              <p className="text-[11px] text-zinc-400 font-semibold truncate">@{adminUsername}</p>
+            </div>
+          </button>
+
+          <button
+            onClick={() => {
+              if (confirm('Are you sure you want to log out of Ai Vastra CRM?')) {
+                localStorage.removeItem('crm_authenticated');
+                window.location.reload();
+              }
+            }}
+            className="p-2.5 rounded-xl bg-zinc-900 hover:bg-rose-900/60 hover:text-rose-400 text-zinc-400 border border-zinc-800 transition-all flex-shrink-0"
+            title="Log Out of CRM"
+          >
+            <LogOut className="w-5 h-5" />
+          </button>
         </div>
       </aside>
 
@@ -671,11 +736,11 @@ export function WhatsAppCrmModule() {
                               <Copy className="w-3 h-3" />
                             </button>
                           </p>
-                        {chat.notesList && chat.notesList.length > 0 && (
-                          <p className="text-xs text-purple-700 mt-1 italic">📝 "{chat.notesList[0]}"</p>
-                        )}
+                          {chat.notesList && chat.notesList.length > 0 && (
+                            <p className="text-xs text-purple-700 mt-1 italic">📝 "{chat.notesList[0]}"</p>
+                          )}
+                        </div>
                       </div>
-                    </div>
 
                     <div className="flex items-center gap-2 flex-shrink-0">
                       {chat.callStatus === 'YES' && (
@@ -706,6 +771,13 @@ export function WhatsAppCrmModule() {
             </div>
           </div>
         </div>
+      )}
+
+      {showAdminModal && (
+        <AdminProfileModal
+          onClose={() => setShowAdminModal(false)}
+          onSaveSuccess={refreshAdminProfile}
+        />
       )}
     </div>
   );

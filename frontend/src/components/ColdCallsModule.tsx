@@ -300,28 +300,39 @@ export function ColdCallsModule({
     reader.readAsBinaryString(file);
   };
 
-  // ── Inline Edit (Always-On Excel Editing) ───────────────────────────────────
+  // ── Inline Edit (Always-On Excel Editing with Instant Auto-Save) ────────────
   const handleCellEdit = (leadId: string, field: keyof ColdCallLead, value: string) => {
+    const activeUser = typeof window !== 'undefined'
+      ? (localStorage.getItem('crm_user_name') || localStorage.getItem('crm_admin_display_name') || 'Executive User')
+      : 'Executive User';
     const now = Date.now();
+
+    const partialUpdates: Partial<ColdCallLead> = {
+      [field]: value,
+      calledBy: activeUser,
+      callTimestamp: now,
+      updatedAt: now,
+    };
+
     setEditedRows(prev => {
       const next = new Map(prev);
-      next.set(leadId, { 
-        ...(next.get(leadId) || {}), 
-        [field]: value, 
-        calledBy: currentUserName,
-        callTimestamp: now,
-        updatedAt: now 
-      });
+      next.set(leadId, { ...(next.get(leadId) || {}), ...partialUpdates });
       return next;
     });
-    // Optimistically update displayed leads and bring the edited lead TO THE TOP!
-    setLeads(prev => prev.map(l => l.id === leadId ? { 
-      ...l, 
-      [field]: value, 
-      calledBy: currentUserName,
-      callTimestamp: now,
-      updatedAt: now 
-    } : l));
+
+    // Optimistically update displayed leads in React state
+    setLeads(prev => prev.map(l => l.id === leadId ? { ...l, ...partialUpdates } : l));
+
+    // INSTANT AUTO-SAVE TO BACKEND & BROADCAST TO ALL CONNECTED USERS
+    fetch(`${getBackendUrl()}/api/cold-calls/${leadId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(partialUpdates),
+    }).then(res => res.json()).then(data => {
+      if (data.success && data.lead) {
+        setLeads(prev => prev.map(l => l.id === data.lead.id ? data.lead : l));
+      }
+    }).catch(err => console.error('Instant cell save error:', err));
   };
 
   // ── Save All Edits ────────────────────────────────────────────────────────────
@@ -667,17 +678,20 @@ export function ColdCallsModule({
           return normF === selectedDate || (Boolean(l.followUpDate) && selectedDate === new Date().toISOString().slice(0, 10));
         });
 
-        // Recent calls list strictly for calls logged or updated on selectedDate
+        // Recent calls list: Any lead with call activity, status, or note updated by a user
         const displayCallsList = leads.filter(l => {
-          const isActualCallLogged = (l.callChoice === 'YES' || l.callChoice === 'NO') && Boolean(l.calledBy) && l.callStatus !== 'PENDING';
-          if (!isActualCallLogged) return false;
-          const timestamp = l.callTimestamp || l.updatedAt;
-          if (!timestamp) return false;
-          const dStr = new Date(timestamp).toISOString().slice(0, 10);
-          return dStr === selectedDate;
+          const hasActivity = Boolean(l.calledBy) || l.callChoice === 'YES' || l.callChoice === 'NO' || (l.callStatus && l.callStatus !== 'PENDING') || (l.notesList && l.notesList.length > 0) || Boolean(l.note);
+          if (!hasActivity) return false;
+
+          const ts = l.callTimestamp || l.updatedAt;
+          if (ts) {
+            const dStr = new Date(ts).toISOString().slice(0, 10);
+            return dStr === selectedDate || selectedDate === new Date().toISOString().slice(0, 10);
+          }
+          return true;
         }).sort((a, b) => {
-          const tA = a.callTimestamp || a.updatedAt || 0;
-          const tB = b.callTimestamp || b.updatedAt || 0;
+          const tA = a.callTimestamp || a.updatedAt || a.createdAt || 0;
+          const tB = b.callTimestamp || b.updatedAt || b.createdAt || 0;
           return tB - tA;
         });
 

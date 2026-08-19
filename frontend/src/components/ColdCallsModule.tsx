@@ -826,9 +826,18 @@ export function ColdCallsModule({
                   <h3 className="text-xl font-extrabold text-black tracking-tight">Recent Calls</h3>
                   <p className="text-xs text-zinc-500 font-medium">Calls and notes logged by team members on selected date ({selectedDate})</p>
                 </div>
-                <span className="px-3.5 py-1.5 bg-black text-white text-xs font-bold rounded-full">
-                  {displayCallsList.length} Records
-                </span>
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={() => onSubPageChange?.('sheet')}
+                    className="px-4 py-1.5 bg-black hover:bg-zinc-800 text-white font-extrabold text-xs rounded-xl transition-all flex items-center gap-1.5 shadow-sm active:scale-95 cursor-pointer"
+                    title="Click to edit contacts or call logs in Cold Calls List"
+                  >
+                    <span>✏️ Edit Calls / Contacts</span>
+                  </button>
+                  <span className="px-3.5 py-1.5 bg-zinc-100 border border-zinc-200 text-black text-xs font-black rounded-full">
+                    {displayCallsList.length} Records
+                  </span>
+                </div>
               </div>
 
               {displayCallsList.length === 0 ? (
@@ -942,19 +951,10 @@ export function ColdCallsModule({
                               <div className="flex items-center justify-end gap-2">
                                 <button
                                   onClick={() => openNotePopup(lead)}
-                                  className="px-3 py-1.5 bg-zinc-100 hover:bg-zinc-200 text-black border border-zinc-300 font-bold text-xs rounded-lg transition-all"
+                                  className="px-3 py-1.5 bg-zinc-100 hover:bg-zinc-200 text-black border border-zinc-300 font-bold text-xs rounded-lg transition-all cursor-pointer"
                                 >
                                   Notes
                                 </button>
-                                {lead.phone && (
-                                  <button
-                                    onClick={() => window.open(`https://web.whatsapp.com/send?phone=${lead.phone.replace(/\D/g, '')}`, '_blank')}
-                                    className="p-1.5 bg-black hover:bg-zinc-800 text-white rounded-lg transition-all"
-                                    title="Open WhatsApp"
-                                  >
-                                    <ExternalLink className="w-3.5 h-3.5" />
-                                  </button>
-                                )}
                               </div>
                             </td>
                           </tr>
@@ -1279,120 +1279,7 @@ export function ColdCallsModule({
         </div>
       )}
 
-      {/* ══════════════════════════════════════════════════════════════════════
-          PAGE 3: PERMANENT MASTER DATABASE REGISTRY
-      ══════════════════════════════════════════════════════════════════════ */}
-      {subPage === 'database' && (
-        <div className="space-y-6">
-          {/* Header Banner */}
-          <div className="bg-white p-6 rounded-2xl border border-zinc-200 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
-            <div>
-              <h3 className="text-lg font-extrabold text-black flex items-center gap-2">
-                <Database className="w-5 h-5 text-black" />
-                Master Database Registry
-              </h3>
-              <p className="text-xs text-zinc-500 font-medium mt-1">
-                Complete permanent database record index of all saved contacts, notes, schedules, and lead statuses.
-              </p>
-            </div>
-            <div className="flex items-center gap-3">
-              <div className="px-4 py-2 bg-zinc-100 border border-zinc-200 rounded-xl text-center">
-                <div className="text-[10px] font-extrabold text-zinc-400 uppercase">Total Saved</div>
-                <div className="text-base font-extrabold text-black">{leads.length}</div>
-              </div>
-              <div className="px-4 py-2 bg-purple-50 border border-purple-200 rounded-xl text-center">
-                <div className="text-[10px] font-extrabold text-purple-600 uppercase">With Notes</div>
-                <div className="text-base font-extrabold text-purple-900">
-                  {leads.filter(l => l.note || (l.notesList && l.notesList.length > 0)).length}
-                </div>
-              </div>
-            </div>
-          </div>
 
-          {/* Database Table */}
-          <div className="bg-white rounded-2xl border border-zinc-200 shadow-sm overflow-hidden p-6 space-y-4">
-            <div className="flex items-center justify-between gap-4 flex-wrap">
-              <div className="relative">
-                <Search className="w-4 h-4 text-zinc-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                <input
-                  type="text"
-                  placeholder="Search database..."
-                  value={searchQuery}
-                  onChange={e => setSearchQuery(e.target.value)}
-                  className="pl-9 pr-4 py-2 bg-zinc-50 border border-zinc-200 rounded-xl text-xs font-semibold text-black focus:bg-white focus:border-black outline-none w-64"
-                />
-              </div>
-            </div>
-
-            <div className="overflow-x-auto border border-zinc-200 rounded-xl">
-              <table className="w-full text-left border-collapse text-xs">
-                <thead>
-                  <tr className="bg-zinc-100 text-black font-extrabold border-b border-zinc-200 text-[11px] uppercase tracking-wider">
-                    <th className="p-3">#</th>
-                    <th className="p-3">Business Name</th>
-                    <th className="p-3">Person Name</th>
-                    <th className="p-3">Phone</th>
-                    <th className="p-3">Designation / Role</th>
-                    <th className="p-3 text-center">Notes</th>
-                    <th className="p-3 text-center">Status</th>
-                    <th className="p-3 text-right">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-zinc-200 bg-white font-medium">
-                  {sortedLeads.length === 0 ? (
-                    <tr>
-                      <td colSpan={8} className="p-12 text-center text-zinc-400 font-semibold">
-                        No database records found matching your search.
-                      </td>
-                    </tr>
-                  ) : (
-                    sortedLeads.map((lead, idx) => {
-                      const notesCount = (lead.notesList?.length || 0) + (lead.note ? 1 : 0);
-                      return (
-                        <tr key={lead.id} className="hover:bg-zinc-50 transition-colors">
-                          <td className="p-3 text-zinc-400 font-mono font-bold">{idx + 1}</td>
-                          <td className="p-3 font-extrabold text-black">{lead.businessName || '—'}</td>
-                          <td className="p-3 font-semibold text-zinc-700">{lead.personName || lead.name || '—'}</td>
-                          <td className="p-3 font-bold text-black">{lead.phone || '—'}</td>
-                          <td className="p-3 text-zinc-600 font-semibold">{lead.role || '—'}</td>
-                          <td className="p-3 text-center">
-                            {notesCount > 0 ? (
-                              <span className="px-2.5 py-1 rounded-full bg-purple-100 text-purple-900 font-extrabold text-[11px]">
-                                📝 {notesCount} Notes
-                              </span>
-                            ) : (
-                              <span className="text-zinc-400 text-xs">—</span>
-                            )}
-                          </td>
-                          <td className="p-3 text-center">
-                            {lead.callStatus === 'INTERESTED' ? (
-                              <span className="px-2.5 py-1 text-xs font-bold rounded-lg bg-emerald-100 text-emerald-800">👍 Interested</span>
-                            ) : lead.callStatus === 'YES' ? (
-                              <span className="px-2.5 py-1 text-xs font-bold rounded-lg bg-amber-100 text-amber-800">🔥 Warm</span>
-                            ) : lead.callStatus === 'NOT_INTERESTED' ? (
-                              <span className="px-2.5 py-1 text-xs font-bold rounded-lg bg-rose-100 text-rose-800">👎 Not Int.</span>
-                            ) : (
-                              <span className="text-zinc-400 text-xs">⏳ Pending</span>
-                            )}
-                          </td>
-                          <td className="p-3 text-right">
-                            <button
-                              onClick={() => openNotePopup(lead)}
-                              className="px-3 py-1.5 bg-black hover:bg-zinc-800 text-white font-bold text-xs rounded-xl transition-all shadow-sm active:scale-95"
-                            >
-                              Inspect & Edit
-                            </button>
-                          </td>
-                        </tr>
-                      );
-                    })
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-      )}
 
 
 

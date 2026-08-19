@@ -395,7 +395,7 @@ export function WhatsAppCrmModule() {
               {activeNav === 'whatsapp' ? 'WhatsApp CRM Dashboard' : activeNav === 'calls' ? 'Cold Calls Dashboard' : 'Settings & AI Agent'}
             </h2>
 
-            {/* COLD CALLS 3-PAGE SELECTOR PILL BAR IN TOP HEADER */}
+            {/* COLD CALLS 2-PAGE SELECTOR PILL BAR IN TOP HEADER (Moved to Right) */}
             {activeNav === 'calls' && (
               <div className="flex items-center gap-1.5 bg-zinc-100 p-1 rounded-xl border border-zinc-200">
                 <button
@@ -418,28 +418,19 @@ export function WhatsAppCrmModule() {
                 >
                   📋 2. Cold Calls List
                 </button>
-                <button
-                  onClick={() => setColdCallsSubPage('database')}
-                  className={`px-3.5 py-1.5 rounded-lg text-xs font-extrabold transition-all ${
-                    coldCallsSubPage === 'database'
-                      ? 'bg-black text-white shadow-sm'
-                      : 'text-zinc-700 hover:text-black hover:bg-zinc-200'
-                  }`}
-                >
-                  🗄️ 3. Database
-                </button>
               </div>
             )}
-          </div>
 
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => handleOpenSpecificChat()}
-              className="px-4 py-2 bg-black hover:bg-zinc-800 text-white font-bold text-sm rounded-xl transition-all flex items-center gap-2 shadow-sm"
-            >
-              <span>Launch WhatsApp Web</span>
-              <ExternalLink className="w-4 h-4" />
-            </button>
+            {/* Launch WhatsApp Web button (ONLY for WhatsApp module) */}
+            {activeNav === 'whatsapp' && (
+              <button
+                onClick={() => handleOpenSpecificChat()}
+                className="px-4 py-2 bg-black hover:bg-zinc-800 text-white font-bold text-sm rounded-xl transition-all flex items-center gap-2 shadow-sm"
+              >
+                <span>Launch WhatsApp Web</span>
+                <ExternalLink className="w-4 h-4" />
+              </button>
+            )}
           </div>
         </header>
 

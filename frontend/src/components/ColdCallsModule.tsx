@@ -1701,30 +1701,21 @@ export function ColdCallsModule({
               </button>
             </div>
             {/* Body */}
-            <div className="p-6 space-y-4">
+            <div className="p-6 space-y-3 font-sans">
               {([
-                ['Interested', leads.filter(l => l.callStatus === 'INTERESTED').length, 'bg-emerald-500', 'text-emerald-800', 'bg-emerald-50', 'border-emerald-200', '👍'],
-                ['Warm', leads.filter(l => l.callStatus === 'WARM' || l.callStatus === 'YES').length, 'bg-amber-500', 'text-amber-800', 'bg-amber-50', 'border-amber-200', '🔥'],
-                ['Not Interested', leads.filter(l => l.callStatus === 'NOT_INTERESTED').length, 'bg-rose-500', 'text-rose-800', 'bg-rose-50', 'border-rose-200', '👎'],
-                ['Not Connected / Pending', leads.filter(l => l.callStatus === 'NOT_CONNECTED' || l.callChoice === 'NO' || !l.callStatus || l.callStatus === 'PENDING').length, 'bg-zinc-500', 'text-zinc-800', 'bg-zinc-50', 'border-zinc-200', '⏳'],
-              ] as [string, number, string, string, string, string, string][]).map(([label, count, barBg, textColor, cardBg, cardBorder, emoji]) => {
-                const total = leads.length || 1;
-                const pct = Math.round((count / total) * 100);
-                return (
-                  <div key={label} className={`p-4 rounded-xl border ${cardBg} ${cardBorder} space-y-2`}>
-                    <div className="flex items-center justify-between text-xs font-bold">
-                      <span className={`flex items-center gap-1.5 ${textColor}`}>
-                        <span>{emoji}</span>
-                        <span>{label}</span>
-                      </span>
-                      <span className="font-extrabold text-black text-sm">{count} ({pct}%)</span>
-                    </div>
-                    <div className="w-full h-2 rounded-full bg-white/80 overflow-hidden border border-black/5">
-                      <div className={`h-full ${barBg} rounded-full transition-all duration-500`} style={{ width: `${pct}%` }} />
-                    </div>
+                ['Interested', leads.filter(l => l.callStatus === 'INTERESTED').length, 'text-emerald-900', 'bg-emerald-50', 'border-emerald-200', '👍'],
+                ['Warm', leads.filter(l => l.callStatus === 'WARM' || l.callStatus === 'YES').length, 'text-amber-900', 'bg-amber-50', 'border-amber-200', '🔥'],
+                ['Not Interested', leads.filter(l => l.callStatus === 'NOT_INTERESTED').length, 'text-rose-900', 'bg-rose-50', 'border-rose-200', '👎'],
+                ['Not Connected / Pending', leads.filter(l => l.callStatus === 'NOT_CONNECTED' || l.callChoice === 'NO' || !l.callStatus || l.callStatus === 'PENDING').length, 'text-zinc-900', 'bg-zinc-50', 'border-zinc-200', '⏳'],
+              ] as [string, number, string, string, string, string][]).map(([label, count, textColor, cardBg, cardBorder, emoji]) => (
+                <div key={label} className={`p-4 rounded-xl border ${cardBg} ${cardBorder} flex items-center justify-between`}>
+                  <div className={`flex items-center gap-2.5 text-sm font-extrabold ${textColor}`}>
+                    <span className="text-base">{emoji}</span>
+                    <span>{label}</span>
                   </div>
-                );
-              })}
+                  <span className="font-black text-black text-xl">{count}</span>
+                </div>
+              ))}
             </div>
             {/* Footer */}
             <div className="px-6 py-3 border-t border-gray-200 bg-gray-50 flex justify-end">

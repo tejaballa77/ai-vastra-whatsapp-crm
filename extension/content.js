@@ -208,6 +208,23 @@ function startChatObserver() {
   observer.observe(document.body, { childList: true, subtree: true });
 }
 
+// Detect WhatsApp profile display name (e.g., "~Parth" -> "Parth") from Contact Info panel or DOM
+function extractProfileNameFromDom() {
+  try {
+    const elements = document.querySelectorAll('span, div');
+    for (const el of elements) {
+      const txt = (el.textContent || '').trim();
+      if (txt.startsWith('~') && txt.length >= 2 && txt.length <= 40 && !txt.includes('\n')) {
+        const cleanName = txt.substring(1).trim();
+        if (cleanName && !cleanName.toLowerCase().includes('last seen') && !cleanName.toLowerCase().includes('online')) {
+          return cleanName;
+        }
+      }
+    }
+  } catch (e) {}
+  return null;
+}
+
 function detectActiveContact(force = false) {
   try {
     const mainHeader = document.querySelector('#main header');
@@ -243,14 +260,21 @@ function detectActiveContact(force = false) {
     const cleanDigits = targetTitle.replace(/\D/g, '');
     const contactKey = cleanDigits.length >= 10 ? cleanDigits : targetTitle;
 
+    // Detect WhatsApp profile name (~Parth) from DOM
+    const profileName = extractProfileNameFromDom();
+    let displayTitle = targetTitle;
+    if (cleanDigits.length >= 10 && profileName) {
+      displayTitle = profileName;
+    }
+
     if (activeContactKey !== contactKey || force) {
       activeContactKey = contactKey;
-      activeDisplayName = targetTitle;
+      activeDisplayName = displayTitle;
       activePhoneClean = cleanDigits;
       activeAvatarUrl = domAvatar;
 
       activeFormData = { leadStatus: 'UNASSIGNED', callStatus: null, followUpDate: '', notesList: [] };
-      fetchCrmMetadata(contactKey, targetTitle, domAvatar);
+      fetchCrmMetadata(contactKey, displayTitle, domAvatar);
     }
   } catch (e) {}
 }

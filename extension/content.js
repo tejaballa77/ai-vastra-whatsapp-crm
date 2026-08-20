@@ -481,7 +481,7 @@ function saveCrmMetadata() {
 
   const payload = {
     name: effectiveName,
-    phone: activePhoneClean,
+    phone: cleanDigits,
     leadStatus: activeFormData.leadStatus,
     callStatus: activeFormData.callStatus,
     followUpDate: activeFormData.followUpDate || undefined,

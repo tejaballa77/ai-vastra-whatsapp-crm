@@ -858,7 +858,7 @@ class StorageEngine {
         phone: tenDigit ? `91${tenDigit}` : rawDigits,
         name: incomingNameIsValid ? incomingNameClean : (contact.name || this.formatPhoneFallback(rawDigits)),
         unreadCount: 0,
-        lastMessageAt: 0,
+        lastMessageAt: Date.now(),
         isGroup: canonicalJid.endsWith('@g.us'),
         leadStatus: metadata.leadStatus || 'UNASSIGNED',
         callStatus: metadata.callStatus || undefined,

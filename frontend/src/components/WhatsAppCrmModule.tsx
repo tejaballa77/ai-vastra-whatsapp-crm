@@ -146,7 +146,9 @@ export function WhatsAppCrmModule() {
     if (c.jid.endsWith('@lid') || rawDigits.length > 13 || rawDigits.length === 15) {
       continue;
     }
-    const dedupeKey = canonicalPhone(rawDigits) || c.jid;
+    const tenDigit = canonicalPhone(rawDigits);
+    if (!tenDigit) continue; // Exclude non-phone phantom JIDs to prevent duplicate rows
+    const dedupeKey = tenDigit;
     if (!chatsMap.has(dedupeKey)) {
       chatsMap.set(dedupeKey, c);
     } else {

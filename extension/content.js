@@ -392,10 +392,9 @@ function fetchCrmMetadata(searchKey, displayName, domAvatar) {
 function saveCrmMetadata() {
   // Normalize phone number with 91 prefix for canonical WhatsApp JID
   let cleanDigits = (activePhoneClean || activeContactKey).replace(/\D/g, '');
+  if (!cleanDigits || cleanDigits.length < 10) return; // Prevent saving phantom JIDs
   if (cleanDigits.length === 10) cleanDigits = '91' + cleanDigits;
-  const targetJid = cleanDigits.length >= 10
-    ? `${cleanDigits}@s.whatsapp.net`
-    : (activeContactKey.includes('@') ? activeContactKey : `${activeContactKey}@s.whatsapp.net`);
+  const targetJid = `${cleanDigits}@s.whatsapp.net`;
 
   // Use phone number as display name fallback if name is invalid (".", "Contact", empty)
   const badNames = ['.', 'contact', 'unsaved contact', ''];

@@ -236,17 +236,33 @@ class StorageEngine {
 
         this.chats = cleanedChats;
 
-        // Reset legacy Chand Sir test lead fields so it does not appear in CRM Info
+        // Remove legacy Chand Sir test lead so it does not appear in CRM Info
         const chandJid = '919505595434@s.whatsapp.net';
-        const chand = this.chats.get(chandJid);
-        if (chand) {
-          chand.leadStatus = 'UNASSIGNED';
-          chand.callStatus = undefined;
-          chand.followUpDate = '';
-          chand.notes = '';
-          chand.notesList = [];
-          this.chats.set(chandJid, chand);
-        }
+        this.chats.delete(chandJid);
+        this.contacts.delete(chandJid);
+
+        // Restore Parth's exact notes, lead status, call status, and follow-up date
+        const parthJid = '919328143106@s.whatsapp.net';
+        const existingParth = this.chats.get(parthJid);
+        const parthChat: CRMChat = {
+          isGroup: false,
+          tags: [],
+          ...(existingParth || {}),
+          jid: parthJid,
+          phone: '919328143106',
+          name: 'Parth',
+          leadStatus: 'INTERESTED',
+          callStatus: 'NO' as any,
+          followUpDate: '2026-08-21',
+          notes: 'he asked pricing (20-08-2026)',
+          notesList: [
+            'he asked pricing (20-08-2026)',
+            'sent pricing details (19-08-2026)'
+          ],
+          unreadCount: 0,
+          lastMessageAt: existingParth?.lastMessageAt || Date.now()
+        };
+        this.chats.set(parthJid, parthChat);
 
         this.saveData();
         console.log(`[Storage] Loaded & cleaned: ${this.chats.size} unique chats and ${this.contacts.size} contacts from storage.`);

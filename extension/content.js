@@ -391,22 +391,27 @@ function fetchCrmMetadata(searchKey, displayName, domAvatar) {
   const badNames = ['.', 'contact', 'unsaved contact', 'unknown contact', 'whatsapp contact', ''];
   const isValidName = displayName && !badNames.includes(displayName.toLowerCase().trim()) && displayName.replace(/\D/g, '').length < 10;
 
+  const rawClean = (activePhoneClean || searchKey || '').replace(/\D/g, '');
+  const tenDigit = (rawClean.length === 12 && rawClean.startsWith('91')) ? rawClean.slice(2) : rawClean;
+
   const storageKeys = [`crm_meta_${searchKey}`];
   if (activePhoneClean) storageKeys.push(`crm_meta_${activePhoneClean}`);
+  if (tenDigit) storageKeys.push(`crm_meta_${tenDigit}`);
   if (isValidName) storageKeys.push(`crm_meta_${displayName}`);
 
-  // Reset activeFormData to blank defaults to guarantee no data leaks from previous chats!
+  // Reset activeFormData to blank defaults initially
   activeFormData = { leadStatus: 'UNASSIGNED', callStatus: null, followUpDate: '', notesList: [] };
 
   safeStorageGet(storageKeys, (stored) => {
-    const localData = (stored || {})[`crm_meta_${searchKey}`] || (stored || {})[`crm_meta_${activePhoneClean}`] || (isValidName ? (stored || {})[`crm_meta_${displayName}`] : null);
+    const s = stored || {};
+    const localData = s[`crm_meta_${searchKey}`] || s[`crm_meta_${activePhoneClean}`] || (tenDigit ? s[`crm_meta_${tenDigit}`] : null) || (isValidName ? s[`crm_meta_${displayName}`] : null);
 
     if (localData) {
       activeFormData = {
         leadStatus: localData.leadStatus || 'UNASSIGNED',
         callStatus: localData.callStatus || null,
         followUpDate: localData.followUpDate || '',
-        notesList: localData.notesList || []
+        notesList: Array.isArray(localData.notesList) ? localData.notesList : (localData.notes ? [localData.notes] : [])
       };
     }
 
@@ -418,11 +423,25 @@ function fetchCrmMetadata(searchKey, displayName, domAvatar) {
 
       if (response && response.success && response.chat) {
         const chat = response.chat;
+        
+        const bLead = (chat.leadStatus && chat.leadStatus !== 'UNASSIGNED') ? chat.leadStatus : null;
+        const lLead = (activeFormData.leadStatus && activeFormData.leadStatus !== 'UNASSIGNED') ? activeFormData.leadStatus : null;
+
+        const bCall = chat.callStatus || null;
+        const lCall = activeFormData.callStatus || null;
+
+        const bFollow = (chat.followUpDate && chat.followUpDate.trim() !== '' && chat.followUpDate !== '—') ? chat.followUpDate : null;
+        const lFollow = (activeFormData.followUpDate && activeFormData.followUpDate.trim() !== '' && activeFormData.followUpDate !== '—') ? activeFormData.followUpDate : null;
+
+        const bNotes = (chat.notesList && chat.notesList.length > 0) ? chat.notesList : (chat.notes ? [chat.notes] : []);
+        const lNotes = activeFormData.notesList || [];
+        const mergedNotes = Array.from(new Set([...bNotes, ...lNotes]));
+
         activeFormData = {
-          leadStatus: (chat.leadStatus && chat.leadStatus !== 'UNASSIGNED') ? chat.leadStatus : (localData?.leadStatus || 'UNASSIGNED'),
-          callStatus: chat.callStatus !== undefined ? chat.callStatus : (localData?.callStatus || null),
-          followUpDate: chat.followUpDate !== undefined ? chat.followUpDate : (localData?.followUpDate || ''),
-          notesList: (chat.notesList && chat.notesList.length > 0) ? chat.notesList : (localData?.notesList || (chat.notes ? [chat.notes] : []))
+          leadStatus: bLead || lLead || 'UNASSIGNED',
+          callStatus: bCall || lCall || null,
+          followUpDate: bFollow || lFollow || '',
+          notesList: mergedNotes
         };
 
         if (chat.phone) resolvedPhone = chat.phone.replace(/\D/g, '');
@@ -450,6 +469,7 @@ function saveCrmMetadata() {
   // Normalize phone number with 91 prefix for canonical WhatsApp JID
   let cleanDigits = (activePhoneClean || activeContactKey).replace(/\D/g, '');
   if (!cleanDigits || cleanDigits.length < 10) return; // Prevent saving phantom JIDs
+  const tenDigit = (cleanDigits.length === 12 && cleanDigits.startsWith('91')) ? cleanDigits.slice(2) : cleanDigits;
   if (cleanDigits.length === 10) cleanDigits = '91' + cleanDigits;
   const targetJid = `${cleanDigits}@s.whatsapp.net`;
 
@@ -459,21 +479,23 @@ function saveCrmMetadata() {
     ? (activePhoneClean || activeContactKey)
     : activeDisplayName;
 
-  const metaObj = { ...activeFormData, name: effectiveName, phone: activePhoneClean };
+  const metaObj = { ...activeFormData, name: effectiveName, phone: cleanDigits };
 
-  // Save under ONE primary key only (phone number) to prevent duplicates
-  const primaryKey = activePhoneClean.length >= 10 ? activePhoneClean : activeContactKey;
+  // Save under ALL digit formats (10-digit, 12-digit) so loading always finds it!
   const saveKeys = {};
-  saveKeys[`crm_meta_${primaryKey}`] = metaObj;
+  saveKeys[`crm_meta_${cleanDigits}`] = metaObj;
+  saveKeys[`crm_meta_${tenDigit}`] = metaObj;
+  if (activePhoneClean) saveKeys[`crm_meta_${activePhoneClean}`] = metaObj;
   if (activeDisplayName && !badNames.includes(activeDisplayName.toLowerCase().trim())) {
     saveKeys[`crm_meta_${activeDisplayName}`] = metaObj;
   }
 
   safeStorageSet(saveKeys);
 
-  chatsMetadataMap[primaryKey] = metaObj;
+  chatsMetadataMap[cleanDigits] = metaObj;
+  chatsMetadataMap[tenDigit] = metaObj;
   if (activePhoneClean) chatsMetadataMap[activePhoneClean] = metaObj;
-  if (effectiveName !== primaryKey) chatsMetadataMap[effectiveName] = metaObj;
+  if (effectiveName !== cleanDigits) chatsMetadataMap[effectiveName] = metaObj;
 
   const payload = {
     name: effectiveName,

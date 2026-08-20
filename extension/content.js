@@ -1,5 +1,6 @@
 // AI Vastra Chrome Extension - Injected Content Script on web.whatsapp.com
 console.log('[AI Vastra Chrome Extension] Script active on WhatsApp Web!');
+const DEFAULT_API_BASE = 'https://crm.nicedigitalsgroup.com';
 
 // Safe chrome.storage wrapper — prevents crash when running in non-extension frames
 function safeStorageGet(keys, callback) {
@@ -526,6 +527,7 @@ function saveCrmMetadata() {
   if (effectiveName !== cleanDigits) chatsMetadataMap[effectiveName] = metaObj;
 
   const payload = {
+    jid: targetJid,
     name: effectiveName,
     phone: cleanDigits,
     leadStatus: activeFormData.leadStatus,
@@ -535,8 +537,21 @@ function saveCrmMetadata() {
     notesList: activeFormData.notesList
   };
 
+  // 1. Direct fetch to backend CRM API
+  try {
+    fetch(`${DEFAULT_API_BASE}/api/crm/contact`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    })
+      .then((res) => res.json())
+      .then((data) => console.log('[AI Vastra Extension] Direct sync success:', data))
+      .catch((e) => console.warn('[AI Vastra Extension] Direct sync fallback:', e));
+  } catch (e) {}
+
+  // 2. Background message worker sync
   safeSendMessage({ action: 'UPDATE_CRM_METADATA', jid: targetJid, data: payload }, (response) => {
-    console.log('[AI Vastra Extension] Save response:', response);
+    console.log('[AI Vastra Extension] Background save response:', response);
   });
 
   injectChatListBadges();
@@ -678,6 +693,7 @@ function renderCrmPanel(displayName, cleanPhone, avatarUrl, showSaveToast = fals
 
     // 4. Send clear update to CRM backend
     const payload = {
+      jid: targetJid,
       name: activeDisplayName || cleanDigits,
       phone: cleanDigits || activeContactKey,
       leadStatus: 'UNASSIGNED',
@@ -686,6 +702,14 @@ function renderCrmPanel(displayName, cleanPhone, avatarUrl, showSaveToast = fals
       notes: '',
       notesList: []
     };
+
+    try {
+      fetch(`${DEFAULT_API_BASE}/api/crm/contact`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      }).catch(() => {});
+    } catch (e) {}
 
     safeSendMessage({ action: 'UPDATE_CRM_METADATA', jid: targetJid, data: payload }, (response) => {
       console.log('[AI Vastra Extension] Clear response:', response);

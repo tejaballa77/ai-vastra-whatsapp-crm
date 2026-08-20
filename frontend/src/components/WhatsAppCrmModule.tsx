@@ -142,7 +142,7 @@ export function WhatsAppCrmModule() {
   for (const c of rawChats) {
     if (!c.jid) continue;
     const rawDigits = (c.phone || c.jid.split('@')[0] || '').replace(/\D/g, '');
-    if (c.jid.endsWith('@lid') || rawDigits.length > 13 || rawDigits.length === 15) {
+    if (c.jid.endsWith('@lid') || rawDigits.length > 15 || rawDigits.length === 15) {
       continue;
     }
     const tenDigit = canonicalPhone(rawDigits);

@@ -100,11 +100,6 @@ export const SocketProvider = ({ children }: { children: ReactNode }) => {
     fetchChats();
     const pollInterval = setInterval(fetchChats, 3000);
 
-    return () => {
-      clearInterval(pollInterval);
-      s.disconnect();
-    };
-
     s.on('new_message', (msg: Message) => {
       setMessages((prev) => {
         const list = prev[msg.chatJid] || [];
@@ -136,6 +131,7 @@ export const SocketProvider = ({ children }: { children: ReactNode }) => {
     });
 
     return () => {
+      clearInterval(pollInterval);
       s.disconnect();
     };
   }, []);

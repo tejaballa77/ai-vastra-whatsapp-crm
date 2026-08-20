@@ -189,12 +189,38 @@ function injectChatListBadges() {
       const chatMeta = chatsMetadataMap[key] || chatsMetadataMap[rawText] || chatsMetadataMap[cleanDigits] || chatsMetadataMap[tenDigit];
 
       // Replace raw phone number in left sidebar with detected profile name if available
-      const targetName = chatMeta?.name || (key === activeContactKey && activeDisplayName && activeDisplayName !== activePhoneClean ? activeDisplayName : null);
+      const badNames = ['.', 'contact', 'unsaved contact', 'unknown contact', 'whatsapp contact', ''];
+      const rawMetaName = chatMeta?.name ? chatMeta.name.trim() : null;
+      const isValidMetaName = rawMetaName && !badNames.includes(rawMetaName.toLowerCase()) && rawMetaName.replace(/\D/g, '').length < 10;
+
+      const targetName = isValidMetaName ? rawMetaName : ((key === activeContactKey || cleanDigits === activePhoneClean) && activeDisplayName && activeDisplayName !== activePhoneClean ? activeDisplayName : null);
 
       if (targetName && cleanDigits.length >= 10) {
-        if (titleEl.textContent !== targetName) {
-          titleEl.textContent = targetName;
-          titleEl.setAttribute('title', targetName);
+        const parentSpan = titleEl.parentElement;
+        if (parentSpan) {
+          let override = parentSpan.querySelector('.aivastra-name-override');
+          if (!override) {
+            override = document.createElement('span');
+            override.className = 'aivastra-name-override';
+            override.style.fontWeight = '600';
+            override.style.fontSize = '16px';
+            override.style.color = '#111b21';
+            override.style.display = 'inline-block';
+            override.style.overflow = 'hidden';
+            override.style.textOverflow = 'ellipsis';
+            override.style.whiteSpace = 'nowrap';
+            parentSpan.appendChild(override);
+          }
+          override.textContent = targetName;
+          override.setAttribute('title', targetName);
+          titleEl.style.display = 'none'; // Hide raw phone number node cleanly
+        }
+      } else {
+        const parentSpan = titleEl.parentElement;
+        if (parentSpan) {
+          const override = parentSpan.querySelector('.aivastra-name-override');
+          if (override) override.remove();
+          titleEl.style.display = '';
         }
       }
 
@@ -301,9 +327,20 @@ function detectActiveContact(force = false) {
     let displayTitle = targetTitle;
     if (cleanDigits.length >= 10 && profileName) {
       displayTitle = profileName;
-      // Replace main chat header raw phone number with detected name
-      if (targetSpan && targetSpan.textContent.replace(/\D/g, '') === cleanDigits) {
-        targetSpan.textContent = profileName;
+      // Replace main chat header raw phone number with detected name via overlay span
+      if (targetSpan && targetSpan.parentElement) {
+        let headerOverride = targetSpan.parentElement.querySelector('.aivastra-header-name-override');
+        if (!headerOverride) {
+          headerOverride = document.createElement('span');
+          headerOverride.className = 'aivastra-header-name-override';
+          headerOverride.style.fontWeight = '700';
+          headerOverride.style.fontSize = '16px';
+          headerOverride.style.color = '#111b21';
+          headerOverride.style.display = 'inline-block';
+          targetSpan.parentElement.appendChild(headerOverride);
+        }
+        headerOverride.textContent = profileName;
+        targetSpan.style.display = 'none';
       }
     }
 

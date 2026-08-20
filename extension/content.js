@@ -101,7 +101,15 @@ function ensureHeaderButton() {
     isPanelVisible = !isPanelVisible;
     const panel = document.getElementById('aivastra-crm-panel');
     if (panel) panel.style.display = isPanelVisible ? 'flex' : 'none';
-    if (isPanelVisible) detectActiveContact(true);
+    if (isPanelVisible) {
+      if (activeContactKey) {
+        // Same contact — just re-render with current in-memory data (preserves unsaved form state!)
+        renderCrmPanel(activeDisplayName, activePhoneClean, activeAvatarUrl);
+      } else {
+        // No contact detected yet — run full detection
+        detectActiveContact(true);
+      }
+    }
   };
 }
 
@@ -363,13 +371,18 @@ function detectActiveContact(force = false) {
       }
     }
 
-    if (activeContactKey !== contactKey || force) {
+    const isNewContact = activeContactKey !== contactKey;
+
+    if (isNewContact || force) {
+      if (isNewContact) {
+        // Only blank form data when genuinely switching to a DIFFERENT contact
+        activeFormData = { leadStatus: 'UNASSIGNED', callStatus: null, followUpDate: '', notesList: [] };
+      }
       activeContactKey = contactKey;
       activeDisplayName = displayTitle;
       activePhoneClean = cleanDigits;
       activeAvatarUrl = domAvatar;
 
-      activeFormData = { leadStatus: 'UNASSIGNED', callStatus: null, followUpDate: '', notesList: [] };
       fetchCrmMetadata(contactKey, displayTitle, domAvatar);
 
       // Auto-persist detected profile name to local name cache so page reloads load it instantly!
@@ -399,14 +412,12 @@ function fetchCrmMetadata(searchKey, displayName, domAvatar) {
   if (tenDigit) storageKeys.push(`crm_meta_${tenDigit}`);
   if (isValidName) storageKeys.push(`crm_meta_${displayName}`);
 
-  // Reset activeFormData to blank defaults initially
-  activeFormData = { leadStatus: 'UNASSIGNED', callStatus: null, followUpDate: '', notesList: [] };
-
   safeStorageGet(storageKeys, (stored) => {
     const s = stored || {};
     const localData = s[`crm_meta_${searchKey}`] || s[`crm_meta_${activePhoneClean}`] || (tenDigit ? s[`crm_meta_${tenDigit}`] : null) || (isValidName ? s[`crm_meta_${displayName}`] : null);
 
     if (localData) {
+      // Found local data — use it (always prefer local storage over the blank default)
       activeFormData = {
         leadStatus: localData.leadStatus || 'UNASSIGNED',
         callStatus: localData.callStatus || null,
@@ -414,6 +425,7 @@ function fetchCrmMetadata(searchKey, displayName, domAvatar) {
         notesList: Array.isArray(localData.notesList) ? localData.notesList : (localData.notes ? [localData.notes] : [])
       };
     }
+    // If no local data found, keep whatever is already in activeFormData (don't blank it)
 
     renderCrmPanel(displayName, activePhoneClean, domAvatar || activeAvatarUrl);
 
@@ -468,10 +480,12 @@ function fetchCrmMetadata(searchKey, displayName, domAvatar) {
 function saveCrmMetadata() {
   // Normalize phone number with 91 prefix for canonical WhatsApp JID
   let cleanDigits = (activePhoneClean || activeContactKey).replace(/\D/g, '');
-  if (!cleanDigits || cleanDigits.length < 10) return; // Prevent saving phantom JIDs
   const tenDigit = (cleanDigits.length === 12 && cleanDigits.startsWith('91')) ? cleanDigits.slice(2) : cleanDigits;
   if (cleanDigits.length === 10) cleanDigits = '91' + cleanDigits;
-  const targetJid = `${cleanDigits}@s.whatsapp.net`;
+
+  const targetJid = cleanDigits.length >= 10
+    ? `${cleanDigits}@s.whatsapp.net`
+    : `${activeContactKey}@s.whatsapp.net`;
 
   // Use phone number as display name fallback if name is invalid (".", "Contact", empty)
   const badNames = ['.', 'contact', 'unsaved contact', ''];
@@ -479,17 +493,23 @@ function saveCrmMetadata() {
     ? (activePhoneClean || activeContactKey)
     : activeDisplayName;
 
-  const metaObj = { ...activeFormData, name: effectiveName, phone: cleanDigits };
+  const metaObj = { ...activeFormData, name: effectiveName, phone: cleanDigits || activeContactKey };
 
-  // Save under ALL digit formats (10-digit, 12-digit) so loading always finds it!
+  // Save under ALL possible keys so loading always finds it
   const saveKeys = {};
-  saveKeys[`crm_meta_${cleanDigits}`] = metaObj;
-  saveKeys[`crm_meta_${tenDigit}`] = metaObj;
-  if (activePhoneClean) saveKeys[`crm_meta_${activePhoneClean}`] = metaObj;
+  if (cleanDigits.length >= 10) {
+    saveKeys[`crm_meta_${cleanDigits}`] = metaObj;
+    saveKeys[`crm_meta_${tenDigit}`] = metaObj;
+    if (activePhoneClean) saveKeys[`crm_meta_${activePhoneClean}`] = metaObj;
+  }
   if (activeDisplayName && !badNames.includes(activeDisplayName.toLowerCase().trim())) {
     saveKeys[`crm_meta_${activeDisplayName}`] = metaObj;
   }
+  if (activeContactKey && !saveKeys[`crm_meta_${activeContactKey}`]) {
+    saveKeys[`crm_meta_${activeContactKey}`] = metaObj;
+  }
 
+  console.log('[AI Vastra] Saving metadata:', JSON.stringify(saveKeys));
   safeStorageSet(saveKeys);
 
   chatsMetadataMap[cleanDigits] = metaObj;

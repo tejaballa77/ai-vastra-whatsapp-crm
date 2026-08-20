@@ -105,11 +105,10 @@ export function WhatsAppCrmModule() {
   const BAD_NAMES = new Set(['.', 'contact', 'unsaved contact', 'unknown contact', 'whatsapp contact', '']);
   const canonicalPhone = (raw: string) => {
     const digits = (raw || '').replace(/\D/g, '');
-    if (digits.length > 13 || digits.length === 15) return '';
+    if (!digits || digits.length > 15 || digits.length < 7) return '';
     if (digits.length === 12 && digits.startsWith('91')) return digits.slice(2);
     if (digits.length === 13 && digits.startsWith('091')) return digits.slice(3);
-    if (digits.length === 10) return digits;
-    return '';
+    return digits;
   };
 
   const getCleanDisplayContact = (chat: any) => {

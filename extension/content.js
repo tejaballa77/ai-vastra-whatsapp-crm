@@ -373,10 +373,18 @@ function detectActiveContact(force = false) {
 }
 
 function fetchCrmMetadata(searchKey, displayName, domAvatar) {
-  const storageKeys = [`crm_meta_${searchKey}`, `crm_meta_${activePhoneClean}`, `crm_meta_${displayName}`];
+  const badNames = ['.', 'contact', 'unsaved contact', 'unknown contact', 'whatsapp contact', ''];
+  const isValidName = displayName && !badNames.includes(displayName.toLowerCase().trim()) && displayName.replace(/\D/g, '').length < 10;
+
+  const storageKeys = [`crm_meta_${searchKey}`];
+  if (activePhoneClean) storageKeys.push(`crm_meta_${activePhoneClean}`);
+  if (isValidName) storageKeys.push(`crm_meta_${displayName}`);
+
+  // Reset activeFormData to blank defaults to guarantee no data leaks from previous chats!
+  activeFormData = { leadStatus: 'UNASSIGNED', callStatus: null, followUpDate: '', notesList: [] };
 
   safeStorageGet(storageKeys, (stored) => {
-    const localData = (stored || {})[`crm_meta_${searchKey}`] || (stored || {})[`crm_meta_${activePhoneClean}`] || (stored || {})[`crm_meta_${displayName}`];
+    const localData = (stored || {})[`crm_meta_${searchKey}`] || (stored || {})[`crm_meta_${activePhoneClean}`] || (isValidName ? (stored || {})[`crm_meta_${displayName}`] : null);
 
     if (localData) {
       activeFormData = {
@@ -385,8 +393,6 @@ function fetchCrmMetadata(searchKey, displayName, domAvatar) {
         followUpDate: localData.followUpDate || '',
         notesList: localData.notesList || []
       };
-    } else {
-      activeFormData = { leadStatus: 'UNASSIGNED', callStatus: null, followUpDate: '', notesList: [] };
     }
 
     renderCrmPanel(displayName, activePhoneClean, domAvatar || activeAvatarUrl);
@@ -397,14 +403,13 @@ function fetchCrmMetadata(searchKey, displayName, domAvatar) {
 
       if (response && response.success && response.chat) {
         const chat = response.chat;
-        if (!localData) {
-          activeFormData = {
-            leadStatus: chat.leadStatus || 'UNASSIGNED',
-            callStatus: chat.callStatus || null,
-            followUpDate: chat.followUpDate || '',
-            notesList: chat.notesList || (chat.notes ? [chat.notes] : [])
-          };
-        }
+        activeFormData = {
+          leadStatus: (chat.leadStatus && chat.leadStatus !== 'UNASSIGNED') ? chat.leadStatus : (localData?.leadStatus || 'UNASSIGNED'),
+          callStatus: chat.callStatus !== undefined ? chat.callStatus : (localData?.callStatus || null),
+          followUpDate: chat.followUpDate !== undefined ? chat.followUpDate : (localData?.followUpDate || ''),
+          notesList: (chat.notesList && chat.notesList.length > 0) ? chat.notesList : (localData?.notesList || (chat.notes ? [chat.notes] : []))
+        };
+
         if (chat.phone) resolvedPhone = chat.phone.replace(/\D/g, '');
         else if (chat.jid) {
           const jidNum = chat.jid.split('@')[0].replace(/\D/g, '');
@@ -413,9 +418,9 @@ function fetchCrmMetadata(searchKey, displayName, domAvatar) {
         if (!resolvedAvatar && chat.avatarUrl) resolvedAvatar = chat.avatarUrl;
 
         const meta = { ...activeFormData, name: displayName, phone: resolvedPhone };
-        chatsMetadataMap[searchKey] = meta;
+        if (searchKey) chatsMetadataMap[searchKey] = meta;
         if (resolvedPhone) chatsMetadataMap[resolvedPhone] = meta;
-        if (displayName) chatsMetadataMap[displayName] = meta;
+        if (isValidName) chatsMetadataMap[displayName] = meta;
       }
 
       activePhoneClean = resolvedPhone;

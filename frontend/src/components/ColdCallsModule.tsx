@@ -1352,15 +1352,29 @@ export function ColdCallsModule({
                             </button>
                           </td>
 
-                          {/* Follow-up Date Cell (Green Font - Mandatory) */}
-                          <td className="py-2 px-3 border border-gray-300 font-extrabold text-[#00a884]" style={{ width: `${colWidths.followUpDate || 150}px` }}>
-                            <EditableCell
-                              leadId={lead.id}
-                              field="followUpDate"
-                              value={lead.followUpDate || ''}
-                              placeholder=""
-                              className="text-[#00a884] font-extrabold"
-                            />
+                          {/* Follow-up Date Cell (Interactive Date Calendar Selection) */}
+                          <td className="py-2 px-2 border border-gray-300 font-extrabold text-[#00a884]" style={{ width: `${colWidths.followUpDate || 150}px` }}>
+                            <div className="flex items-center gap-1 w-full bg-zinc-50/60 hover:bg-white focus-within:bg-white rounded px-1.5 py-0.5 border border-transparent hover:border-zinc-300 focus-within:border-black transition-all">
+                              <input
+                                type="date"
+                                value={normalizeDateStr(lead.followUpDate || '')}
+                                onChange={(e) => handleCellEdit(lead.id, 'followUpDate', e.target.value)}
+                                className="w-full bg-transparent text-xs font-extrabold text-[#00a884] outline-none cursor-pointer"
+                              />
+                              {lead.followUpDate && (
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleCellEdit(lead.id, 'followUpDate', '');
+                                  }}
+                                  title="Clear follow-up date"
+                                  className="text-zinc-400 hover:text-red-500 p-0.5 rounded transition-colors"
+                                >
+                                  <X className="w-3 h-3" />
+                                </button>
+                              )}
+                            </div>
                           </td>
                         </tr>
                       );
@@ -1413,7 +1427,7 @@ export function ColdCallsModule({
                 <label className="text-xs font-black text-black uppercase tracking-wider block mb-2">Follow-up Date</label>
                 <input
                   type="date"
-                  value={notePopupLead.followUpDate || ''}
+                  value={normalizeDateStr(notePopupLead.followUpDate || '')}
                   onChange={e => handlePopupFieldEdit('followUpDate', e.target.value)}
                   className="w-full px-4 py-2.5 text-xs font-bold rounded-xl border border-gray-300 bg-gray-50 focus:bg-white focus:border-black focus:outline-none transition-all"
                 />

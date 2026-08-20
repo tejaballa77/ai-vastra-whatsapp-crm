@@ -583,8 +583,13 @@ function renderCrmPanel(displayName, cleanPhone, avatarUrl, showSaveToast = fals
         <button id="aivastra-add-note-btn" class="aivastra-add-note-btn">+ Add Note</button>
         <div id="aivastra-notes-list" style="margin-top:10px;max-height:140px;overflow-y:auto;">
           ${activeFormData.notesList.map((n, i) => `
-            <div class="aivastra-note-item">
-              <span style="flex:1;word-break:break-word;">${n}</span>
+            <div class="aivastra-note-item" style="display:flex;align-items:flex-start;gap:6px;padding:7px 10px;background:#f7f7f7;border-radius:8px;margin-bottom:6px;border:1px solid #e5e5e5;">
+              <span style="flex:1;word-break:break-word;font-size:12px;line-height:1.5;color:#111;">${i + 1}. ${n}</span>
+              <button data-note-index="${i}" class="aivastra-delete-note-btn" title="Delete this note" style="
+                background:none;border:none;cursor:pointer;padding:2px 4px;
+                color:#cc0000;font-size:15px;flex-shrink:0;line-height:1;
+                border-radius:4px;transition:background 0.15s;
+              ">🗑️</button>
             </div>
           `).join('')}
         </div>
@@ -635,6 +640,19 @@ function renderCrmPanel(displayName, cleanPhone, avatarUrl, showSaveToast = fals
     saveCrmMetadata();
     renderCrmPanel(displayName, cleanPhone, avatarUrl, true);
   };
+
+  // Dustbin delete buttons — one per saved note
+  document.querySelectorAll('.aivastra-delete-note-btn').forEach((btn) => {
+    btn.onclick = (e) => {
+      e.stopPropagation();
+      const idx = parseInt(btn.getAttribute('data-note-index'), 10);
+      if (!isNaN(idx) && idx >= 0 && idx < activeFormData.notesList.length) {
+        activeFormData.notesList.splice(idx, 1);
+        saveCrmMetadata();
+        renderCrmPanel(displayName, cleanPhone, avatarUrl);
+      }
+    };
+  });
 }
 
 function getTodayFormattedDate() {

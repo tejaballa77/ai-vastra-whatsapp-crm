@@ -153,6 +153,11 @@ class StorageEngine {
         }
         if (parsed.coldCalls) {
           this.coldCalls = new Map<string, ColdCallLead>(Object.entries(parsed.coldCalls));
+          for (const lead of this.coldCalls.values()) {
+            if (lead.calledBy === 'Executive User' || lead.calledBy === 'Staff') {
+              lead.calledBy = undefined;
+            }
+          }
         }
         if (parsed.activeUsers && Array.isArray(parsed.activeUsers)) {
           this.activeUsers = new Set(parsed.activeUsers);
@@ -930,7 +935,9 @@ class StorageEngine {
       ...partial,
       callChoice: (partial.callChoice === null || (partial.callChoice as any) === '') ? undefined : (partial.callChoice !== undefined ? partial.callChoice : existing.callChoice),
       callStatus: partial.callStatus || (partial.callChoice === null ? 'PENDING' : existing.callStatus || 'PENDING'),
-      calledBy: partial.calledBy === null || partial.calledBy === '' ? undefined : (partial.calledBy !== undefined ? partial.calledBy : existing.calledBy),
+      calledBy: (partial.calledBy === null || partial.calledBy === '' || partial.calledBy === 'Executive User' || partial.calledBy === 'Staff')
+        ? undefined
+        : (partial.calledBy !== undefined ? partial.calledBy : (existing.calledBy === 'Executive User' || existing.calledBy === 'Staff' ? undefined : existing.calledBy)),
       callTimestamp: partial.callTimestamp === null ? undefined : (partial.callTimestamp !== undefined ? partial.callTimestamp : existing.callTimestamp),
       callOutcome: partial.callOutcome === null || partial.callOutcome === '' ? undefined : (partial.callOutcome !== undefined ? partial.callOutcome : existing.callOutcome),
       notesList: partial.notesList !== undefined ? (partial.notesList as NoteEntry[]) : existing.notesList,

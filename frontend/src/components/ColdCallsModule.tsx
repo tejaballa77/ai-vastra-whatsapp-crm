@@ -166,8 +166,8 @@ export function ColdCallsModule({
   });
 
   const currentUserName = typeof window !== 'undefined'
-    ? (localStorage.getItem('crm_user_name') || localStorage.getItem('crm_admin_display_name') || 'Executive User')
-    : 'Executive User';
+    ? (localStorage.getItem('crm_user_name') || localStorage.getItem('crm_user_display') || localStorage.getItem('crm_admin_display_name') || localStorage.getItem('crm_admin_username') || 'Teja')
+    : 'Teja';
 
   // Inline edit tracking: Map<leadId, partial changes>
   const [editedRows, setEditedRows] = useState<Map<string, Partial<ColdCallLead>>>(new Map());
@@ -995,10 +995,14 @@ export function ColdCallsModule({
 
                             {/* Called By (Vibrant Green) */}
                             <td className="py-3.5 px-4">
-                              <span className="px-2.5 py-1 bg-emerald-50 border border-emerald-300 rounded-lg text-xs font-black text-emerald-800 flex items-center gap-1.5 w-fit shadow-xs">
-                                <User className="w-3.5 h-3.5 text-emerald-600" />
-                                {lead.calledBy || 'Staff'}
-                              </span>
+                              {lead.calledBy && lead.calledBy !== 'Executive User' && lead.calledBy !== 'Staff' ? (
+                                <span className="px-2.5 py-1 bg-emerald-50 border border-emerald-300 rounded-lg text-xs font-black text-emerald-800 flex items-center gap-1.5 w-fit shadow-xs">
+                                  <User className="w-3.5 h-3.5 text-emerald-600" />
+                                  {lead.calledBy}
+                                </span>
+                              ) : (
+                                <span className="text-xs text-zinc-400 font-medium">—</span>
+                              )}
                             </td>
 
                             {/* Time (Green if Entered Today, Normal Gray if Past) */}

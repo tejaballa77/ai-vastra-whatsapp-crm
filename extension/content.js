@@ -255,24 +255,37 @@ function injectChatListBadges() {
   });
 }
 
-// Observe WhatsApp Web chat header and DOM changes
+let observerDebounceTimer = null;
+let isUpdatingDom = false;
+
+// Observe WhatsApp Web chat header and DOM changes with throttling & mutation guards
 function startChatObserver() {
   const observer = new MutationObserver(() => {
-    try {
-      ensureHeaderButton();
-      detectActiveContact();
-      injectChatListBadges();
-    } catch (e) {}
+    if (isUpdatingDom) return;
+    if (observerDebounceTimer) return;
+
+    observerDebounceTimer = setTimeout(() => {
+      observerDebounceTimer = null;
+      try {
+        isUpdatingDom = true;
+        ensureHeaderButton();
+        detectActiveContact();
+        injectChatListBadges();
+      } catch (e) {
+      } finally {
+        isUpdatingDom = false;
+      }
+    }, 300);
   });
 
   observer.observe(document.body, { childList: true, subtree: true });
 }
 
-// Detect WhatsApp profile display name (e.g., "~Parth" -> "Parth") from Contact Info panel or DOM
+// Detect WhatsApp profile display name (e.g., "~Parth" -> "Parth") from Contact Info panel or DOM (targeted)
 function extractProfileNameFromDom() {
   try {
-    const elements = document.querySelectorAll('span, div');
-    for (const el of elements) {
+    const targets = document.querySelectorAll('#main header span, [role="region"] span, header + div span, #app header span');
+    for (const el of targets) {
       const txt = (el.textContent || '').trim();
       if (txt.startsWith('~') && txt.length >= 2 && txt.length <= 40 && !txt.includes('\n')) {
         const cleanName = txt.substring(1).trim();

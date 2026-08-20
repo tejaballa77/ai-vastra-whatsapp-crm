@@ -149,7 +149,7 @@ function syncAllCrmChats(callback) {
 }
 
 
-// Inject Lead Status Emoji Badges into left chat list
+// Inject Lead Status Emoji Badges & Display Name into left chat list
 function injectChatListBadges() {
   const chatItems = document.querySelectorAll('#pane-side [role="listitem"]');
   if (!chatItems || chatItems.length === 0) return;
@@ -164,6 +164,14 @@ function injectChatListBadges() {
       const key = cleanDigits.length >= 10 ? cleanDigits : rawTitle;
 
       const chatMeta = chatsMetadataMap[key] || chatsMetadataMap[rawTitle] || chatsMetadataMap[cleanDigits];
+
+      // Update name in left sidebar if we have a detected profile name for an unsaved phone number
+      if (chatMeta && chatMeta.name && cleanDigits.length >= 10 && rawTitle.replace(/\D/g, '') === cleanDigits) {
+        if (titleEl.textContent !== chatMeta.name) {
+          titleEl.textContent = chatMeta.name;
+        }
+      }
+
       const status = chatMeta?.leadStatus || (key === activeContactKey ? activeFormData.leadStatus : null);
 
       let existingBadge = item.querySelector('.aivastra-chat-badge');
@@ -234,6 +242,7 @@ function detectActiveContact(force = false) {
 
     const spans = Array.from(mainHeader.querySelectorAll('span[title], span[dir="auto"]'));
     let targetTitle = '';
+    let targetSpan = null;
 
     for (const span of spans) {
       const txt = (span.getAttribute('title') || span.textContent || '').trim();
@@ -246,6 +255,7 @@ function detectActiveContact(force = false) {
         txt === '⚡ AI CRM'
       ) continue;
       targetTitle = txt;
+      targetSpan = span;
       break;
     }
 
@@ -265,6 +275,10 @@ function detectActiveContact(force = false) {
     let displayTitle = targetTitle;
     if (cleanDigits.length >= 10 && profileName) {
       displayTitle = profileName;
+      // Replace main chat header raw phone number with detected name
+      if (targetSpan && targetSpan.textContent.replace(/\D/g, '') === cleanDigits) {
+        targetSpan.textContent = profileName;
+      }
     }
 
     if (activeContactKey !== contactKey || force) {

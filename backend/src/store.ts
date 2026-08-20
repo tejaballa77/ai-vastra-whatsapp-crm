@@ -152,18 +152,7 @@ class StorageEngine {
           this.lidToJidMap = new Map(Object.entries(parsed.lidToJidMap));
         }
         if (parsed.coldCalls) {
-          const loadedColdCalls = new Map<string, ColdCallLead>(Object.entries(parsed.coldCalls));
-          for (const [id, lead] of loadedColdCalls.entries()) {
-            loadedColdCalls.set(id, {
-              ...lead,
-              callChoice: undefined,
-              callStatus: 'PENDING',
-              calledBy: undefined,
-              callTimestamp: undefined,
-              callOutcome: undefined,
-            });
-          }
-          this.coldCalls = loadedColdCalls;
+          this.coldCalls = new Map<string, ColdCallLead>(Object.entries(parsed.coldCalls));
         }
         if (parsed.activeUsers && Array.isArray(parsed.activeUsers)) {
           this.activeUsers = new Set(parsed.activeUsers);

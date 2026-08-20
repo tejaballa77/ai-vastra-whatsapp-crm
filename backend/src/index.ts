@@ -51,9 +51,10 @@ io.on('connection', (socket) => {
     meJid: waEngine.meJid,
   });
 
-  // Send initial chat list & cold calls from local cache
+  // Send initial chat list, cold calls & active users from local cache
   socket.emit('chats_updated', db.getAllChatsSorted());
   socket.emit('cold_calls_updated', db.getAllColdCalls());
+  socket.emit('users_updated', db.getActiveUsers());
 
   socket.on('disconnect', () => {
     console.log(`[Socket.IO] Client disconnected: ${socket.id}`);

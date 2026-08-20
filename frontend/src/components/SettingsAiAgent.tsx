@@ -51,8 +51,12 @@ export function SettingsAiAgent() {
   }, [socket, currentUser]);
 
   useEffect(() => {
-    const fetchActiveUsers = () => {
-      fetch(`${getBackendUrl()}/api/users/active`)
+    const syncActiveUsers = () => {
+      fetch(`${getBackendUrl()}/api/users/active`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: currentUser }),
+      })
         .then(res => res.json())
         .then(data => {
           if (data.success && Array.isArray(data.activeUsers)) {
@@ -64,8 +68,8 @@ export function SettingsAiAgent() {
         .catch(err => console.error(err));
     };
 
-    fetchActiveUsers();
-    const interval = setInterval(fetchActiveUsers, 3000);
+    syncActiveUsers();
+    const interval = setInterval(syncActiveUsers, 3000);
     return () => clearInterval(interval);
   }, [currentUser]);
 

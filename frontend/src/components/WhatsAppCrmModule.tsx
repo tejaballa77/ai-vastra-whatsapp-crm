@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { getBackendUrl } from '../config';
 import { 
   Users, 
@@ -69,6 +69,25 @@ export function WhatsAppCrmModule() {
       }).catch(() => {});
     }
   };
+
+  useEffect(() => {
+    const registerUser = () => {
+      if (typeof window !== 'undefined') {
+        const user = localStorage.getItem('crm_user_name') || localStorage.getItem('crm_admin_display_name') || 'Executive User';
+        if (user && user !== 'Staff' && user !== 'Executive User') {
+          fetch(`${getBackendUrl()}/api/users/active`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username: user }),
+          }).catch(() => {});
+        }
+      }
+    };
+
+    registerUser();
+    const interval = setInterval(registerUser, 4000);
+    return () => clearInterval(interval);
+  }, []);
 
   const [activeNav, setActiveNav] = useState<'whatsapp' | 'calls' | 'emails' | 'settings'>('whatsapp');
   const [coldCallsSubPage, setColdCallsSubPage] = useState<'analytics' | 'sheet' | 'database'>('analytics');

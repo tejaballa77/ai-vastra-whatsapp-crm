@@ -1353,13 +1353,21 @@ export function ColdCallsModule({
                           </td>
 
                           {/* Follow-up Date Cell (Interactive Date Calendar Selection) */}
-                          <td className="py-2 px-2 border border-gray-300 font-extrabold text-[#00a884]" style={{ width: `${colWidths.followUpDate || 150}px` }}>
-                            <div className="flex items-center gap-1 w-full bg-zinc-50/60 hover:bg-white focus-within:bg-white rounded px-1.5 py-0.5 border border-transparent hover:border-zinc-300 focus-within:border-black transition-all">
+                          <td className={`py-2 px-2 border border-gray-300 ${lead.followUpDate ? 'font-black text-[#00a884]' : 'text-gray-400 font-normal'}`} style={{ width: `${colWidths.followUpDate || 150}px` }}>
+                            <div className={`flex items-center gap-1 w-full rounded px-1.5 py-0.5 border transition-all ${
+                              lead.followUpDate 
+                                ? 'bg-emerald-50/70 border-emerald-200 hover:border-emerald-400 focus-within:border-emerald-600 focus-within:bg-white' 
+                                : 'bg-zinc-50/40 border-transparent hover:border-zinc-300 focus-within:border-black focus-within:bg-white'
+                            }`}>
                               <input
                                 type="date"
                                 value={normalizeDateStr(lead.followUpDate || '')}
                                 onChange={(e) => handleCellEdit(lead.id, 'followUpDate', e.target.value)}
-                                className="w-full bg-transparent text-xs font-extrabold text-[#00a884] outline-none cursor-pointer"
+                                className={`w-full bg-transparent text-xs outline-none cursor-pointer ${
+                                  lead.followUpDate 
+                                    ? 'text-[#00a884] font-black' 
+                                    : 'text-gray-400 font-medium'
+                                }`}
                               />
                               {lead.followUpDate && (
                                 <button
@@ -1369,9 +1377,9 @@ export function ColdCallsModule({
                                     handleCellEdit(lead.id, 'followUpDate', '');
                                   }}
                                   title="Clear follow-up date"
-                                  className="text-zinc-400 hover:text-red-500 p-0.5 rounded transition-colors"
+                                  className="text-emerald-600 hover:text-red-500 p-0.5 rounded transition-colors"
                                 >
-                                  <X className="w-3 h-3" />
+                                  <X className="w-3.5 h-3.5" />
                                 </button>
                               )}
                             </div>

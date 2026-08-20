@@ -708,17 +708,19 @@ export function WhatsAppCrmModule() {
                               )}
                             </td>
 
-                            <td className="p-4">
+                            <td className="p-4 align-top">
                               {chat.callStatus === 'YES' ? (
-                                <span className="px-3 py-1 text-xs font-extrabold bg-black text-white rounded-md">
-                                  Call: Yes
+                                <span className="px-3 py-1 text-xs font-extrabold bg-black text-white rounded-md inline-block">
+                                  Yes
                                 </span>
                               ) : (
-                                <span className="text-zinc-400 text-xs">No</span>
+                                <span className="px-3 py-1 text-xs font-extrabold bg-black text-white rounded-md inline-block">
+                                  No
+                                </span>
                               )}
                             </td>
 
-                            <td className="p-4">
+                            <td className="p-4 align-top">
                               {chat.followUpDate ? (
                                 <span className="px-3 py-1 text-xs font-extrabold bg-zinc-100 text-black border border-black rounded-md flex items-center gap-1 w-max">
                                   📅 {chat.followUpDate}
@@ -728,14 +730,33 @@ export function WhatsAppCrmModule() {
                               )}
                             </td>
 
-                            <td className="p-4 max-w-xs">
-                              {chat.notesList && chat.notesList.length > 0 ? (
-                                <p className="truncate text-zinc-800 italic text-sm" title={chat.notesList[0]}>
-                                  "{chat.notesList[0]}"
-                                </p>
-                              ) : (
-                                <span className="text-zinc-400 text-xs">No notes</span>
-                              )}
+                            <td className="p-4 min-w-[280px] max-w-md align-top">
+                              {(() => {
+                                const allNotes: string[] = [];
+                                if (chat.notesList && Array.isArray(chat.notesList) && chat.notesList.length > 0) {
+                                  chat.notesList.forEach(n => {
+                                    if (typeof n === 'string' && n.trim()) allNotes.push(n.trim());
+                                    else if (n && typeof n === 'object' && (n as any).text) allNotes.push(((n as any).text + ((n as any).date ? ` (${(n as any).date})` : '')).trim());
+                                  });
+                                } else if (chat.notes && chat.notes.trim()) {
+                                  allNotes.push(chat.notes.trim());
+                                }
+
+                                if (allNotes.length === 0) {
+                                  return <span className="text-zinc-400 text-xs italic">No notes</span>;
+                                }
+
+                                return (
+                                  <div className="space-y-2 py-0.5">
+                                    {allNotes.map((noteText, nIdx) => (
+                                      <div key={nIdx} className="text-sm font-medium text-zinc-900 leading-relaxed break-words whitespace-pre-wrap">
+                                        <span className="font-extrabold text-black mr-1.5">{nIdx + 1}.</span>
+                                        <span className="italic">"{noteText}"</span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                );
+                              })()}
                             </td>
 
                             <td className="p-4 text-right">

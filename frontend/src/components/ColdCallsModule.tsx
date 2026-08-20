@@ -725,15 +725,6 @@ export function ColdCallsModule({
         // 3. Conversations (Interested Contacts)
         const interestedLeadsList = leads.filter(l => l.callStatus === 'INTERESTED' || (l.callChoice === 'YES' && (l.callStatus === 'WARM' || l.callStatus === 'YES' || !l.callStatus)));
 
-        // 4. All Scheduled Follow-ups (any follow-up date set)
-        const scheduledFollowupLeadsList = leads.filter(l => Boolean(l.followUpDate) && l.followUpDate.trim() !== '' && l.followUpDate !== '—');
-
-        // 5. Follow-ups Today
-        const followupTodayLeadsList = leads.filter(l => {
-          const normF = normalizeDateStr(l.followUpDate);
-          return normF === selectedDate || (Boolean(l.followUpDate) && selectedDate === todayLocalStr);
-        });
-
         // Recent calls list: ALL leads where a call choice (YES/NO) or explicit status (Interested/Warm/etc.) has been logged
         const displayCallsList = leads.filter(l => {
           const hasCallChoice = l.callChoice === 'YES' || l.callChoice === 'NO';

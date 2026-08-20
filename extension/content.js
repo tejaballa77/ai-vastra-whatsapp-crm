@@ -382,7 +382,6 @@ function renderCrmPanel(displayName, cleanPhone, avatarUrl, showSaveToast = fals
         <span>Contact Info</span>
       </div>
       <div style="display:flex;align-items:center;">
-        <button id="aivastra-clear-btn" class="aivastra-clear-btn">Clear</button>
         <button id="aivastra-close-btn" class="aivastra-close-btn">✕</button>
       </div>
     </div>
@@ -428,7 +427,6 @@ function renderCrmPanel(displayName, cleanPhone, avatarUrl, showSaveToast = fals
           ${activeFormData.notesList.map((n, i) => `
             <div class="aivastra-note-item">
               <span style="flex:1;word-break:break-word;">${n}</span>
-              <span class="aivastra-note-delete" data-index="${i}" title="Delete Note">🗑</span>
             </div>
           `).join('')}
         </div>
@@ -459,11 +457,6 @@ function getTodayFormattedDate() {
     isPanelVisible = false;
     panel.style.display = 'none';
   };
-  document.getElementById('aivastra-clear-btn').onclick = () => {
-    activeFormData = { leadStatus: 'UNASSIGNED', callStatus: null, followUpDate: '', notesList: [] };
-    saveCrmMetadata();
-    renderCrmPanel(displayName, cleanPhone, avatarUrl);
-  };
   document.getElementById('btn-call-yes').onclick = () => { activeFormData.callStatus = 'YES'; renderCrmPanel(displayName, cleanPhone, avatarUrl); };
   document.getElementById('btn-call-no').onclick = () => { activeFormData.callStatus = 'NO'; renderCrmPanel(displayName, cleanPhone, avatarUrl); };
   document.getElementById('btn-interested').onclick = () => { activeFormData.leadStatus = 'INTERESTED'; renderCrmPanel(displayName, cleanPhone, avatarUrl); };
@@ -492,14 +485,6 @@ function getTodayFormattedDate() {
     saveCrmMetadata();
     renderCrmPanel(displayName, cleanPhone, avatarUrl, true);
   };
-  panel.querySelectorAll('.aivastra-note-delete').forEach(el => {
-    el.onclick = (e) => {
-      const idx = parseInt(e.target.getAttribute('data-index'));
-      activeFormData.notesList.splice(idx, 1);
-      saveCrmMetadata();
-      renderCrmPanel(displayName, cleanPhone, avatarUrl);
-    };
-  });
 }
 
 // Start

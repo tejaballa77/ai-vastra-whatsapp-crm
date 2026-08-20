@@ -93,6 +93,10 @@ export function WhatsAppCrmModule() {
   const [coldCallsSubPage, setColdCallsSubPage] = useState<'analytics' | 'sheet' | 'database'>('analytics');
   const [tableFilter, setTableFilter] = useState<'ALL' | 'INTERESTED' | 'WARM' | 'NOT_INTERESTED' | 'CALLS' | 'FOLLOWUPS'>('ALL');
   const [modalCategory, setModalCategory] = useState<'INTERESTED' | 'WARM' | 'NOT_INTERESTED' | 'CALLS' | 'FOLLOWUPS' | null>(null);
+  const [showStatusModal, setShowStatusModal] = useState(false);
+  const [showInterestedModal, setShowInterestedModal] = useState(false);
+  const [showScheduledModal, setShowScheduledModal] = useState(false);
+  const [showFollowupsTodayModal, setShowFollowupsTodayModal] = useState(false);
   const [copiedPhone, setCopiedPhone] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState<string>('');
 
@@ -180,6 +184,26 @@ export function WhatsAppCrmModule() {
 
   const chats = Array.from(chatsMap.values());
 
+  const getLocalYYYYMMDD = (ts?: number | string) => {
+    const d = ts ? new Date(ts) : new Date();
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
+  };
+
+  const normalizeDateStr = (dStr?: string) => {
+    if (!dStr) return '';
+    const s = dStr.trim();
+    if (s.includes('-') && s.split('-')[0].length === 2) {
+      const [dd, mm, yyyy] = s.split('-');
+      return `${yyyy}-${mm}-${dd}`;
+    }
+    return s;
+  };
+
+  const todayLocalStr = getLocalYYYYMMDD();
+
   // Compute 100% DYNAMIC real stats from database chats (Default 0)
   const interestedChats = chats.filter((c) => c.leadStatus === 'INTERESTED');
   const warmChats = chats.filter((c) => c.leadStatus === 'WARM_INTERESTED' || c.leadStatus === 'WARM');
@@ -192,10 +216,14 @@ export function WhatsAppCrmModule() {
   const unassignedCount = unassignedChats.length;
 
   const callsYesChats = chats.filter((c) => c.callStatus === 'YES');
-  const followUpChats = chats.filter((c) => Boolean(c.followUpDate && c.followUpDate.trim().length > 0 && c.leadStatus !== 'UNASSIGNED'));
+  const scheduledFollowupChatsList = chats.filter(c => Boolean(c.followUpDate) && c.followUpDate.trim() !== '' && c.followUpDate !== '—');
+  const followupTodayChatsList = chats.filter(c => {
+    const normF = normalizeDateStr(c.followUpDate);
+    return normF === todayLocalStr;
+  });
 
   const callsYesCount = callsYesChats.length;
-  const followUpsCount = followUpChats.length;
+  const followUpsCount = scheduledFollowupChatsList.length;
 
   // Filtered chats where user has actively entered CRM info (Lead Status, Call:Yes, or Notes)
   // If cleared (leadStatus = UNASSIGNED and no notes and callStatus != YES), excluded completely!
@@ -309,7 +337,7 @@ export function WhatsAppCrmModule() {
       case 'CALLS':
         return callsYesChats;
       case 'FOLLOWUPS':
-        return followUpChats;
+        return scheduledFollowupChatsList;
       default:
         return [];
     }
@@ -461,69 +489,94 @@ export function WhatsAppCrmModule() {
 
         {activeNav === 'whatsapp' && (
           <div className="flex-1 overflow-y-auto p-6 space-y-6 bg-zinc-50/50">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
-              <div 
-                onClick={() => setModalCategory('INTERESTED')}
-                className="bg-white p-5 rounded-2xl border border-zinc-200 shadow-sm hover:shadow-md hover:border-black transition-all cursor-pointer group"
-              >
-                <div className="flex items-center justify-between mb-3">
-                  <span className="text-xs font-bold text-zinc-600 uppercase tracking-wider">INTERESTED</span>
-                  <div className="w-9 h-9 rounded-xl bg-zinc-100 flex items-center justify-center text-black">
-                    <ThumbsUp className="w-5 h-5" />
-                  </div>
+            {/* ── 5 TOP METRIC CARDS BAR (Matching Cold Calls Styling) ── */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+              {/* Card 1: Total Chats */}
+              <div className="bg-[#eff6ff] p-4 rounded-2xl border border-blue-200/80 shadow-sm flex items-center gap-3.5 transition-all hover:shadow-md hover:border-blue-400">
+                <div className="w-11 h-11 rounded-2xl bg-blue-600 text-white flex items-center justify-center flex-shrink-0 shadow-md">
+                  <MessageSquare className="w-5 h-5" />
                 </div>
-                <div className="text-3xl font-extrabold text-black mb-1">{interestedCount}</div>
-                <span className="text-xs font-bold text-black group-hover:underline flex items-center gap-1">
-                  Click to view leads <ChevronRight className="w-3.5 h-3.5" />
-                </span>
+                <div className="min-w-0 flex-1">
+                  <div className="text-[11px] font-bold text-blue-800 uppercase tracking-wider">Total Chats</div>
+                  <div className="text-2xl font-black text-blue-950 tracking-tight">{savedLeads.length.toLocaleString()}</div>
+                  <div className="text-[10px] font-semibold text-blue-600/90 mt-0.5 truncate">Contacts with CRM entries</div>
+                </div>
               </div>
 
-              <div 
-                onClick={() => setModalCategory('WARM')}
-                className="bg-white p-5 rounded-2xl border border-zinc-200 shadow-sm hover:shadow-md hover:border-black transition-all cursor-pointer group"
+              {/* Card 2: Status Breakdown */}
+              <div
+                onClick={() => setShowStatusModal(true)}
+                className="bg-[#ecfdf5] p-4 rounded-2xl border border-emerald-200/80 shadow-sm flex items-center gap-3.5 transition-all hover:shadow-md hover:border-emerald-400 cursor-pointer active:scale-98 group"
+                title="Click to view detailed status breakdown"
               >
-                <div className="flex items-center justify-between mb-3">
-                  <span className="text-xs font-bold text-zinc-600 uppercase tracking-wider">WARM</span>
-                  <div className="w-9 h-9 rounded-xl bg-zinc-100 flex items-center justify-center text-black">
-                    <Flame className="w-5 h-5" />
-                  </div>
+                <div className="w-11 h-11 rounded-2xl bg-emerald-500 text-white flex items-center justify-center flex-shrink-0 shadow-md group-hover:scale-105 transition-transform">
+                  <PhoneCall className="w-5 h-5" />
                 </div>
-                <div className="text-3xl font-extrabold text-black mb-1">{warmCount}</div>
-                <span className="text-xs font-bold text-black group-hover:underline flex items-center gap-1">
-                  Click to view leads <ChevronRight className="w-3.5 h-3.5" />
-                </span>
+                <div className="min-w-0 flex-1">
+                  <div className="text-[11px] font-bold text-emerald-700 uppercase tracking-wider flex items-center justify-between">
+                    <span>Status</span>
+                    <span className="text-[9px] text-emerald-600 bg-emerald-100 px-1 py-0.5 rounded font-black">POPUP ↗</span>
+                  </div>
+                  <div className="text-2xl font-black text-emerald-950 tracking-tight">{savedLeads.length.toLocaleString()}</div>
+                  <div className="text-[10px] font-semibold text-emerald-600/90 mt-0.5 truncate">Click for status breakdown</div>
+                </div>
               </div>
 
-              <div 
-                onClick={() => setModalCategory('NOT_INTERESTED')}
-                className="bg-white p-5 rounded-2xl border border-zinc-200 shadow-sm hover:shadow-md hover:border-black transition-all cursor-pointer group"
+              {/* Card 3: Conversations (Interested Leads) */}
+              <div
+                onClick={() => setShowInterestedModal(true)}
+                className="bg-[#f5f3ff] p-4 rounded-2xl border border-purple-200/80 shadow-sm flex items-center gap-3.5 transition-all hover:shadow-md hover:border-purple-400 cursor-pointer active:scale-98 group"
+                title="Click to view interested contacts info"
               >
-                <div className="flex items-center justify-between mb-3">
-                  <span className="text-xs font-bold text-zinc-600 uppercase tracking-wider">NOT INTERESTED</span>
-                  <div className="w-9 h-9 rounded-xl bg-zinc-100 flex items-center justify-center text-black">
-                    <ThumbsDown className="w-5 h-5" />
-                  </div>
+                <div className="w-11 h-11 rounded-2xl bg-purple-500 text-white flex items-center justify-center flex-shrink-0 shadow-md group-hover:scale-105 transition-transform">
+                  <Users className="w-5 h-5" />
                 </div>
-                <div className="text-3xl font-extrabold text-black mb-1">{notInterestedCount}</div>
-                <span className="text-xs font-bold text-black group-hover:underline flex items-center gap-1">
-                  Click to view leads <ChevronRight className="w-3.5 h-3.5" />
-                </span>
+                <div className="min-w-0 flex-1">
+                  <div className="text-[11px] font-bold text-purple-700 uppercase tracking-wider flex items-center justify-between">
+                    <span>Conversations</span>
+                    <span className="text-[9px] text-purple-600 bg-purple-100 px-1 py-0.5 rounded font-black">POPUP ↗</span>
+                  </div>
+                  <div className="text-2xl font-black text-purple-950 tracking-tight">{interestedCount.toLocaleString()}</div>
+                  <div className="text-[10px] font-semibold text-purple-600/90 mt-0.5 truncate">Interested WhatsApp contacts</div>
+                </div>
               </div>
 
-              <div 
-                onClick={() => setModalCategory('FOLLOWUPS')}
-                className="bg-white p-5 rounded-2xl border border-zinc-200 shadow-sm hover:shadow-md hover:border-black transition-all cursor-pointer group"
+              {/* Card 4: Follow-ups Scheduled */}
+              <div
+                onClick={() => setShowScheduledModal(true)}
+                className="bg-[#eef2ff] p-4 rounded-2xl border border-indigo-200/80 shadow-sm flex items-center gap-3.5 transition-all hover:shadow-md hover:border-indigo-400 cursor-pointer active:scale-98 group"
+                title="Click to inspect all scheduled follow-up leads"
               >
-                <div className="flex items-center justify-between mb-3">
-                  <span className="text-xs font-bold text-zinc-600 uppercase tracking-wider">CALLS & FOLLOW-UPS</span>
-                  <div className="w-9 h-9 rounded-xl bg-zinc-100 flex items-center justify-center text-black">
-                    <Calendar className="w-5 h-5" />
-                  </div>
+                <div className="w-11 h-11 rounded-2xl bg-indigo-600 text-white flex items-center justify-center flex-shrink-0 shadow-md group-hover:scale-105 transition-transform">
+                  <Calendar className="w-5 h-5" />
                 </div>
-                <div className="text-3xl font-extrabold text-black mb-1">{callsYesCount + followUpsCount}</div>
-                <span className="text-xs text-zinc-600 font-bold">
-                  Calls ({callsYesCount}) • Dates ({followUpsCount})
-                </span>
+                <div className="min-w-0 flex-1">
+                  <div className="text-[11px] font-bold text-indigo-800 uppercase tracking-wider flex items-center justify-between">
+                    <span className="truncate">Follow-ups Scheduled</span>
+                    <span className="text-[9px] text-indigo-600 bg-indigo-100 px-1 py-0.5 rounded font-black">POPUP ↗</span>
+                  </div>
+                  <div className="text-2xl font-black text-indigo-950 tracking-tight">{scheduledFollowupChatsList.length.toLocaleString()}</div>
+                  <div className="text-[10px] font-semibold text-indigo-600/90 mt-0.5 truncate">All scheduled follow-ups</div>
+                </div>
+              </div>
+
+              {/* Card 5: Follow-ups Today */}
+              <div
+                onClick={() => setShowFollowupsTodayModal(true)}
+                className="bg-[#fffbeb] p-4 rounded-2xl border border-amber-200/80 shadow-sm flex items-center gap-3.5 transition-all hover:shadow-md hover:border-amber-400 cursor-pointer active:scale-98 group"
+                title="Click to inspect today's scheduled follow-ups"
+              >
+                <div className="w-11 h-11 rounded-2xl bg-amber-500 text-white flex items-center justify-center flex-shrink-0 shadow-md group-hover:scale-105 transition-transform">
+                  <Calendar className="w-5 h-5" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="text-[11px] font-bold text-amber-800 uppercase tracking-wider flex items-center justify-between">
+                    <span className="truncate">Follow-ups Today</span>
+                    <span className="text-[9px] text-amber-700 bg-amber-100 px-1 py-0.5 rounded font-black">POPUP ↗</span>
+                  </div>
+                  <div className="text-2xl font-black text-amber-950 tracking-tight">{followupTodayChatsList.length.toLocaleString()}</div>
+                  <div className="text-[10px] font-semibold text-amber-700/90 mt-0.5 truncate">Scheduled for today</div>
+                </div>
               </div>
             </div>
 
@@ -784,6 +837,270 @@ export function WhatsAppCrmModule() {
                 );
               })
             )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── STATUS BREAKDOWN POPUP MODAL ── */}
+      {showStatusModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[9999] flex items-center justify-center p-4 text-black font-sans">
+          <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl border border-gray-200 flex flex-col overflow-hidden animate-in fade-in zoom-in duration-150">
+            {/* Header */}
+            <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between bg-emerald-50/50">
+              <div>
+                <h3 className="text-lg font-black text-emerald-950 flex items-center gap-2">
+                  <PhoneCall className="w-5 h-5 text-emerald-600" />
+                  Status Breakdown
+                </h3>
+                <p className="text-xs font-semibold text-emerald-700 mt-0.5">Summary of WhatsApp lead statuses</p>
+              </div>
+              <button onClick={() => setShowStatusModal(false)} className="w-8 h-8 rounded-full bg-white hover:bg-gray-200 flex items-center justify-center text-gray-700 transition-all border border-gray-200 shadow-sm">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            {/* Body */}
+            <div className="p-6 space-y-3 font-sans">
+              {([
+                ['Interested', interestedCount, 'text-emerald-900', 'bg-emerald-50', 'border-emerald-200', '👍'],
+                ['Warm', warmCount, 'text-amber-900', 'bg-amber-50', 'border-amber-200', '🔥'],
+                ['Not Interested', notInterestedCount, 'text-rose-900', 'bg-rose-50', 'border-rose-200', '👎'],
+                ['Unassigned / Pending', unassignedCount, 'text-zinc-900', 'bg-zinc-50', 'border-zinc-200', '⏳'],
+              ] as [string, number, string, string, string, string][]).map(([label, count, textColor, cardBg, cardBorder, emoji]) => (
+                <div key={label} className={`p-4 rounded-xl border ${cardBg} ${cardBorder} flex items-center justify-between`}>
+                  <div className={`flex items-center gap-2.5 text-sm font-extrabold ${textColor}`}>
+                    <span className="text-base">{emoji}</span>
+                    <span>{label}</span>
+                  </div>
+                  <span className="font-black text-black text-xl">{count}</span>
+                </div>
+              ))}
+            </div>
+            {/* Footer */}
+            <div className="px-6 py-3 border-t border-gray-200 bg-gray-50 flex justify-end">
+              <button onClick={() => setShowStatusModal(false)} className="px-5 py-2 bg-black hover:bg-zinc-800 text-white font-bold text-xs rounded-xl transition-all shadow-sm">
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── INTERESTED CONTACTS POPUP MODAL ── */}
+      {showInterestedModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[9999] flex items-center justify-center p-4 text-black font-sans">
+          <div className="bg-white w-full max-w-3xl rounded-2xl shadow-2xl border border-gray-200 flex flex-col max-h-[85vh] overflow-hidden animate-in fade-in zoom-in duration-150">
+            {/* Header */}
+            <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between bg-purple-50/60">
+              <div>
+                <h3 className="text-lg font-black text-purple-950 flex items-center gap-2">
+                  <Users className="w-5 h-5 text-purple-600" />
+                  Interested Leads ({interestedCount})
+                </h3>
+                <p className="text-xs font-semibold text-purple-700 mt-0.5">High potential WhatsApp clients</p>
+              </div>
+              <button onClick={() => setShowInterestedModal(false)} className="w-8 h-8 rounded-full bg-white hover:bg-gray-200 flex items-center justify-center text-gray-700 transition-all border border-gray-200 shadow-sm">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            {/* Table Body */}
+            <div className="overflow-y-auto flex-1 p-6">
+              {interestedChats.length === 0 ? (
+                <div className="p-12 text-center text-xs text-gray-400 font-semibold bg-gray-50 rounded-xl border border-gray-200">
+                  No interested contacts recorded yet.
+                </div>
+              ) : (
+                <div className="border border-gray-200 rounded-xl overflow-hidden">
+                  <table className="w-full text-left border-collapse text-xs">
+                    <thead>
+                      <tr className="bg-gray-100 text-gray-700 font-extrabold border-b border-gray-200 uppercase tracking-wider">
+                        <th className="p-3">#</th>
+                        <th className="p-3">Contact Name</th>
+                        <th className="p-3">Phone</th>
+                        <th className="p-3 text-center">Status</th>
+                        <th className="p-3">Note</th>
+                        <th className="p-3 text-right">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-200 bg-white font-medium">
+                      {interestedChats.map((chat, idx) => {
+                        const { displayName, formattedPhone, cleanPhone } = getCleanDisplayContact(chat);
+                        return (
+                          <tr key={chat.jid} className="hover:bg-purple-50/30 transition-colors">
+                            <td className="p-3 text-gray-400 font-mono font-bold">{idx + 1}</td>
+                            <td className="p-3 font-extrabold text-black">{displayName}</td>
+                            <td className="p-3 font-extrabold text-[#00a884]">📞 {formattedPhone}</td>
+                            <td className="p-3 text-center">
+                              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-purple-100 text-purple-800">
+                                Interested
+                              </span>
+                            </td>
+                            <td className="p-3 text-gray-600 truncate max-w-[150px]">{chat.notes || chat.notesList?.[0] || '—'}</td>
+                            <td className="p-3 text-right">
+                              <button
+                                onClick={() => { setShowInterestedModal(false); handleOpenSpecificChat(cleanPhone); }}
+                                className="px-3 py-1 bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs rounded-lg transition-all shadow-sm"
+                              >
+                                Chat ↗
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+            {/* Footer */}
+            <div className="px-6 py-3 border-t border-gray-200 bg-gray-50 flex justify-end">
+              <button onClick={() => setShowInterestedModal(false)} className="px-5 py-2 bg-black hover:bg-zinc-800 text-white font-bold text-xs rounded-xl transition-all shadow-sm">
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── FOLLOW-UPS SCHEDULED POPUP MODAL (ALL FUTURE) ── */}
+      {showScheduledModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[9999] flex items-center justify-center p-4 text-black font-sans">
+          <div className="bg-white w-full max-w-3xl rounded-2xl shadow-2xl border border-gray-200 flex flex-col max-h-[85vh] overflow-hidden animate-in fade-in zoom-in duration-150">
+            {/* Header */}
+            <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between bg-indigo-50/80">
+              <div>
+                <h3 className="text-lg font-black text-indigo-950 flex items-center gap-2">
+                  <Calendar className="w-5 h-5 text-indigo-600" />
+                  Follow-ups Scheduled ({scheduledFollowupChatsList.length})
+                </h3>
+                <p className="text-xs font-semibold text-indigo-700 mt-0.5">All contacts scheduled for future follow-up dates</p>
+              </div>
+              <button onClick={() => setShowScheduledModal(false)} className="w-8 h-8 rounded-full bg-white hover:bg-gray-200 flex items-center justify-center text-gray-700 transition-all border border-gray-200 shadow-sm">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            {/* Table Body */}
+            <div className="overflow-y-auto flex-1 p-6">
+              {scheduledFollowupChatsList.length === 0 ? (
+                <div className="p-12 text-center text-xs text-gray-400 font-semibold bg-gray-50 rounded-xl border border-gray-200">
+                  No scheduled follow-up contacts found.
+                </div>
+              ) : (
+                <div className="border border-gray-200 rounded-xl overflow-hidden">
+                  <table className="w-full text-left border-collapse text-xs">
+                    <thead>
+                      <tr className="bg-gray-100 text-gray-700 font-extrabold border-b border-gray-200 uppercase tracking-wider">
+                        <th className="p-3">#</th>
+                        <th className="p-3">Contact Name</th>
+                        <th className="p-3">Phone</th>
+                        <th className="p-3 font-extrabold text-indigo-700">Follow-up Date</th>
+                        <th className="p-3">Note</th>
+                        <th className="p-3 text-right">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-200 bg-white font-medium">
+                      {scheduledFollowupChatsList.map((chat, idx) => {
+                        const { displayName, formattedPhone, cleanPhone } = getCleanDisplayContact(chat);
+                        return (
+                          <tr key={chat.jid} className="hover:bg-indigo-50/30 transition-colors">
+                            <td className="p-3 text-gray-400 font-mono font-bold">{idx + 1}</td>
+                            <td className="p-3 font-extrabold text-black">{displayName}</td>
+                            <td className="p-3 font-extrabold text-[#00a884]">📞 {formattedPhone}</td>
+                            <td className="p-3 font-extrabold text-indigo-800 bg-indigo-50/80 rounded">📅 {chat.followUpDate || '—'}</td>
+                            <td className="p-3 text-gray-600 truncate max-w-[150px]">{chat.notes || chat.notesList?.[0] || '—'}</td>
+                            <td className="p-3 text-right">
+                              <button
+                                onClick={() => { setShowScheduledModal(false); handleOpenSpecificChat(cleanPhone); }}
+                                className="px-3 py-1 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-lg transition-all shadow-sm"
+                              >
+                                Chat ↗
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+            {/* Footer */}
+            <div className="px-6 py-3 border-t border-gray-200 bg-gray-50 flex justify-end">
+              <button onClick={() => setShowScheduledModal(false)} className="px-5 py-2 bg-black hover:bg-zinc-800 text-white font-bold text-xs rounded-xl transition-all shadow-sm">
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── FOLLOW-UPS TODAY POPUP MODAL ── */}
+      {showFollowupsTodayModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[9999] flex items-center justify-center p-4 text-black font-sans">
+          <div className="bg-white w-full max-w-3xl rounded-2xl shadow-2xl border border-gray-200 flex flex-col max-h-[85vh] overflow-hidden animate-in fade-in zoom-in duration-150">
+            {/* Header */}
+            <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between bg-amber-50/60">
+              <div>
+                <h3 className="text-lg font-black text-amber-950 flex items-center gap-2">
+                  <Calendar className="w-5 h-5 text-amber-600" />
+                  Follow-ups Today ({followupTodayChatsList.length})
+                </h3>
+                <p className="text-xs font-semibold text-amber-700 mt-0.5">Contacts scheduled for follow-up today ({todayLocalStr})</p>
+              </div>
+              <button onClick={() => setShowFollowupsTodayModal(false)} className="w-8 h-8 rounded-full bg-white hover:bg-gray-200 flex items-center justify-center text-gray-700 transition-all border border-gray-200 shadow-sm">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            {/* Table Body */}
+            <div className="overflow-y-auto flex-1 p-6">
+              {followupTodayChatsList.length === 0 ? (
+                <div className="p-12 text-center text-xs text-gray-400 font-semibold bg-gray-50 rounded-xl border border-gray-200">
+                  No scheduled follow-up contacts found for today ({todayLocalStr}).
+                </div>
+              ) : (
+                <div className="border border-gray-200 rounded-xl overflow-hidden">
+                  <table className="w-full text-left border-collapse text-xs">
+                    <thead>
+                      <tr className="bg-gray-100 text-gray-700 font-extrabold border-b border-gray-200 uppercase tracking-wider">
+                        <th className="p-3">#</th>
+                        <th className="p-3">Contact Name</th>
+                        <th className="p-3">Phone</th>
+                        <th className="p-3 font-extrabold text-amber-700">Follow-up Date</th>
+                        <th className="p-3">Note</th>
+                        <th className="p-3 text-right">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-200 bg-white font-medium">
+                      {followupTodayChatsList.map((chat, idx) => {
+                        const { displayName, formattedPhone, cleanPhone } = getCleanDisplayContact(chat);
+                        return (
+                          <tr key={chat.jid} className="hover:bg-amber-50/30 transition-colors">
+                            <td className="p-3 text-gray-400 font-mono font-bold">{idx + 1}</td>
+                            <td className="p-3 font-extrabold text-black">{displayName}</td>
+                            <td className="p-3 font-extrabold text-[#00a884]">📞 {formattedPhone}</td>
+                            <td className="p-3 font-extrabold text-amber-800 bg-amber-50/80 rounded">📅 {chat.followUpDate || '—'}</td>
+                            <td className="p-3 text-gray-600 truncate max-w-[150px]">{chat.notes || chat.notesList?.[0] || '—'}</td>
+                            <td className="p-3 text-right">
+                              <button
+                                onClick={() => { setShowFollowupsTodayModal(false); handleOpenSpecificChat(cleanPhone); }}
+                                className="px-3 py-1 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs rounded-lg transition-all shadow-sm"
+                              >
+                                Chat ↗
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+            {/* Footer */}
+            <div className="px-6 py-3 border-t border-gray-200 bg-gray-50 flex justify-end">
+              <button onClick={() => setShowFollowupsTodayModal(false)} className="px-5 py-2 bg-black hover:bg-zinc-800 text-white font-bold text-xs rounded-xl transition-all shadow-sm">
+                Close
+              </button>
             </div>
           </div>
         </div>

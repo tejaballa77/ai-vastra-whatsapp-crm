@@ -372,7 +372,7 @@ function detectActiveContact(force = false) {
       activeFormData = { leadStatus: 'UNASSIGNED', callStatus: null, followUpDate: '', notesList: [] };
       fetchCrmMetadata(contactKey, displayTitle, domAvatar);
 
-      // Auto-persist detected profile name to backend & local cache so page reloads load it instantly!
+      // Auto-persist detected profile name to local name cache so page reloads load it instantly!
       if (profileName) {
         const cleanP = cleanDigits;
         const tenP = (cleanP.length === 12 && cleanP.startsWith('91')) ? cleanP.slice(2) : cleanP;
@@ -382,10 +382,6 @@ function detectActiveContact(force = false) {
           cache[tenP] = profileName;
           safeStorageSet({ crm_name_cache: cache });
         });
-        const meta = { ...activeFormData, name: profileName, phone: cleanDigits };
-        if (cleanP) chatsMetadataMap[cleanP] = meta;
-        if (tenP) chatsMetadataMap[tenP] = meta;
-        setTimeout(() => saveCrmMetadata(), 400);
       }
     }
   } catch (e) {}

@@ -1422,17 +1422,6 @@ export function ColdCallsModule({
             {/* Body */}
             <div className="overflow-y-auto flex-1 p-6 space-y-6 font-sans">
 
-              {/* ── Follow-up Date ────────────────────────────────────────── */}
-              <div>
-                <label className="text-xs font-black text-black uppercase tracking-wider block mb-2">Follow-up Date</label>
-                <input
-                  type="date"
-                  value={normalizeDateStr(notePopupLead.followUpDate || '')}
-                  onChange={e => handlePopupFieldEdit('followUpDate', e.target.value)}
-                  className="w-full px-4 py-2.5 text-xs font-bold rounded-xl border border-gray-300 bg-gray-50 focus:bg-white focus:border-black focus:outline-none transition-all"
-                />
-              </div>
-
               {/* ── Notes Section ─────────────────────────────────────────── */}
               <div className="space-y-3">
                 <label className="text-xs font-black text-black uppercase tracking-wider block">Notes</label>

@@ -22,6 +22,14 @@ function safeStorageSet(obj) {
   } catch (e) {}
 }
 
+function safeStorageRemove(keys) {
+  try {
+    if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+      chrome.storage.local.remove(keys);
+    }
+  } catch (e) {}
+}
+
 function safeSendMessage(msg, callback) {
   try {
     if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.sendMessage) {
@@ -559,13 +567,18 @@ function renderCrmPanel(displayName, cleanPhone, avatarUrl, showSaveToast = fals
         <span style="color:#00a884;font-size:16px;">⚡</span>
         <span>Contact Info</span>
       </div>
-      <div style="display:flex;align-items:center;">
+      <div style="display:flex;align-items:center;gap:8px;">
+        <button id="aivastra-clear-btn" class="aivastra-clear-btn" title="Clear all CRM data for this contact" style="
+          background:#fee2e2;color:#dc2626;border:1px solid #fecaca;
+          border-radius:6px;padding:3px 8px;font-size:11px;font-weight:700;
+          cursor:pointer;display:flex;align-items:center;gap:3px;
+        ">🧹 Clear</button>
         <button id="aivastra-close-btn" class="aivastra-close-btn">✕</button>
       </div>
     </div>
 
-    <div id="aivastra-save-toast" class="aivastra-toast" style="display:${showSaveToast ? 'block' : 'none'};">
-      ✓ Contact info saved successfully!
+    <div id="aivastra-save-toast" class="aivastra-toast" style="display:${showSaveToast ? 'block' : 'none'};background:${showSaveToast === 'CLEARED' ? '#ef4444' : '#00a884'};">
+      ${showSaveToast === 'CLEARED' ? '🗑️ Contact CRM data cleared!' : '✓ Contact info saved successfully!'}
     </div>
 
     <div class="aivastra-body">
@@ -632,6 +645,57 @@ function renderCrmPanel(displayName, cleanPhone, avatarUrl, showSaveToast = fals
     isPanelVisible = false;
     panel.style.display = 'none';
   };
+
+  document.getElementById('aivastra-clear-btn').onclick = () => {
+    let cleanDigits = (activePhoneClean || activeContactKey).replace(/\D/g, '');
+    const tenDigit = (cleanDigits.length === 12 && cleanDigits.startsWith('91')) ? cleanDigits.slice(2) : cleanDigits;
+    if (cleanDigits.length === 10) cleanDigits = '91' + cleanDigits;
+
+    const targetJid = cleanDigits.length >= 10
+      ? `${cleanDigits}@s.whatsapp.net`
+      : `${activeContactKey}@s.whatsapp.net`;
+
+    // 1. Reset in-memory form data
+    activeFormData = {
+      leadStatus: 'UNASSIGNED',
+      callStatus: null,
+      followUpDate: '',
+      notesList: []
+    };
+
+    // 2. Remove from local storage cache
+    const keysToRemove = [`crm_meta_${cleanDigits}`, `crm_meta_${tenDigit}`, `crm_meta_${activeContactKey}`];
+    if (activePhoneClean) keysToRemove.push(`crm_meta_${activePhoneClean}`);
+    if (activeDisplayName) keysToRemove.push(`crm_meta_${activeDisplayName}`);
+    safeStorageRemove(keysToRemove);
+
+    // 3. Remove from memory metadata map
+    delete chatsMetadataMap[cleanDigits];
+    delete chatsMetadataMap[tenDigit];
+    delete chatsMetadataMap[activePhoneClean];
+    delete chatsMetadataMap[activeDisplayName];
+    delete chatsMetadataMap[activeContactKey];
+
+    // 4. Send clear update to CRM backend
+    const payload = {
+      name: activeDisplayName || cleanDigits,
+      phone: cleanDigits || activeContactKey,
+      leadStatus: 'UNASSIGNED',
+      callStatus: undefined,
+      followUpDate: '',
+      notes: '',
+      notesList: []
+    };
+
+    safeSendMessage({ action: 'UPDATE_CRM_METADATA', jid: targetJid, data: payload }, (response) => {
+      console.log('[AI Vastra Extension] Clear response:', response);
+    });
+
+    // 5. Update UI
+    injectChatListBadges();
+    renderCrmPanel(displayName, cleanPhone, avatarUrl, 'CLEARED');
+  };
+
   document.getElementById('btn-call-yes').onclick = () => { activeFormData.callStatus = 'YES'; renderCrmPanel(displayName, cleanPhone, avatarUrl); };
   document.getElementById('btn-call-no').onclick = () => { activeFormData.callStatus = 'NO'; renderCrmPanel(displayName, cleanPhone, avatarUrl); };
   document.getElementById('btn-interested').onclick = () => { activeFormData.leadStatus = 'INTERESTED'; renderCrmPanel(displayName, cleanPhone, avatarUrl); };

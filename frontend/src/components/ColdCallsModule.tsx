@@ -191,15 +191,22 @@ export function ColdCallsModule({
   const [deleteConfirmLead, setDeleteConfirmLead] = useState<ColdCallLead | null>(null);
 
   const handleConfirmRemoveCall = (lead: ColdCallLead) => {
-    const clearedLeadPartial: Partial<ColdCallLead> = {
+    const clearedLeadPartial = {
+      callChoice: null,
+      callStatus: 'PENDING',
+      calledBy: null,
+      callTimestamp: null,
+      callOutcome: null,
+    };
+
+    setLeads(prev => prev.map(l => l.id === lead.id ? {
+      ...l,
       callChoice: undefined,
       callStatus: 'PENDING',
       calledBy: undefined,
       callTimestamp: undefined,
       callOutcome: undefined,
-    };
-
-    setLeads(prev => prev.map(l => l.id === lead.id ? { ...l, ...clearedLeadPartial } : l));
+    } : l));
 
     fetch(`${getBackendUrl()}/api/cold-calls/${lead.id}`, {
       method: 'PUT',

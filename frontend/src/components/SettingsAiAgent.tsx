@@ -316,29 +316,7 @@ export function SettingsAiAgent() {
         </div>
       </div>
 
-      {/* Active Logged-In CRM Users Card */}
-      <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm space-y-3">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2.5 text-[#111b21] font-bold text-sm">
-            <User className="w-5 h-5 text-[#00a884]" />
-            <span>Active Logged-In CRM Users</span>
-          </div>
-          <span className="px-3.5 py-1 bg-[#00a884] text-white text-xs font-black rounded-full">
-            {activeUsersList.length} Active User{activeUsersList.length === 1 ? '' : 's'}
-          </span>
-        </div>
-        <p className="text-xs text-gray-500 font-medium">
-          Team members currently logged into the CRM session or actively logging call entries.
-        </p>
-        <div className="flex items-center gap-2 flex-wrap pt-1">
-          {activeUsersList.map((usr, i) => (
-            <span key={i} className="px-3.5 py-1.5 bg-emerald-50 border border-emerald-200 rounded-xl text-xs font-bold text-emerald-900 flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-              <span>👤 {usr}</span>
-            </span>
-          ))}
-        </div>
-      </div>
+
 
       {/* OpenAI API Key Section */}
       <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm space-y-4">

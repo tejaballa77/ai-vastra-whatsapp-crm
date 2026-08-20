@@ -928,12 +928,13 @@ class StorageEngine {
     const updated: ColdCallLead = {
       ...existing,
       ...partial,
-      // Preserve notesList array type (NoteEntry[])
+      callChoice: (partial.callChoice === null || (partial.callChoice as any) === '') ? undefined : (partial.callChoice !== undefined ? partial.callChoice : existing.callChoice),
+      callStatus: partial.callStatus || (partial.callChoice === null ? 'PENDING' : existing.callStatus || 'PENDING'),
+      calledBy: partial.calledBy === null || partial.calledBy === '' ? undefined : (partial.calledBy !== undefined ? partial.calledBy : existing.calledBy),
+      callTimestamp: partial.callTimestamp === null ? undefined : (partial.callTimestamp !== undefined ? partial.callTimestamp : existing.callTimestamp),
+      callOutcome: partial.callOutcome === null || partial.callOutcome === '' ? undefined : (partial.callOutcome !== undefined ? partial.callOutcome : existing.callOutcome),
       notesList: partial.notesList !== undefined ? (partial.notesList as NoteEntry[]) : existing.notesList,
       customFields: partial.customFields ? { ...existing.customFields, ...partial.customFields } : existing.customFields,
-      calledBy: partial.calledBy !== undefined ? partial.calledBy : existing.calledBy,
-      callTimestamp: partial.callTimestamp !== undefined ? partial.callTimestamp : now,
-      callOutcome: partial.callOutcome !== undefined ? partial.callOutcome : existing.callOutcome,
       updatedAt: now,
     };
 

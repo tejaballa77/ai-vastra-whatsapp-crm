@@ -543,18 +543,29 @@ export function ColdCallsModule({
     return true;
   });
 
-  // DYNAMIC SORT:
-  // 1. Leads with existing notes float to the TOP!
-  // 2. Within rows with notes (or without notes), sort by updatedAt descending!
+  // DYNAMIC SPREADSHEET SORTING:
+  // 1. Worked / Logged leads (where status/call choice/notes/calledBy are entered) float to the VERY TOP!
+  // 2. Newly uploaded file rows float right below worked leads!
+  // 3. Older uncalled leads float at the bottom!
   const sortedLeads = [...filteredLeads].sort((a, b) => {
-    const hasNotesA = Boolean(a.note || (a.notesList && a.notesList.length > 0));
-    const hasNotesB = Boolean(b.note || (b.notesList && b.notesList.length > 0));
-    if (hasNotesA && !hasNotesB) return -1;
-    if (!hasNotesA && hasNotesB) return 1;
+    const aWorked = (a.callChoice === 'YES' || a.callChoice === 'NO' || (Boolean(a.callStatus) && a.callStatus !== 'PENDING') || (Boolean(a.calledBy) && a.calledBy !== 'Staff' && a.calledBy !== 'Executive User') || Boolean(a.note) || (a.notesList && a.notesList.length > 0));
+    const bWorked = (b.callChoice === 'YES' || b.callChoice === 'NO' || (Boolean(b.callStatus) && b.callStatus !== 'PENDING') || (Boolean(b.calledBy) && b.calledBy !== 'Staff' && b.calledBy !== 'Executive User') || Boolean(b.note) || (b.notesList && b.notesList.length > 0));
 
-    const timeA = typeof a.updatedAt === 'number' ? a.updatedAt : (a.updatedAt ? new Date(a.updatedAt).getTime() : (a.createdAt || 0));
-    const timeB = typeof b.updatedAt === 'number' ? b.updatedAt : (b.updatedAt ? new Date(b.updatedAt).getTime() : (b.createdAt || 0));
-    return timeB - timeA;
+    // Priority 1: Worked / Logged leads come FIRST at the top!
+    if (aWorked && !bWorked) return -1;
+    if (!aWorked && bWorked) return 1;
+
+    // If both are worked, sort by most recent activity timestamp descending
+    if (aWorked && bWorked) {
+      const timeA = typeof a.callTimestamp === 'number' ? a.callTimestamp : (typeof a.updatedAt === 'number' ? a.updatedAt : (a.updatedAt ? new Date(a.updatedAt).getTime() : (a.createdAt || 0)));
+      const timeB = typeof b.callTimestamp === 'number' ? b.callTimestamp : (typeof b.updatedAt === 'number' ? b.updatedAt : (b.updatedAt ? new Date(b.updatedAt).getTime() : (b.createdAt || 0)));
+      return timeB - timeA;
+    }
+
+    // Priority 2: Uncalled leads — newly uploaded file rows appear on top of older uncalled file rows!
+    const createdA = typeof a.createdAt === 'number' ? a.createdAt : (a.createdAt ? new Date(a.createdAt).getTime() : 0);
+    const createdB = typeof b.createdAt === 'number' ? b.createdAt : (b.createdAt ? new Date(b.createdAt).getTime() : 0);
+    return createdB - createdA;
   });
 
   // Calculate Today's Scheduled Follow-ups

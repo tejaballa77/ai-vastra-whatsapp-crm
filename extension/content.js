@@ -333,10 +333,16 @@ function detectActiveContact(force = false) {
     }
 
     const cleanDigits = targetTitle.replace(/\D/g, '');
+    const tenDigit = (cleanDigits.length === 12 && cleanDigits.startsWith('91')) ? cleanDigits.slice(2) : cleanDigits;
     const contactKey = cleanDigits.length >= 10 ? cleanDigits : targetTitle;
 
-    // Detect WhatsApp profile name (~Parth) from DOM
-    const profileName = extractProfileNameFromDom();
+    // Retrieve locked cached profile name so closing WhatsApp contact info drawer does not lose the name
+    const existingMeta = chatsMetadataMap[cleanDigits] || chatsMetadataMap[contactKey] || chatsMetadataMap[tenDigit];
+    const badNames = ['.', 'contact', 'unsaved contact', 'unknown contact', 'whatsapp contact', ''];
+    const cachedName = existingMeta?.name && !badNames.includes(existingMeta.name.toLowerCase().trim()) && existingMeta.name.replace(/\D/g, '').length < 10 ? existingMeta.name : null;
+
+    // Detect WhatsApp profile name (~Parth) from DOM or fallback to locked cache
+    const profileName = extractProfileNameFromDom() || cachedName;
     let displayTitle = targetTitle;
     if (cleanDigits.length >= 10 && profileName) {
       displayTitle = profileName;

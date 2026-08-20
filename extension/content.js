@@ -107,44 +107,57 @@ function ensureHeaderButton() {
 
 // Sync all saved CRM chats from backend into chatsMetadataMap
 function syncAllCrmChats(callback) {
-  safeSendMessage({ action: 'FETCH_ALL_CRM_CHATS' }, (response) => {
-    if (response && response.success && Array.isArray(response.chats)) {
-      for (const c of response.chats) {
-        const hasInfo = Boolean(
-          (c.leadStatus && c.leadStatus !== 'UNASSIGNED') ||
-          c.callStatus === 'YES' ||
-          Boolean(c.followUpDate && c.followUpDate.trim().length > 0) ||
-          (c.notesList && c.notesList.length > 0) ||
-          Boolean(c.notes && c.notes.trim().length > 0)
-        );
-
-        const rawNum = (c.phone || c.jid || '').split('@')[0].replace(/\D/g, '');
-        const tenDigit = (rawNum.length === 12 && rawNum.startsWith('91')) ? rawNum.slice(2) : rawNum;
-
-        if (hasInfo) {
-          const meta = {
-            leadStatus: c.leadStatus || 'UNASSIGNED',
-            callStatus: c.callStatus || null,
-            followUpDate: c.followUpDate || '',
-            notesList: c.notesList || (c.notes ? [c.notes] : []),
-            name: c.name,
-            phone: c.phone || tenDigit
-          };
-          if (tenDigit) chatsMetadataMap[tenDigit] = meta;
-          if (rawNum) chatsMetadataMap[rawNum] = meta;
-          if (c.jid) chatsMetadataMap[c.jid] = meta;
-          if (c.name) chatsMetadataMap[c.name.trim()] = meta;
-        } else {
-          // If cleared, remove from metadata map
-          if (tenDigit) delete chatsMetadataMap[tenDigit];
-          if (rawNum) delete chatsMetadataMap[rawNum];
-          if (c.jid) delete chatsMetadataMap[c.jid];
-          if (c.name) delete chatsMetadataMap[c.name.trim()];
-        }
+  // First load locally cached names instantly
+  safeStorageGet(['crm_name_cache'], (res) => {
+    const localCache = res?.crm_name_cache || {};
+    for (const [phoneKey, cachedName] of Object.entries(localCache)) {
+      if (cachedName && phoneKey) {
+        const cleanK = phoneKey.replace(/\D/g, '');
+        const tenK = (cleanK.length === 12 && cleanK.startsWith('91')) ? cleanK.slice(2) : cleanK;
+        const entry = { ...(chatsMetadataMap[cleanK] || chatsMetadataMap[tenK] || { leadStatus: 'UNASSIGNED', callStatus: null, followUpDate: '', notesList: [] }), name: cachedName, phone: cleanK };
+        if (cleanK) chatsMetadataMap[cleanK] = entry;
+        if (tenK) chatsMetadataMap[tenK] = entry;
       }
     }
-    if (callback) callback();
-    injectChatListBadges();
+
+    safeSendMessage({ action: 'FETCH_ALL_CRM_CHATS' }, (response) => {
+      if (response && response.success && Array.isArray(response.chats)) {
+        for (const c of response.chats) {
+          const rawNum = (c.phone || c.jid || '').split('@')[0].replace(/\D/g, '');
+          const tenDigit = (rawNum.length === 12 && rawNum.startsWith('91')) ? rawNum.slice(2) : rawNum;
+
+          const badNames = ['.', 'contact', 'unsaved contact', 'unknown contact', 'whatsapp contact', ''];
+          const hasValidName = Boolean(c.name && c.name.trim() && !badNames.includes(c.name.trim().toLowerCase()) && c.name.trim().replace(/\D/g, '').length < 10);
+
+          const hasInfo = Boolean(
+            hasValidName ||
+            (c.leadStatus && c.leadStatus !== 'UNASSIGNED') ||
+            c.callStatus === 'YES' ||
+            Boolean(c.followUpDate && c.followUpDate.trim().length > 0) ||
+            (c.notesList && c.notesList.length > 0) ||
+            Boolean(c.notes && c.notes.trim().length > 0)
+          );
+
+          if (hasInfo || hasValidName) {
+            const existingMeta = chatsMetadataMap[tenDigit] || chatsMetadataMap[rawNum] || {};
+            const meta = {
+              leadStatus: c.leadStatus || existingMeta.leadStatus || 'UNASSIGNED',
+              callStatus: c.callStatus || existingMeta.callStatus || null,
+              followUpDate: c.followUpDate || existingMeta.followUpDate || '',
+              notesList: c.notesList || existingMeta.notesList || (c.notes ? [c.notes] : []),
+              name: (hasValidName ? c.name : existingMeta.name),
+              phone: c.phone || tenDigit
+            };
+            if (tenDigit) chatsMetadataMap[tenDigit] = meta;
+            if (rawNum) chatsMetadataMap[rawNum] = meta;
+            if (c.jid) chatsMetadataMap[c.jid] = meta;
+            if (c.name && hasValidName) chatsMetadataMap[c.name.trim()] = meta;
+          }
+        }
+      }
+      if (callback) callback();
+      injectChatListBadges();
+    });
   });
 }
 
@@ -171,8 +184,9 @@ function injectChatListBadges() {
         }
       }
 
+      const tenDigit = (cleanDigits.length === 12 && cleanDigits.startsWith('91')) ? cleanDigits.slice(2) : cleanDigits;
       const key = cleanDigits.length >= 10 ? cleanDigits : rawText;
-      const chatMeta = chatsMetadataMap[key] || chatsMetadataMap[rawText] || chatsMetadataMap[cleanDigits];
+      const chatMeta = chatsMetadataMap[key] || chatsMetadataMap[rawText] || chatsMetadataMap[cleanDigits] || chatsMetadataMap[tenDigit];
 
       // Replace raw phone number in left sidebar with detected profile name if available
       const targetName = chatMeta?.name || (key === activeContactKey && activeDisplayName && activeDisplayName !== activePhoneClean ? activeDisplayName : null);
@@ -302,9 +316,20 @@ function detectActiveContact(force = false) {
       activeFormData = { leadStatus: 'UNASSIGNED', callStatus: null, followUpDate: '', notesList: [] };
       fetchCrmMetadata(contactKey, displayTitle, domAvatar);
 
-      // Auto-persist detected profile name to backend so page reloads load it instantly!
+      // Auto-persist detected profile name to backend & local cache so page reloads load it instantly!
       if (profileName) {
-        setTimeout(() => saveCrmMetadata(), 600);
+        const cleanP = cleanDigits;
+        const tenP = (cleanP.length === 12 && cleanP.startsWith('91')) ? cleanP.slice(2) : cleanP;
+        safeStorageGet(['crm_name_cache'], (res) => {
+          const cache = res?.crm_name_cache || {};
+          cache[cleanP] = profileName;
+          cache[tenP] = profileName;
+          safeStorageSet({ crm_name_cache: cache });
+        });
+        const meta = { ...activeFormData, name: profileName, phone: cleanDigits };
+        if (cleanP) chatsMetadataMap[cleanP] = meta;
+        if (tenP) chatsMetadataMap[tenP] = meta;
+        setTimeout(() => saveCrmMetadata(), 400);
       }
     }
   } catch (e) {}

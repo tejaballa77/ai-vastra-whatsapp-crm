@@ -47,14 +47,36 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
   if (request.action === 'UPDATE_CRM_METADATA') {
     getApiUrl().then((baseUrl) => {
-      fetch(`${baseUrl}/api/crm/contact/${encodeURIComponent(request.jid)}`, {
-        method: 'PUT',
+      const payload = {
+        jid: request.jid,
+        ...(request.data || {})
+      };
+      console.log('[AI Vastra Extension BG] Sending CRM update:', payload);
+
+      fetch(`${baseUrl}/api/crm/contact`, {
+        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(request.data)
+        body: JSON.stringify(payload)
       })
         .then((res) => res.json())
-        .then((data) => sendResponse({ success: true, data }))
-        .catch((err) => sendResponse({ success: false, error: err.message }));
+        .then((data) => {
+          console.log('[AI Vastra Extension BG] Update response:', data);
+          sendResponse({ success: true, data });
+        })
+        .catch((err) => {
+          console.warn('[AI Vastra Extension BG] POST failed, trying PUT fallback:', err.message);
+          fetch(`${baseUrl}/api/crm/contact/${encodeURIComponent(request.jid)}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(request.data)
+          })
+            .then((res) => res.json())
+            .then((data) => sendResponse({ success: true, data }))
+            .catch((fallbackErr) => {
+              console.error('[AI Vastra Extension BG] All update attempts failed:', fallbackErr.message);
+              sendResponse({ success: false, error: fallbackErr.message });
+            });
+        });
     });
     return true;
   }
@@ -63,7 +85,8 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 function getApiUrl() {
   return new Promise((resolve) => {
     chrome.storage.sync.get(['apiUrl'], (result) => {
-      resolve(result.apiUrl || DEFAULT_API_URL);
+      const customUrl = (result?.apiUrl || '').trim().replace(/\/$/, '');
+      resolve(customUrl || DEFAULT_API_URL);
     });
   });
 }

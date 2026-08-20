@@ -136,11 +136,17 @@ app.post('/api/messages/send', async (req, res) => {
 });
 
 // 7. Update CRM metadata (Lead Status, Call Status, Follow-up date, Notes, Tags)
-app.put('/api/crm/contact/:jid', (req, res) => {
-  const { jid } = req.params;
+const handleCrmUpdate = (req: express.Request, res: express.Response) => {
+  const bodyJid = req.body.jid;
+  const paramJid = req.params.jid;
   const { name, phone, leadStatus, callStatus, followUpDate, notes, notesList, tags } = req.body;
+  const targetJid = paramJid || bodyJid || (phone ? `${phone}@s.whatsapp.net` : '');
 
-  const updatedChat = db.updateCrmMetadata(jid, {
+  if (!targetJid) {
+    return res.status(400).json({ success: false, error: 'Missing contact identifier or phone number' });
+  }
+
+  const updatedChat = db.updateCrmMetadata(targetJid, {
     name,
     phone,
     leadStatus,
@@ -155,7 +161,11 @@ app.put('/api/crm/contact/:jid', (req, res) => {
   io.emit('chats_updated', db.getAllChatsSorted());
 
   res.json({ success: true, chat: updatedChat });
-});
+};
+
+app.post('/api/crm/contact', handleCrmUpdate);
+app.put('/api/crm/contact', handleCrmUpdate);
+app.put('/api/crm/contact/:jid', handleCrmUpdate);
 
 // 8. Import address book contacts (VCF / CSV / JSON)
 app.post('/api/contacts/import', (req, res) => {

@@ -668,8 +668,8 @@ export function WhatsAppCrmModule() {
                         const { displayName, formattedPhone, cleanPhone } = getCleanDisplayContact(chat);
 
                         return (
-                          <tr key={chat.jid} className="hover:bg-zinc-50 transition-colors">
-                            <td className="p-4">
+                          <tr key={chat.jid} className="hover:bg-zinc-50 transition-colors border-b border-zinc-100">
+                            <td className="p-4 align-middle">
                               <div className="font-extrabold text-black text-base">{displayName}</div>
                               <div className="text-zinc-600 font-semibold text-xs flex items-center gap-1.5 mt-1">
                                 <span>📞 {formattedPhone}</span>
@@ -687,19 +687,19 @@ export function WhatsAppCrmModule() {
                               </div>
                             </td>
 
-                            <td className="p-4">
+                            <td className="p-4 align-middle">
                               {chat.leadStatus === 'INTERESTED' && (
-                                <span className="px-3 py-1 text-xs font-extrabold bg-black text-white rounded-md">
+                                <span className="px-3 py-1 text-xs font-extrabold bg-black text-white rounded-md inline-block">
                                   Interested
                                 </span>
                               )}
                               {chat.leadStatus === 'WARM_INTERESTED' && (
-                                <span className="px-3 py-1 text-xs font-extrabold bg-zinc-800 text-white rounded-md">
+                                <span className="px-3 py-1 text-xs font-extrabold bg-zinc-800 text-white rounded-md inline-block">
                                   Warm
                                 </span>
                               )}
                               {chat.leadStatus === 'NOT_INTERESTED' && (
-                                <span className="px-3 py-1 text-xs font-extrabold bg-zinc-200 text-zinc-800 rounded-md">
+                                <span className="px-3 py-1 text-xs font-extrabold bg-zinc-200 text-zinc-800 rounded-md inline-block">
                                   Not Interested
                                 </span>
                               )}
@@ -708,7 +708,7 @@ export function WhatsAppCrmModule() {
                               )}
                             </td>
 
-                            <td className="p-4 align-top">
+                            <td className="p-4 align-middle">
                               {chat.callStatus === 'YES' ? (
                                 <span className="px-3 py-1 text-xs font-extrabold bg-black text-white rounded-md inline-block">
                                   Yes
@@ -720,7 +720,7 @@ export function WhatsAppCrmModule() {
                               )}
                             </td>
 
-                            <td className="p-4 align-top">
+                            <td className="p-4 align-middle">
                               {chat.followUpDate ? (
                                 <span className="px-3 py-1 text-xs font-extrabold bg-zinc-100 text-black border border-black rounded-md flex items-center gap-1 w-max">
                                   📅 {chat.followUpDate}
@@ -730,7 +730,7 @@ export function WhatsAppCrmModule() {
                               )}
                             </td>
 
-                            <td className="p-4 min-w-[280px] max-w-md align-top">
+                            <td className="p-4 min-w-[280px] max-w-md align-middle">
                               {(() => {
                                 const allNotes: string[] = [];
                                 if (chat.notesList && Array.isArray(chat.notesList) && chat.notesList.length > 0) {
@@ -747,10 +747,10 @@ export function WhatsAppCrmModule() {
                                 }
 
                                 return (
-                                  <div className="space-y-2 py-0.5">
+                                  <div className="space-y-1.5 py-1">
                                     {allNotes.map((noteText, nIdx) => (
                                       <div key={nIdx} className="text-sm font-medium text-zinc-900 leading-relaxed break-words whitespace-pre-wrap">
-                                        <span className="font-extrabold text-black mr-1.5">{nIdx + 1}.</span>
+                                        <span className="font-extrabold text-black mr-1">{nIdx + 1}.</span>
                                         <span className="italic">"{noteText}"</span>
                                       </div>
                                     ))}
@@ -759,7 +759,7 @@ export function WhatsAppCrmModule() {
                               })()}
                             </td>
 
-                            <td className="p-4 text-right">
+                            <td className="p-4 text-right align-middle">
                               <button
                                 onClick={() => handleOpenSpecificChat(chat.phone || chat.jid)}
                                 className="px-4 py-2 bg-black hover:bg-zinc-800 text-white font-bold text-xs rounded-xl transition-all inline-flex items-center gap-1.5 shadow-sm active:scale-95"

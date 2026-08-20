@@ -159,16 +159,28 @@ function injectChatListBadges() {
       const titleEl = item.querySelector('span[title]') || item.querySelector('span[dir="auto"]');
       if (!titleEl) return;
 
-      const rawTitle = (titleEl.getAttribute('title') || titleEl.textContent || '').trim();
-      const cleanDigits = rawTitle.replace(/\D/g, '');
-      const key = cleanDigits.length >= 10 ? cleanDigits : rawTitle;
+      // Preserve clean phone number in custom attribute data-aivastra-phone
+      let cleanDigits = item.getAttribute('data-aivastra-phone') || '';
+      const rawText = (titleEl.getAttribute('title') || titleEl.textContent || '').trim();
 
-      const chatMeta = chatsMetadataMap[key] || chatsMetadataMap[rawTitle] || chatsMetadataMap[cleanDigits];
+      if (!cleanDigits) {
+        const parsed = rawText.replace(/\D/g, '');
+        if (parsed.length >= 10) {
+          cleanDigits = parsed;
+          item.setAttribute('data-aivastra-phone', cleanDigits);
+        }
+      }
 
-      // Update name in left sidebar if we have a detected profile name for an unsaved phone number
-      if (chatMeta && chatMeta.name && cleanDigits.length >= 10 && rawTitle.replace(/\D/g, '') === cleanDigits) {
-        if (titleEl.textContent !== chatMeta.name) {
-          titleEl.textContent = chatMeta.name;
+      const key = cleanDigits.length >= 10 ? cleanDigits : rawText;
+      const chatMeta = chatsMetadataMap[key] || chatsMetadataMap[rawText] || chatsMetadataMap[cleanDigits];
+
+      // Replace raw phone number in left sidebar with detected profile name if available
+      const targetName = chatMeta?.name || (key === activeContactKey && activeDisplayName && activeDisplayName !== activePhoneClean ? activeDisplayName : null);
+
+      if (targetName && cleanDigits.length >= 10) {
+        if (titleEl.textContent !== targetName) {
+          titleEl.textContent = targetName;
+          titleEl.setAttribute('title', targetName);
         }
       }
 
@@ -289,6 +301,11 @@ function detectActiveContact(force = false) {
 
       activeFormData = { leadStatus: 'UNASSIGNED', callStatus: null, followUpDate: '', notesList: [] };
       fetchCrmMetadata(contactKey, displayTitle, domAvatar);
+
+      // Auto-persist detected profile name to backend so page reloads load it instantly!
+      if (profileName) {
+        setTimeout(() => saveCrmMetadata(), 600);
+      }
     }
   } catch (e) {}
 }

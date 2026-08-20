@@ -126,11 +126,10 @@ class StorageEngine {
   private canonicalPhone(digits: string): string {
     if (!digits) return '';
     const clean = digits.replace(/\D/g, '');
-    // Ignore 15-digit LIDs or unmapped numbers longer than 13 digits
-    if (clean.length > 13 || clean.length === 15) return '';
+    if (clean.length > 15 || clean.length === 15) return '';
     if (clean.length === 12 && clean.startsWith('91')) return clean.slice(2);
     if (clean.length === 13 && clean.startsWith('091')) return clean.slice(3);
-    if (clean.length === 10) return clean;
+    if (clean.length >= 7 && clean.length <= 15) return clean;
     return '';
   }
 
@@ -712,15 +711,24 @@ class StorageEngine {
         const existNameBad = !secondary.name || BAD_NAMES.has(secondary.name.toLowerCase().trim()) || secondary.name.length <= 1;
         const bestName = !curNameBad ? primary.name : (!existNameBad ? secondary.name : primary.name);
 
+        const mergedLeadStatus = (primary.leadStatus && primary.leadStatus !== 'UNASSIGNED')
+          ? primary.leadStatus
+          : (secondary.leadStatus && secondary.leadStatus !== 'UNASSIGNED' ? secondary.leadStatus : 'UNASSIGNED');
+
+        const mergedCallStatus = primary.callStatus !== undefined ? primary.callStatus : secondary.callStatus;
+        const mergedFollowUpDate = (primary.followUpDate && primary.followUpDate.trim() !== '') ? primary.followUpDate : (secondary.followUpDate || '');
+        const mergedNotes = (primary.notes && primary.notes.trim() !== '') ? primary.notes : (secondary.notes || '');
+        const mergedNotesList = (primary.notesList && primary.notesList.length > 0) ? primary.notesList : (secondary.notesList || []);
+
         uniqueMap.set(dedupeKey, {
           ...secondary,
           ...primary,
           name: bestName || this.formatPhoneFallback(rawDigits),
-          leadStatus: primary.leadStatus !== undefined ? primary.leadStatus : (secondary.leadStatus || 'UNASSIGNED'),
-          callStatus: primary.callStatus !== undefined ? primary.callStatus : secondary.callStatus,
-          followUpDate: primary.followUpDate !== undefined ? primary.followUpDate : secondary.followUpDate,
-          notes: primary.notes !== undefined ? primary.notes : secondary.notes,
-          notesList: primary.notesList !== undefined ? primary.notesList : (secondary.notesList || []),
+          leadStatus: mergedLeadStatus,
+          callStatus: mergedCallStatus,
+          followUpDate: mergedFollowUpDate,
+          notes: mergedNotes,
+          notesList: mergedNotesList,
           lastMessageAt: Math.max(existing.lastMessageAt || 0, lastMessageAt || 0),
           avatarUrl: primary.avatarUrl || secondary.avatarUrl,
         });

@@ -673,8 +673,12 @@ export function ColdCallsModule({
 
   const todayLocalStr = getLocalYYYYMMDD();
 
-  // All Scheduled Follow-ups (any follow-up date set)
-  const scheduledFollowupLeadsList = leads.filter(l => Boolean(l.followUpDate) && l.followUpDate.trim() !== '' && l.followUpDate !== '—');
+  // All Scheduled Follow-ups (current & future follow-up dates)
+  const scheduledFollowupLeadsList = leads.filter(l => {
+    if (!l.followUpDate || l.followUpDate.trim() === '' || l.followUpDate === '—') return false;
+    const normF = normalizeDateStr(l.followUpDate);
+    return normF >= todayLocalStr;
+  });
 
   // Follow-ups Today: Strictly matches selectedDate or today's local date
   const followupTodayLeadsList = leads.filter(l => {

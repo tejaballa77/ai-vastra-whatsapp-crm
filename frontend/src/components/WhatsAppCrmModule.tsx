@@ -216,7 +216,11 @@ export function WhatsAppCrmModule() {
   const unassignedCount = unassignedChats.length;
 
   const callsYesChats = chats.filter((c) => c.callStatus === 'YES');
-  const scheduledFollowupChatsList = chats.filter(c => Boolean(c.followUpDate) && c.followUpDate.trim() !== '' && c.followUpDate !== '—');
+  const scheduledFollowupChatsList = chats.filter(c => {
+    if (!c.followUpDate || c.followUpDate.trim() === '' || c.followUpDate === '—') return false;
+    const normF = normalizeDateStr(c.followUpDate);
+    return normF >= todayLocalStr;
+  });
   const followupTodayChatsList = chats.filter(c => {
     const normF = normalizeDateStr(c.followUpDate);
     return normF === todayLocalStr;

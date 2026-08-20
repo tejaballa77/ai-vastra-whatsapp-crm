@@ -186,7 +186,8 @@ export function ColdCallsModule({
   // Dashboard Card Popups
   const [showStatusModal, setShowStatusModal] = useState(false);
   const [showInterestedModal, setShowInterestedModal] = useState(false);
-  const [showFollowupsModal, setShowFollowupsModal] = useState(false);
+  const [showScheduledModal, setShowScheduledModal] = useState(false);
+  const [showFollowupsTodayModal, setShowFollowupsTodayModal] = useState(false);
   const [deleteConfirmLead, setDeleteConfirmLead] = useState<ColdCallLead | null>(null);
 
   const handleConfirmRemoveCall = (lead: ColdCallLead) => {
@@ -634,6 +635,35 @@ export function ColdCallsModule({
     </div>
   );
 
+  const getLocalYYYYMMDD = (ts?: number | string) => {
+    const d = ts ? new Date(ts) : new Date();
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
+  };
+
+  const normalizeDateStr = (dStr?: string) => {
+    if (!dStr) return '';
+    const s = dStr.trim();
+    if (s.includes('-') && s.split('-')[0].length === 2) {
+      const [dd, mm, yyyy] = s.split('-');
+      return `${yyyy}-${mm}-${dd}`;
+    }
+    return s;
+  };
+
+  const todayLocalStr = getLocalYYYYMMDD();
+
+  // All Scheduled Follow-ups (any follow-up date set)
+  const scheduledFollowupLeadsList = leads.filter(l => Boolean(l.followUpDate) && l.followUpDate.trim() !== '' && l.followUpDate !== '—');
+
+  // Follow-ups Today
+  const followupTodayLeadsList = leads.filter(l => {
+    const normF = normalizeDateStr(l.followUpDate);
+    return normF === selectedDate || (Boolean(l.followUpDate) && selectedDate === todayLocalStr);
+  });
+
   // ─── Render ───────────────────────────────────────────────────────────────────
   return (
     <div className="flex-1 overflow-y-auto p-6 space-y-6 bg-zinc-50/50 text-black">
@@ -656,24 +686,6 @@ export function ColdCallsModule({
           PAGE 1: ANALYTICS & RECENT CALLS DASHBOARD
       ══════════════════════════════════════════════════════════════════════ */}
       {subPage === 'analytics' && (() => {
-        const getLocalYYYYMMDD = (ts?: number | string) => {
-          const d = ts ? new Date(ts) : new Date();
-          const yyyy = d.getFullYear();
-          const mm = String(d.getMonth() + 1).padStart(2, '0');
-          const dd = String(d.getDate()).padStart(2, '0');
-          return `${yyyy}-${mm}-${dd}`;
-        };
-        const todayLocalStr = getLocalYYYYMMDD();
-
-        const normalizeDateStr = (dStr?: string) => {
-          if (!dStr) return '';
-          const s = dStr.trim();
-          if (s.includes('-') && s.split('-')[0].length === 2) {
-            const [dd, mm, yyyy] = s.split('-');
-            return `${yyyy}-${mm}-${dd}`;
-          }
-          return s;
-        };
 
         // Filter leads based on selectedDate
         const dateLeads = leads.filter(l => {
@@ -702,8 +714,11 @@ export function ColdCallsModule({
         // 3. Conversations (Interested Contacts)
         const interestedLeadsList = leads.filter(l => l.callStatus === 'INTERESTED' || (l.callChoice === 'YES' && (l.callStatus === 'WARM' || l.callStatus === 'YES' || !l.callStatus)));
 
-        // 4. Follow-ups Today
-        const followupLeadsList = leads.filter(l => {
+        // 4. All Scheduled Follow-ups (any follow-up date set)
+        const scheduledFollowupLeadsList = leads.filter(l => Boolean(l.followUpDate) && l.followUpDate.trim() !== '' && l.followUpDate !== '—');
+
+        // 5. Follow-ups Today
+        const followupTodayLeadsList = leads.filter(l => {
           const normF = normalizeDateStr(l.followUpDate);
           return normF === selectedDate || (Boolean(l.followUpDate) && selectedDate === todayLocalStr);
         });
@@ -777,74 +792,93 @@ export function ColdCallsModule({
               </div>
             </div>
 
-            {/* 4 Modern Metric Cards with Interactive Click Modals */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
+            {/* 5 Modern Metric Cards with Interactive Click Modals */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
               {/* Card 1: Total Calls */}
-              <div className="bg-[#eff6ff] p-5 rounded-2xl border border-blue-200/80 shadow-sm flex items-center gap-4 transition-all">
-                <div className="w-12 h-12 rounded-2xl bg-blue-500 text-white flex items-center justify-center flex-shrink-0 shadow-md">
-                  <Phone className="w-6 h-6" />
+              <div className="bg-[#eff6ff] p-4 rounded-2xl border border-blue-200/80 shadow-sm flex items-center gap-3.5 transition-all">
+                <div className="w-11 h-11 rounded-2xl bg-blue-500 text-white flex items-center justify-center flex-shrink-0 shadow-md">
+                  <Phone className="w-5 h-5" />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <div className="text-xs font-bold text-blue-700 uppercase tracking-wider">Total Calls</div>
-                  <div className="text-3xl font-black text-blue-950 tracking-tight">{totalCallsCount.toLocaleString()}</div>
-                  <div className="text-[11px] font-semibold text-blue-600/90 mt-0.5">Calls marked "Yes" on {selectedDate}</div>
+                  <div className="text-[11px] font-bold text-blue-700 uppercase tracking-wider">Total Calls</div>
+                  <div className="text-2xl font-black text-blue-950 tracking-tight">{totalCallsCount.toLocaleString()}</div>
+                  <div className="text-[10px] font-semibold text-blue-600/90 mt-0.5 truncate">Calls marked "Yes" on {selectedDate}</div>
                 </div>
               </div>
 
               {/* Card 2: Status Breakdown */}
               <div
                 onClick={() => setShowStatusModal(true)}
-                className="bg-[#ecfdf5] p-5 rounded-2xl border border-emerald-200/80 shadow-sm flex items-center gap-4 transition-all hover:shadow-md hover:border-emerald-400 cursor-pointer active:scale-98 group"
+                className="bg-[#ecfdf5] p-4 rounded-2xl border border-emerald-200/80 shadow-sm flex items-center gap-3.5 transition-all hover:shadow-md hover:border-emerald-400 cursor-pointer active:scale-98 group"
                 title="Click to view detailed status breakdown"
               >
-                <div className="w-12 h-12 rounded-2xl bg-emerald-500 text-white flex items-center justify-center flex-shrink-0 shadow-md group-hover:scale-105 transition-transform">
-                  <PhoneCall className="w-6 h-6" />
+                <div className="w-11 h-11 rounded-2xl bg-emerald-500 text-white flex items-center justify-center flex-shrink-0 shadow-md group-hover:scale-105 transition-transform">
+                  <PhoneCall className="w-5 h-5" />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <div className="text-xs font-bold text-emerald-700 uppercase tracking-wider flex items-center justify-between">
+                  <div className="text-[11px] font-bold text-emerald-700 uppercase tracking-wider flex items-center justify-between">
                     <span>Status</span>
-                    <span className="text-[10px] text-emerald-600 bg-emerald-100 px-1.5 py-0.5 rounded font-black">POPUP ↗</span>
+                    <span className="text-[9px] text-emerald-600 bg-emerald-100 px-1 py-0.5 rounded font-black">POPUP ↗</span>
                   </div>
-                  <div className="text-3xl font-black text-emerald-950 tracking-tight">{statusLeads.length.toLocaleString()}</div>
-                  <div className="text-[11px] font-semibold text-emerald-600/90 mt-0.5">Click for status breakdown</div>
+                  <div className="text-2xl font-black text-emerald-950 tracking-tight">{statusLeads.length.toLocaleString()}</div>
+                  <div className="text-[10px] font-semibold text-emerald-600/90 mt-0.5 truncate">Click for status breakdown</div>
                 </div>
               </div>
 
               {/* Card 3: Conversations (Interested Contacts) */}
               <div
                 onClick={() => setShowInterestedModal(true)}
-                className="bg-[#f5f3ff] p-5 rounded-2xl border border-purple-200/80 shadow-sm flex items-center gap-4 transition-all hover:shadow-md hover:border-purple-400 cursor-pointer active:scale-98 group"
+                className="bg-[#f5f3ff] p-4 rounded-2xl border border-purple-200/80 shadow-sm flex items-center gap-3.5 transition-all hover:shadow-md hover:border-purple-400 cursor-pointer active:scale-98 group"
                 title="Click to view interested contacts info"
               >
-                <div className="w-12 h-12 rounded-2xl bg-purple-500 text-white flex items-center justify-center flex-shrink-0 shadow-md group-hover:scale-105 transition-transform">
-                  <User className="w-6 h-6" />
+                <div className="w-11 h-11 rounded-2xl bg-purple-500 text-white flex items-center justify-center flex-shrink-0 shadow-md group-hover:scale-105 transition-transform">
+                  <User className="w-5 h-5" />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <div className="text-xs font-bold text-purple-700 uppercase tracking-wider flex items-center justify-between">
+                  <div className="text-[11px] font-bold text-purple-700 uppercase tracking-wider flex items-center justify-between">
                     <span>Conversations</span>
-                    <span className="text-[10px] text-purple-600 bg-purple-100 px-1.5 py-0.5 rounded font-black">POPUP ↗</span>
+                    <span className="text-[9px] text-purple-600 bg-purple-100 px-1 py-0.5 rounded font-black">POPUP ↗</span>
                   </div>
-                  <div className="text-3xl font-black text-purple-950 tracking-tight">{interestedLeadsList.length.toLocaleString()}</div>
-                  <div className="text-[11px] font-semibold text-purple-600/90 mt-0.5">Interested contacts (click to inspect)</div>
+                  <div className="text-2xl font-black text-purple-950 tracking-tight">{interestedLeadsList.length.toLocaleString()}</div>
+                  <div className="text-[10px] font-semibold text-purple-600/90 mt-0.5 truncate">Interested contacts</div>
                 </div>
               </div>
 
-              {/* Card 4: Follow-ups Today */}
+              {/* Card 4: Follow-ups Scheduled (NEW: All Future Follow-ups) */}
               <div
-                onClick={() => setShowFollowupsModal(true)}
-                className="bg-[#fffbeb] p-5 rounded-2xl border border-amber-200/80 shadow-sm flex items-center gap-4 transition-all hover:shadow-md hover:border-amber-400 cursor-pointer active:scale-98 group"
-                title="Click to inspect today's follow-up leads"
+                onClick={() => setShowScheduledModal(true)}
+                className="bg-[#eef2ff] p-4 rounded-2xl border border-indigo-200/80 shadow-sm flex items-center gap-3.5 transition-all hover:shadow-md hover:border-indigo-400 cursor-pointer active:scale-98 group"
+                title="Click to inspect all scheduled follow-up leads"
               >
-                <div className="w-12 h-12 rounded-2xl bg-amber-500 text-white flex items-center justify-center flex-shrink-0 shadow-md group-hover:scale-105 transition-transform">
-                  <Briefcase className="w-6 h-6" />
+                <div className="w-11 h-11 rounded-2xl bg-indigo-600 text-white flex items-center justify-center flex-shrink-0 shadow-md group-hover:scale-105 transition-transform">
+                  <Calendar className="w-5 h-5" />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <div className="text-xs font-bold text-amber-700 uppercase tracking-wider flex items-center justify-between">
-                    <span>Follow-ups Today</span>
-                    <span className="text-[10px] text-amber-600 bg-amber-100 px-1.5 py-0.5 rounded font-black">POPUP ↗</span>
+                  <div className="text-[11px] font-bold text-indigo-800 uppercase tracking-wider flex items-center justify-between">
+                    <span className="truncate">Follow-ups Scheduled</span>
+                    <span className="text-[9px] text-indigo-600 bg-indigo-100 px-1 py-0.5 rounded font-black">POPUP ↗</span>
                   </div>
-                  <div className="text-3xl font-black text-amber-950 tracking-tight">{followupLeadsList.length.toLocaleString()}</div>
-                  <div className="text-[11px] font-semibold text-amber-600/90 mt-0.5">Scheduled for follow-up today</div>
+                  <div className="text-2xl font-black text-indigo-950 tracking-tight">{scheduledFollowupLeadsList.length.toLocaleString()}</div>
+                  <div className="text-[10px] font-semibold text-indigo-600/90 mt-0.5 truncate">All scheduled follow-ups</div>
+                </div>
+              </div>
+
+              {/* Card 5: Follow-ups Today */}
+              <div
+                onClick={() => setShowFollowupsTodayModal(true)}
+                className="bg-[#fffbeb] p-4 rounded-2xl border border-amber-200/80 shadow-sm flex items-center gap-3.5 transition-all hover:shadow-md hover:border-amber-400 cursor-pointer active:scale-98 group"
+                title="Click to inspect today's follow-up leads"
+              >
+                <div className="w-11 h-11 rounded-2xl bg-amber-500 text-white flex items-center justify-center flex-shrink-0 shadow-md group-hover:scale-105 transition-transform">
+                  <Briefcase className="w-5 h-5" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="text-[11px] font-bold text-amber-800 uppercase tracking-wider flex items-center justify-between">
+                    <span className="truncate">Follow-ups Today</span>
+                    <span className="text-[9px] text-amber-600 bg-amber-100 px-1 py-0.5 rounded font-black">POPUP ↗</span>
+                  </div>
+                  <div className="text-2xl font-black text-amber-950 tracking-tight">{followupTodayLeadsList.length.toLocaleString()}</div>
+                  <div className="text-[10px] font-semibold text-amber-600/90 mt-0.5 truncate">Scheduled for today</div>
                 </div>
               </div>
             </div>
@@ -953,17 +987,26 @@ export function ColdCallsModule({
                               {lead.phone || 'N/A'}
                             </td>
 
-                            {/* Called By */}
+                            {/* Called By (Vibrant Green) */}
                             <td className="py-3.5 px-4">
-                              <span className="px-2.5 py-1 bg-zinc-100 border border-zinc-200 rounded-lg text-xs font-bold text-black flex items-center gap-1.5 w-fit">
-                                <User className="w-3.5 h-3.5 text-zinc-500" />
+                              <span className="px-2.5 py-1 bg-emerald-50 border border-emerald-300 rounded-lg text-xs font-black text-emerald-800 flex items-center gap-1.5 w-fit shadow-xs">
+                                <User className="w-3.5 h-3.5 text-emerald-600" />
                                 {lead.calledBy || 'Staff'}
                               </span>
                             </td>
 
-                            {/* Time */}
-                            <td className="py-3.5 px-4 text-xs font-semibold text-zinc-600">
-                              {formattedTime}
+                            {/* Time (Green if Entered Today, Normal Gray if Past) */}
+                            <td className="py-3.5 px-4">
+                              {timeTs && getLocalYYYYMMDD(timeTs) === todayLocalStr ? (
+                                <span className="px-2.5 py-1 bg-emerald-50 text-emerald-800 border border-emerald-300 font-extrabold text-xs rounded-lg inline-flex items-center gap-1.5 shadow-xs">
+                                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                                  {formattedTime}
+                                </span>
+                              ) : (
+                                <span className="text-xs font-semibold text-zinc-600">
+                                  {formattedTime}
+                                </span>
+                              )}
                             </td>
 
                             {/* Outcome */}
@@ -1742,8 +1785,79 @@ export function ColdCallsModule({
         </div>
       )}
 
+      {/* ── FOLLOW-UPS SCHEDULED POPUP MODAL (ALL FUTURE) ── */}
+      {showScheduledModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[9999] flex items-center justify-center p-4 text-black font-sans">
+          <div className="bg-white w-full max-w-3xl rounded-2xl shadow-2xl border border-gray-200 flex flex-col max-h-[85vh] overflow-hidden animate-in fade-in zoom-in duration-150">
+            {/* Header */}
+            <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between bg-indigo-50/80">
+              <div>
+                <h3 className="text-lg font-black text-indigo-950 flex items-center gap-2">
+                  <Calendar className="w-5 h-5 text-indigo-600" />
+                  Follow-ups Scheduled ({scheduledFollowupLeadsList.length})
+                </h3>
+                <p className="text-xs font-semibold text-indigo-700 mt-0.5">All contacts scheduled for future follow-up dates</p>
+              </div>
+              <button onClick={() => setShowScheduledModal(false)} className="w-8 h-8 rounded-full bg-white hover:bg-gray-200 flex items-center justify-center text-gray-700 transition-all border border-gray-200 shadow-sm">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            {/* Table Body */}
+            <div className="overflow-y-auto flex-1 p-6">
+              {scheduledFollowupLeadsList.length === 0 ? (
+                <div className="p-12 text-center text-xs text-gray-400 font-semibold bg-gray-50 rounded-xl border border-gray-200">
+                  No scheduled follow-up contacts found.
+                </div>
+              ) : (
+                <div className="border border-gray-200 rounded-xl overflow-hidden">
+                  <table className="w-full text-left border-collapse text-xs">
+                    <thead>
+                      <tr className="bg-gray-100 text-gray-700 font-extrabold border-b border-gray-200 uppercase tracking-wider">
+                        <th className="p-3">#</th>
+                        <th className="p-3">Business Name</th>
+                        <th className="p-3">Person Name</th>
+                        <th className="p-3">Phone</th>
+                        <th className="p-3 font-extrabold text-indigo-700">Follow-up Date</th>
+                        <th className="p-3">Note</th>
+                        <th className="p-3 text-right">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-200 bg-white font-medium">
+                      {scheduledFollowupLeadsList.map((lead, idx) => (
+                        <tr key={lead.id} className="hover:bg-indigo-50/30 transition-colors">
+                          <td className="p-3 text-gray-400 font-mono font-bold">{idx + 1}</td>
+                          <td className="p-3 font-extrabold text-black">{lead.businessName || '—'}</td>
+                          <td className="p-3 font-semibold text-gray-700">{lead.personName || lead.name || '—'}</td>
+                          <td className="p-3 font-extrabold text-[#00a884]">{lead.phone || '—'}</td>
+                          <td className="p-3 font-extrabold text-indigo-800 bg-indigo-50/80 rounded">{lead.followUpDate || '—'}</td>
+                          <td className="p-3 text-gray-600 truncate max-w-[150px]">{lead.note || lead.notesList?.[0]?.text || '—'}</td>
+                          <td className="p-3 text-right">
+                            <button
+                              onClick={() => { setShowScheduledModal(false); openNotePopup(lead); }}
+                              className="px-3 py-1 bg-indigo-100 hover:bg-indigo-200 text-indigo-900 font-bold text-xs rounded-lg transition-all border border-indigo-300"
+                            >
+                              Notes
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+            {/* Footer */}
+            <div className="px-6 py-3 border-t border-gray-200 bg-gray-50 flex justify-end">
+              <button onClick={() => setShowScheduledModal(false)} className="px-5 py-2 bg-black hover:bg-zinc-800 text-white font-bold text-xs rounded-xl transition-all shadow-sm">
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── FOLLOW-UPS TODAY POPUP MODAL ── */}
-      {showFollowupsModal && (
+      {showFollowupsTodayModal && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[9999] flex items-center justify-center p-4 text-black font-sans">
           <div className="bg-white w-full max-w-3xl rounded-2xl shadow-2xl border border-gray-200 flex flex-col max-h-[85vh] overflow-hidden animate-in fade-in zoom-in duration-150">
             {/* Header */}
@@ -1751,17 +1865,17 @@ export function ColdCallsModule({
               <div>
                 <h3 className="text-lg font-black text-amber-950 flex items-center gap-2">
                   <Briefcase className="w-5 h-5 text-amber-600" />
-                  Follow-ups Scheduled ({leads.filter(l => Boolean(l.followUpDate)).length})
+                  Follow-ups Today ({followupTodayLeadsList.length})
                 </h3>
-                <p className="text-xs font-semibold text-amber-700 mt-0.5">Contacts scheduled for follow-up on or around {selectedDate}</p>
+                <p className="text-xs font-semibold text-amber-700 mt-0.5">Contacts scheduled for follow-up today ({selectedDate})</p>
               </div>
-              <button onClick={() => setShowFollowupsModal(false)} className="w-8 h-8 rounded-full bg-white hover:bg-gray-200 flex items-center justify-center text-gray-700 transition-all border border-gray-200 shadow-sm">
+              <button onClick={() => setShowFollowupsTodayModal(false)} className="w-8 h-8 rounded-full bg-white hover:bg-gray-200 flex items-center justify-center text-gray-700 transition-all border border-gray-200 shadow-sm">
                 <X className="w-4 h-4" />
               </button>
             </div>
             {/* Table Body */}
             <div className="overflow-y-auto flex-1 p-6">
-              {leads.filter(l => Boolean(l.followUpDate)).length === 0 ? (
+              {followupTodayLeadsList.length === 0 ? (
                 <div className="p-12 text-center text-xs text-gray-400 font-semibold bg-gray-50 rounded-xl border border-gray-200">
                   No scheduled follow-up contacts found for selected date ({selectedDate}).
                 </div>
@@ -1780,7 +1894,7 @@ export function ColdCallsModule({
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-200 bg-white font-medium">
-                      {leads.filter(l => Boolean(l.followUpDate)).map((lead, idx) => (
+                      {followupTodayLeadsList.map((lead, idx) => (
                         <tr key={lead.id} className="hover:bg-amber-50/30 transition-colors">
                           <td className="p-3 text-gray-400 font-mono font-bold">{idx + 1}</td>
                           <td className="p-3 font-extrabold text-black">{lead.businessName || '—'}</td>
@@ -1790,7 +1904,7 @@ export function ColdCallsModule({
                           <td className="p-3 text-gray-600 truncate max-w-[150px]">{lead.note || lead.notesList?.[0]?.text || '—'}</td>
                           <td className="p-3 text-right">
                             <button
-                              onClick={() => { setShowFollowupsModal(false); openNotePopup(lead); }}
+                              onClick={() => { setShowFollowupsTodayModal(false); openNotePopup(lead); }}
                               className="px-3 py-1 bg-amber-100 hover:bg-amber-200 text-amber-900 font-bold text-xs rounded-lg transition-all border border-amber-300"
                             >
                               Notes
@@ -1805,7 +1919,7 @@ export function ColdCallsModule({
             </div>
             {/* Footer */}
             <div className="px-6 py-3 border-t border-gray-200 bg-gray-50 flex justify-end">
-              <button onClick={() => setShowFollowupsModal(false)} className="px-5 py-2 bg-black hover:bg-zinc-800 text-white font-bold text-xs rounded-xl transition-all shadow-sm">
+              <button onClick={() => setShowFollowupsTodayModal(false)} className="px-5 py-2 bg-black hover:bg-zinc-800 text-white font-bold text-xs rounded-xl transition-all shadow-sm">
                 Close
               </button>
             </div>

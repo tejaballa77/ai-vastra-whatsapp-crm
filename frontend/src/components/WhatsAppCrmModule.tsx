@@ -230,13 +230,13 @@ export function WhatsAppCrmModule() {
   const callsYesCount = callsYesChats.length;
   const followUpsCount = scheduledFollowupChatsList.length;
 
-  // Filtered chats where user has actively entered CRM info (Lead Status, Call:Yes, Active Follow-up date, or Notes)
+  // Filtered chats where user has actively entered CRM info (Lead Status, Call:Yes, Follow-up date, or Notes)
   // If cleared (leadStatus = UNASSIGNED and no notes/followup and callStatus != YES), excluded completely!
   const savedLeads = chats.filter(
     (c) =>
       (c.leadStatus && c.leadStatus !== 'UNASSIGNED') ||
       c.callStatus === 'YES' ||
-      Boolean(c.followUpDate && c.followUpDate.trim().length > 0 && c.followUpDate !== '—' && normalizeDateStr(c.followUpDate) >= todayLocalStr) ||
+      Boolean(c.followUpDate && c.followUpDate.trim().length > 0 && c.followUpDate !== '—') ||
       (c.notesList && c.notesList.length > 0) ||
       Boolean(c.notes && c.notes.trim().length > 0)
   );

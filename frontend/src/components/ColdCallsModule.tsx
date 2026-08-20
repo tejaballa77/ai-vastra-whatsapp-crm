@@ -658,10 +658,10 @@ export function ColdCallsModule({
   // All Scheduled Follow-ups (any follow-up date set)
   const scheduledFollowupLeadsList = leads.filter(l => Boolean(l.followUpDate) && l.followUpDate.trim() !== '' && l.followUpDate !== '—');
 
-  // Follow-ups Today
+  // Follow-ups Today: Strictly matches selectedDate or today's local date
   const followupTodayLeadsList = leads.filter(l => {
     const normF = normalizeDateStr(l.followUpDate);
-    return normF === selectedDate || (Boolean(l.followUpDate) && selectedDate === todayLocalStr);
+    return normF === selectedDate || normF === todayLocalStr;
   });
 
   // ─── Render ───────────────────────────────────────────────────────────────────
@@ -723,18 +723,11 @@ export function ColdCallsModule({
           return normF === selectedDate || (Boolean(l.followUpDate) && selectedDate === todayLocalStr);
         });
 
-        // Recent calls list: ONLY leads where a call choice (YES/NO) or explicit status (Interested/Warm/etc.) has been logged
+        // Recent calls list: ALL leads where a call choice (YES/NO) or explicit status (Interested/Warm/etc.) has been logged
         const displayCallsList = leads.filter(l => {
           const hasCallChoice = l.callChoice === 'YES' || l.callChoice === 'NO';
           const hasLoggedStatus = Boolean(l.callStatus) && l.callStatus !== 'PENDING';
-          if (!hasCallChoice && !hasLoggedStatus) return false;
-
-          const ts = l.callTimestamp || l.updatedAt;
-          if (ts) {
-            const dStr = getLocalYYYYMMDD(ts);
-            return dStr === selectedDate || selectedDate === todayLocalStr;
-          }
-          return true;
+          return hasCallChoice || hasLoggedStatus;
         }).sort((a, b) => {
           const tA = typeof a.callTimestamp === 'number' ? a.callTimestamp : (typeof a.updatedAt === 'number' ? a.updatedAt : (a.updatedAt ? new Date(a.updatedAt).getTime() : 0));
           const tB = typeof b.callTimestamp === 'number' ? b.callTimestamp : (typeof b.updatedAt === 'number' ? b.updatedAt : (b.updatedAt ? new Date(b.updatedAt).getTime() : 0));

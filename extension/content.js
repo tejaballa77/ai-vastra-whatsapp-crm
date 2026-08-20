@@ -603,14 +603,6 @@ function renderCrmPanel(displayName, cleanPhone, avatarUrl, showSaveToast = fals
     }, 2000);
   }
 
-function getTodayFormattedDate() {
-  const now = new Date();
-  const dd = String(now.getDate()).padStart(2, '0');
-  const mm = String(now.getMonth() + 1).padStart(2, '0');
-  const yyyy = now.getFullYear();
-  return `${dd}-${mm}-${yyyy}`;
-}
-
   document.getElementById('aivastra-close-btn').onclick = () => {
     isPanelVisible = false;
     panel.style.display = 'none';
@@ -643,6 +635,14 @@ function getTodayFormattedDate() {
     saveCrmMetadata();
     renderCrmPanel(displayName, cleanPhone, avatarUrl, true);
   };
+}
+
+function getTodayFormattedDate() {
+  const now = new Date();
+  const dd = String(now.getDate()).padStart(2, '0');
+  const mm = String(now.getMonth() + 1).padStart(2, '0');
+  const yyyy = now.getFullYear();
+  return `${dd}-${mm}-${yyyy}`;
 }
 
 // Start

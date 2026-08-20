@@ -398,48 +398,46 @@ export function WhatsAppCrmModule() {
 
       <main className="flex-1 flex flex-col overflow-hidden bg-white text-black">
         <header className="h-16 bg-white border-b border-zinc-200 px-6 flex items-center justify-between flex-shrink-0">
-          <div className="flex items-center gap-6">
-            <h2 className="text-2xl font-extrabold text-black tracking-tight">
-              {activeNav === 'whatsapp' ? 'WhatsApp CRM Dashboard' : activeNav === 'calls' ? 'Cold Calls Dashboard' : 'Settings & AI Agent'}
-            </h2>
+          <h2 className="text-2xl font-extrabold text-black tracking-tight">
+            {activeNav === 'whatsapp' ? 'WhatsApp CRM Dashboard' : activeNav === 'calls' ? (coldCallsSubPage === 'analytics' ? 'Cold Calls Dashboard' : 'Cold Calls Lead List') : 'Settings & AI Agent'}
+          </h2>
 
-            {/* COLD CALLS 2-PAGE SELECTOR PILL BAR IN TOP HEADER (Moved to Right) */}
-            {activeNav === 'calls' && (
-              <div className="flex items-center gap-1.5 bg-zinc-100 p-1 rounded-xl border border-zinc-200">
-                <button
-                  onClick={() => setColdCallsSubPage('analytics')}
-                  className={`px-3.5 py-1.5 rounded-lg text-xs font-extrabold transition-all ${
-                    coldCallsSubPage === 'analytics'
-                      ? 'bg-black text-white shadow-sm'
-                      : 'text-zinc-700 hover:text-black hover:bg-zinc-200'
-                  }`}
-                >
-                  📊 1. Dashboard
-                </button>
-                <button
-                  onClick={() => setColdCallsSubPage('sheet')}
-                  className={`px-3.5 py-1.5 rounded-lg text-xs font-extrabold transition-all ${
-                    coldCallsSubPage === 'sheet'
-                      ? 'bg-black text-white shadow-sm'
-                      : 'text-zinc-700 hover:text-black hover:bg-zinc-200'
-                  }`}
-                >
-                  📋 2. Cold Calls List
-                </button>
-              </div>
-            )}
-
-            {/* Launch WhatsApp Web button (ONLY for WhatsApp module) */}
-            {activeNav === 'whatsapp' && (
+          {/* COLD CALLS 2-PAGE SELECTOR PILL BAR IN TOP HEADER (Positioned on the FAR RIGHT END with larger size) */}
+          {activeNav === 'calls' && (
+            <div className="flex items-center gap-2 bg-zinc-100 p-1.5 rounded-2xl border border-zinc-300 shadow-sm ml-auto">
               <button
-                onClick={() => handleOpenSpecificChat()}
-                className="px-4 py-2 bg-black hover:bg-zinc-800 text-white font-bold text-sm rounded-xl transition-all flex items-center gap-2 shadow-sm"
+                onClick={() => setColdCallsSubPage('analytics')}
+                className={`px-5 py-2 rounded-xl text-sm font-extrabold transition-all flex items-center gap-2 cursor-pointer ${
+                  coldCallsSubPage === 'analytics'
+                    ? 'bg-black text-white shadow-md'
+                    : 'text-zinc-700 hover:text-black hover:bg-zinc-200'
+                }`}
               >
-                <span>Launch WhatsApp Web</span>
-                <ExternalLink className="w-4 h-4" />
+                <span>📊 1. Dashboard</span>
               </button>
-            )}
-          </div>
+              <button
+                onClick={() => setColdCallsSubPage('sheet')}
+                className={`px-5 py-2 rounded-xl text-sm font-extrabold transition-all flex items-center gap-2 cursor-pointer ${
+                  coldCallsSubPage === 'sheet'
+                    ? 'bg-black text-white shadow-md'
+                    : 'text-zinc-700 hover:text-black hover:bg-zinc-200'
+                }`}
+              >
+                <span>📋 2. Cold Calls List</span>
+              </button>
+            </div>
+          )}
+
+          {/* Launch WhatsApp Web button (ONLY for WhatsApp module) */}
+          {activeNav === 'whatsapp' && (
+            <button
+              onClick={() => handleOpenSpecificChat()}
+              className="px-4 py-2 bg-black hover:bg-zinc-800 text-white font-bold text-sm rounded-xl transition-all flex items-center gap-2 shadow-sm"
+            >
+              <span>Launch WhatsApp Web</span>
+              <ExternalLink className="w-4 h-4" />
+            </button>
+          )}
         </header>
 
         {activeNav === 'whatsapp' && (

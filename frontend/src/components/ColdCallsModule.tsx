@@ -1009,9 +1009,13 @@ export function ColdCallsModule({
                               {outcomeBadge}
                             </td>
 
-                            {/* Note */}
-                            <td className="py-3.5 px-4 max-w-xs truncate text-xs text-zinc-700 font-medium italic">
-                              "{latestNoteText}"
+                            {/* Note (Standard CRM Font, No Quotes, Full Note on Hover) */}
+                            <td 
+                              className="py-3.5 px-4 max-w-xs truncate text-xs text-zinc-800 font-semibold cursor-pointer"
+                              title={latestNoteText || 'No notes recorded'}
+                              onClick={() => openNotePopup(lead)}
+                            >
+                              {latestNoteText || '—'}
                             </td>
 
                             {/* Action Buttons */}

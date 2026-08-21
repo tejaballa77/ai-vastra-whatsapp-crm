@@ -145,10 +145,9 @@ class StorageEngine {
   private canonicalPhone(digits: string): string {
     if (!digits) return '';
     const clean = digits.replace(/\D/g, '');
-    if (clean.length > 15 || clean.length === 15) return '';
+    if (clean.length === 10) return clean;
     if (clean.length === 12 && clean.startsWith('91')) return clean.slice(2);
     if (clean.length === 13 && clean.startsWith('091')) return clean.slice(3);
-    if (clean.length >= 7 && clean.length <= 15) return clean;
     return '';
   }
 
@@ -644,8 +643,9 @@ class StorageEngine {
     for (const c of list) {
       const resolvedKey = this.resolveJid(c.jid);
       const rawDigits = resolvedKey.split('@')[0].replace(/\D/g, '');
-      // Canonical 10-digit key — merges 919714515645, 9714515645, 09714515645 into ONE entry
-      const dedupeKey = this.canonicalPhone(rawDigits) || resolvedKey;
+      const validTen = this.canonicalPhone(rawDigits);
+      // STRICT dedupeKey: only dedupe if we have a valid 10-digit phone, otherwise use exact unique resolvedKey!
+      const dedupeKey = validTen ? `phone_${validTen}` : `jid_${resolvedKey}`;
 
       let name = (c.name && c.name !== 'Unsaved Contact' && !c.name.includes('@'))
         ? c.name
@@ -759,7 +759,8 @@ class StorageEngine {
     for (const [contactJid, contact] of this.contacts.entries()) {
       const resolvedKey = this.resolveJid(contactJid);
       const rawDigits = (contact.phone || resolvedKey.split('@')[0]).replace(/\D/g, '');
-      const dedupeKey = this.canonicalPhone(rawDigits) || contact.name?.trim().toLowerCase() || resolvedKey;
+      const validTen = this.canonicalPhone(rawDigits);
+      const dedupeKey = validTen ? `phone_${validTen}` : `jid_${resolvedKey}`;
 
       if (!uniqueMap.has(dedupeKey)) {
         const contactChat: CRMChat = {

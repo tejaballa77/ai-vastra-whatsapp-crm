@@ -425,18 +425,25 @@ function fetchCrmMetadata(searchKey, displayName, domAvatar) {
 
   safeStorageGet(storageKeys, (stored) => {
     const s = stored || {};
-    const localData = s[`crm_meta_${searchKey}`] || s[`crm_meta_${activePhoneClean}`] || (tenDigit ? s[`crm_meta_${tenDigit}`] : null) || (isValidName ? s[`crm_meta_${displayName}`] : null);
+    const localData = s[`crm_meta_${searchKey}`] || (activePhoneClean ? s[`crm_meta_${activePhoneClean}`] : null) || (tenDigit ? s[`crm_meta_${tenDigit}`] : null) || (isValidName ? s[`crm_meta_${displayName}`] : null);
 
     if (localData) {
-      // Found local data — use it (always prefer local storage over the blank default)
       activeFormData = {
         leadStatus: localData.leadStatus || 'UNASSIGNED',
         callStatus: localData.callStatus || null,
         followUpDate: localData.followUpDate || '',
+        previousFollowUpDate: localData.previousFollowUpDate || '',
         notesList: Array.isArray(localData.notesList) ? localData.notesList : (localData.notes ? [localData.notes] : [])
       };
+    } else {
+      activeFormData = {
+        leadStatus: 'UNASSIGNED',
+        callStatus: null,
+        followUpDate: '',
+        previousFollowUpDate: '',
+        notesList: []
+      };
     }
-    // If no local data found, keep whatever is already in activeFormData (don't blank it)
 
     renderCrmPanel(displayName, activePhoneClean, domAvatar || activeAvatarUrl);
 
@@ -447,25 +454,18 @@ function fetchCrmMetadata(searchKey, displayName, domAvatar) {
       if (response && response.success && response.chat) {
         const chat = response.chat;
         
-        const bLead = (chat.leadStatus && chat.leadStatus !== 'UNASSIGNED') ? chat.leadStatus : null;
-        const lLead = (activeFormData.leadStatus && activeFormData.leadStatus !== 'UNASSIGNED') ? activeFormData.leadStatus : null;
-
-        const bCall = chat.callStatus || null;
-        const lCall = activeFormData.callStatus || null;
-
-        const bFollow = (chat.followUpDate && chat.followUpDate.trim() !== '' && chat.followUpDate !== '—') ? chat.followUpDate : null;
-        const lFollow = (activeFormData.followUpDate && activeFormData.followUpDate.trim() !== '' && activeFormData.followUpDate !== '—') ? activeFormData.followUpDate : null;
-
-        const bNotes = (chat.notesList && chat.notesList.length > 0) ? chat.notesList : (chat.notes ? [chat.notes] : []);
-        const lNotes = activeFormData.notesList || [];
-        const mergedNotes = Array.from(new Set([...bNotes, ...lNotes]));
+        const bLead = (chat.leadStatus && chat.leadStatus !== 'UNASSIGNED') ? chat.leadStatus : (activeFormData.leadStatus !== 'UNASSIGNED' ? activeFormData.leadStatus : 'UNASSIGNED');
+        const bCall = chat.callStatus !== undefined ? chat.callStatus : activeFormData.callStatus;
+        const bFollow = (chat.followUpDate && chat.followUpDate.trim() !== '' && chat.followUpDate !== '—') ? chat.followUpDate : activeFormData.followUpDate;
+        const bPrevFollow = chat.previousFollowUpDate || activeFormData.previousFollowUpDate || '';
+        const bNotes = (chat.notesList && chat.notesList.length > 0) ? chat.notesList : (chat.notes ? [chat.notes] : activeFormData.notesList);
 
         activeFormData = {
-          leadStatus: bLead || lLead || 'UNASSIGNED',
-          callStatus: bCall || lCall || null,
-          followUpDate: bFollow || lFollow || '',
-          previousFollowUpDate: chat.previousFollowUpDate || activeFormData.previousFollowUpDate || '',
-          notesList: mergedNotes
+          leadStatus: bLead,
+          callStatus: bCall,
+          followUpDate: bFollow,
+          previousFollowUpDate: bPrevFollow,
+          notesList: bNotes
         };
 
         if (chat.phone) resolvedPhone = chat.phone.replace(/\D/g, '');

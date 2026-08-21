@@ -923,7 +923,7 @@ export function WhatsAppCrmModule() {
       {/* ── INTERESTED CONTACTS POPUP MODAL ── */}
       {showInterestedModal && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[9999] flex items-center justify-center p-4 text-black font-sans">
-          <div className="bg-white w-full max-w-5xl rounded-2xl shadow-2xl border border-gray-200 flex flex-col max-h-[85vh] overflow-hidden animate-in fade-in zoom-in duration-150">
+          <div className="bg-white w-full max-w-6xl rounded-2xl shadow-2xl border border-gray-200 flex flex-col max-h-[85vh] overflow-hidden animate-in fade-in zoom-in duration-150">
             {/* Header */}
             <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between bg-purple-50/60">
               <div>
@@ -944,21 +944,22 @@ export function WhatsAppCrmModule() {
                   No interested contacts recorded yet.
                 </div>
               ) : (
-                <div className="border border-gray-200 rounded-xl overflow-hidden shadow-sm">
-                  <table className="w-full text-left border-collapse text-xs">
+                <div className="border border-gray-200 rounded-xl overflow-x-auto shadow-sm">
+                  <table className="w-full text-left border-collapse text-xs min-w-[700px]">
                     <thead>
                       <tr className="bg-gray-100 text-gray-700 font-extrabold border-b border-gray-200 uppercase tracking-wider">
                         <th className="p-3.5 w-12 text-center">#</th>
                         <th className="p-3.5 min-w-[140px]">Contact Name</th>
                         <th className="p-3.5 min-w-[140px]">Phone</th>
                         <th className="p-3.5 min-w-[100px] text-center">Status</th>
-                        <th className="p-3.5 min-w-[200px]">Note</th>
-                        <th className="p-3.5 min-w-[90px] text-center">Action</th>
+                        <th className="p-3.5 min-w-[240px]">Note (Hover to view full)</th>
+                        <th className="p-3.5 w-28 text-center">Action</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-200 bg-white font-medium">
                       {interestedChats.map((chat, idx) => {
                         const { displayName, formattedPhone, cleanPhone } = getCleanDisplayContact(chat);
+                        const noteContent = chat.notes || (Array.isArray(chat.notesList) ? chat.notesList.join('\n') : '') || '—';
                         return (
                           <tr key={chat.jid} className="hover:bg-purple-50/30 transition-colors">
                             <td className="p-3.5 text-center text-gray-400 font-mono font-bold">{idx + 1}</td>
@@ -969,11 +970,24 @@ export function WhatsAppCrmModule() {
                                 Interested
                               </span>
                             </td>
-                            <td className="p-3.5 text-gray-600 truncate max-w-[240px]">{chat.notes || chat.notesList?.[0] || '—'}</td>
-                            <td className="p-3.5 text-center">
+                            <td className="p-3.5 relative">
+                              <div className="group relative">
+                                <div className="text-gray-700 truncate max-w-[220px] cursor-pointer hover:text-black font-semibold flex items-center gap-1" title={noteContent !== '—' ? noteContent : undefined}>
+                                  <span>{noteContent}</span>
+                                  {noteContent !== '—' && <span className="text-[10px] text-purple-600 bg-purple-100 px-1 py-0.5 rounded font-bold">🔍 Full</span>}
+                                </div>
+                                {noteContent !== '—' && (
+                                  <div className="hidden group-hover:block absolute z-[9999] left-0 top-full mt-1 w-80 p-3.5 bg-zinc-900 text-white text-xs rounded-xl shadow-2xl border border-zinc-700 whitespace-pre-wrap break-words pointer-events-none animate-in fade-in zoom-in-95 duration-100">
+                                    <div className="font-black text-[10px] text-purple-400 uppercase tracking-wider mb-1">📝 Complete Note:</div>
+                                    <div className="leading-relaxed font-sans text-zinc-200">{noteContent}</div>
+                                  </div>
+                                )}
+                              </div>
+                            </td>
+                            <td className="p-3.5 text-center whitespace-nowrap">
                               <button
                                 onClick={() => { setShowInterestedModal(false); handleOpenSpecificChat(cleanPhone); }}
-                                className="px-3.5 py-1.5 bg-purple-600 hover:bg-purple-700 text-white font-extrabold text-xs rounded-lg transition-all shadow-sm"
+                                className="px-4 py-1.5 bg-purple-600 hover:bg-purple-700 text-white font-extrabold text-xs rounded-lg transition-all shadow-sm"
                               >
                                 Chat ↗
                               </button>
@@ -999,7 +1013,7 @@ export function WhatsAppCrmModule() {
       {/* ── FOLLOW-UPS SCHEDULED POPUP MODAL (ALL FUTURE) ── */}
       {showScheduledModal && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[9999] flex items-center justify-center p-4 text-black font-sans">
-          <div className="bg-white w-full max-w-5xl rounded-2xl shadow-2xl border border-gray-200 flex flex-col max-h-[85vh] overflow-hidden animate-in fade-in zoom-in duration-150">
+          <div className="bg-white w-full max-w-6xl rounded-2xl shadow-2xl border border-gray-200 flex flex-col max-h-[85vh] overflow-hidden animate-in fade-in zoom-in duration-150">
             {/* Header */}
             <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between bg-indigo-50/80">
               <div>
@@ -1020,32 +1034,46 @@ export function WhatsAppCrmModule() {
                   No scheduled follow-up contacts found.
                 </div>
               ) : (
-                <div className="border border-gray-200 rounded-xl overflow-hidden shadow-sm">
-                  <table className="w-full text-left border-collapse text-xs">
+                <div className="border border-gray-200 rounded-xl overflow-x-auto shadow-sm">
+                  <table className="w-full text-left border-collapse text-xs min-w-[750px]">
                     <thead>
                       <tr className="bg-gray-100 text-gray-700 font-extrabold border-b border-gray-200 uppercase tracking-wider">
                         <th className="p-3.5 w-12 text-center">#</th>
                         <th className="p-3.5 min-w-[140px]">Contact Name</th>
                         <th className="p-3.5 min-w-[140px]">Phone</th>
                         <th className="p-3.5 min-w-[130px] font-extrabold text-indigo-700">Follow-up Date</th>
-                        <th className="p-3.5 min-w-[200px]">Note</th>
-                        <th className="p-3.5 min-w-[90px] text-center">Action</th>
+                        <th className="p-3.5 min-w-[240px]">Note (Hover to view full)</th>
+                        <th className="p-3.5 w-28 text-center">Action</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-200 bg-white font-medium">
                       {scheduledFollowupChatsList.map((chat, idx) => {
                         const { displayName, formattedPhone, cleanPhone } = getCleanDisplayContact(chat);
+                        const noteContent = chat.notes || (Array.isArray(chat.notesList) ? chat.notesList.join('\n') : '') || '—';
                         return (
                           <tr key={chat.jid} className="hover:bg-indigo-50/30 transition-colors">
                             <td className="p-3.5 text-center text-gray-400 font-mono font-bold">{idx + 1}</td>
                             <td className="p-3.5 font-extrabold text-black">{displayName}</td>
                             <td className="p-3.5 font-extrabold text-[#00a884]">📞 {formattedPhone}</td>
                             <td className="p-3.5 font-extrabold text-indigo-800 bg-indigo-50/80">📅 {chat.followUpDate || '—'}</td>
-                            <td className="p-3.5 text-gray-600 truncate max-w-[240px]">{chat.notes || chat.notesList?.[0] || '—'}</td>
-                            <td className="p-3.5 text-center">
+                            <td className="p-3.5 relative">
+                              <div className="group relative">
+                                <div className="text-gray-700 truncate max-w-[220px] cursor-pointer hover:text-black font-semibold flex items-center gap-1" title={noteContent !== '—' ? noteContent : undefined}>
+                                  <span>{noteContent}</span>
+                                  {noteContent !== '—' && <span className="text-[10px] text-indigo-600 bg-indigo-100 px-1 py-0.5 rounded font-bold">🔍 Full</span>}
+                                </div>
+                                {noteContent !== '—' && (
+                                  <div className="hidden group-hover:block absolute z-[9999] left-0 top-full mt-1 w-80 p-3.5 bg-zinc-900 text-white text-xs rounded-xl shadow-2xl border border-zinc-700 whitespace-pre-wrap break-words pointer-events-none animate-in fade-in zoom-in-95 duration-100">
+                                    <div className="font-black text-[10px] text-indigo-400 uppercase tracking-wider mb-1">📝 Complete Note:</div>
+                                    <div className="leading-relaxed font-sans text-zinc-200">{noteContent}</div>
+                                  </div>
+                                )}
+                              </div>
+                            </td>
+                            <td className="p-3.5 text-center whitespace-nowrap">
                               <button
                                 onClick={() => { setShowScheduledModal(false); handleOpenSpecificChat(cleanPhone); }}
-                                className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-xs rounded-lg transition-all shadow-sm"
+                                className="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-xs rounded-lg transition-all shadow-sm"
                               >
                                 Chat ↗
                               </button>
@@ -1071,7 +1099,7 @@ export function WhatsAppCrmModule() {
       {/* ── FOLLOW-UPS TODAY POPUP MODAL ── */}
       {showFollowupsTodayModal && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[9999] flex items-center justify-center p-4 text-black font-sans">
-          <div className="bg-white w-full max-w-5xl rounded-2xl shadow-2xl border border-gray-200 flex flex-col max-h-[85vh] overflow-hidden animate-in fade-in zoom-in duration-150">
+          <div className="bg-white w-full max-w-6xl rounded-2xl shadow-2xl border border-gray-200 flex flex-col max-h-[85vh] overflow-hidden animate-in fade-in zoom-in duration-150">
             {/* Header */}
             <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between bg-amber-50/60">
               <div>
@@ -1092,22 +1120,23 @@ export function WhatsAppCrmModule() {
                   No scheduled follow-up contacts found for today ({todayLocalStr}).
                 </div>
               ) : (
-                <div className="border border-gray-200 rounded-xl overflow-hidden shadow-sm">
-                  <table className="w-full text-left border-collapse text-xs">
+                <div className="border border-gray-200 rounded-xl overflow-x-auto shadow-sm">
+                  <table className="w-full text-left border-collapse text-xs min-w-[850px]">
                     <thead>
                       <tr className="bg-gray-100 text-gray-700 font-extrabold border-b border-gray-200 uppercase tracking-wider">
                         <th className="p-3.5 w-12 text-center">#</th>
-                        <th className="p-3.5 min-w-[140px]">Contact Name</th>
+                        <th className="p-3.5 min-w-[130px]">Contact Name</th>
                         <th className="p-3.5 min-w-[140px]">Phone</th>
                         <th className="p-3.5 min-w-[130px] font-extrabold text-amber-700">Follow-up Date</th>
-                        <th className="p-3.5 min-w-[180px]">Note</th>
+                        <th className="p-3.5 min-w-[200px]">Note (Hover to view full)</th>
                         <th className="p-3.5 min-w-[220px] font-extrabold text-indigo-700">Forward Date</th>
-                        <th className="p-3.5 min-w-[90px] text-center">Action</th>
+                        <th className="p-3.5 w-28 text-center">Action</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-200 bg-white font-medium">
                       {followupTodayChatsList.map((chat, idx) => {
                         const { displayName, formattedPhone, cleanPhone } = getCleanDisplayContact(chat);
+                        const noteContent = chat.notes || (Array.isArray(chat.notesList) ? chat.notesList.join('\n') : '') || '—';
                         return (
                           <tr key={chat.jid} className="hover:bg-amber-50/30 transition-colors">
                             <td className="p-3.5 text-center text-gray-400 font-mono font-bold">{idx + 1}</td>
@@ -1116,7 +1145,20 @@ export function WhatsAppCrmModule() {
                             <td className="p-3.5 font-extrabold text-amber-800 bg-amber-50/80">
                               📅 {chat.followUpDate || '—'}
                             </td>
-                            <td className="p-3.5 text-gray-600 truncate max-w-[200px]">{chat.notes || chat.notesList?.[0] || '—'}</td>
+                            <td className="p-3.5 relative">
+                              <div className="group relative">
+                                <div className="text-gray-700 truncate max-w-[180px] cursor-pointer hover:text-black font-semibold flex items-center gap-1" title={noteContent !== '—' ? noteContent : undefined}>
+                                  <span>{noteContent}</span>
+                                  {noteContent !== '—' && <span className="text-[10px] text-amber-600 bg-amber-100 px-1 py-0.5 rounded font-bold">🔍 Full</span>}
+                                </div>
+                                {noteContent !== '—' && (
+                                  <div className="hidden group-hover:block absolute z-[9999] left-0 top-full mt-1 w-80 p-3.5 bg-zinc-900 text-white text-xs rounded-xl shadow-2xl border border-zinc-700 whitespace-pre-wrap break-words pointer-events-none animate-in fade-in zoom-in-95 duration-100">
+                                    <div className="font-black text-[10px] text-amber-400 uppercase tracking-wider mb-1">📝 Complete Note:</div>
+                                    <div className="leading-relaxed font-sans text-zinc-200">{noteContent}</div>
+                                  </div>
+                                )}
+                              </div>
+                            </td>
                             <td className="p-3.5">
                               <div className="flex items-center gap-2 bg-indigo-50 p-1.5 rounded-lg border border-indigo-200 w-max">
                                 <input
@@ -1139,10 +1181,10 @@ export function WhatsAppCrmModule() {
                                 </span>
                               </div>
                             </td>
-                            <td className="p-3.5 text-center">
+                            <td className="p-3.5 text-center whitespace-nowrap">
                               <button
                                 onClick={() => { setShowFollowupsTodayModal(false); handleOpenSpecificChat(cleanPhone); }}
-                                className="px-3.5 py-1.5 bg-amber-600 hover:bg-amber-700 text-white font-extrabold text-xs rounded-lg transition-all shadow-sm inline-flex items-center gap-1"
+                                className="px-4 py-1.5 bg-amber-600 hover:bg-amber-700 text-white font-extrabold text-xs rounded-lg transition-all shadow-sm inline-flex items-center gap-1"
                               >
                                 Chat ↗
                               </button>

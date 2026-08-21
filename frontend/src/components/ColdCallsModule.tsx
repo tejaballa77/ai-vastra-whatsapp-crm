@@ -268,13 +268,7 @@ export function ColdCallsModule({
   const [leads, setLeads] = useState<ColdCallLead[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
-  const [filterTab, setFilterTab] = useState<'ALL' | 'INTERESTED' | 'WARM' | 'NOT_INTERESTED' | 'PENDING' | 'FOLLOWUPS'>('ALL');
-  
-  // Date selection state for dashboard (defaults to YYYY-MM-DD today)
-  const [selectedDate, setSelectedDate] = useState<string>(() => {
-    const today = new Date();
-    return today.toISOString().slice(0, 10);
-  });
+  const [filterTab, setFilterTab] = useState<'ALL' | 'INTERESTED' | 'WARM' | 'NOT_INTERESTED' | 'PENDING' | number>('ALL');
 
   const currentUserName = typeof window !== 'undefined'
     ? (localStorage.getItem('crm_user_name') || localStorage.getItem('crm_user_display') || localStorage.getItem('crm_admin_display_name') || localStorage.getItem('crm_admin_username') || 'Teja')
@@ -283,11 +277,6 @@ export function ColdCallsModule({
   // Inline edit tracking: Map<leadId, partial changes>
   const [editedRows, setEditedRows] = useState<Map<string, Partial<ColdCallLead>>>(new Map());
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
-
-  // Selected follow-up round for filter tab ('ALL', 1, 2, 3...)
-  const [selectedFollowupRound, setSelectedFollowupRound] = useState<'ALL' | number>('ALL');
-
-  // Info & Follow-ups popup
   const [infoPopupLead, setInfoPopupLead] = useState<ColdCallLead | null>(null);
   const [infoPopupFollowUps, setInfoPopupFollowUps] = useState<FollowUpRound[]>([]);
   const [newNoteInputs, setNewNoteInputs] = useState<Record<number, string>>({});
@@ -755,14 +744,10 @@ export function ColdCallsModule({
     if (filterTab === 'WARM') return l.callStatus === 'YES' || l.callStatus === 'WARM';
     if (filterTab === 'NOT_INTERESTED') return l.callStatus === 'NOT_INTERESTED';
     if (filterTab === 'PENDING') return !l.callStatus || l.callStatus === 'PENDING';
-    if (filterTab === 'FOLLOWUPS') {
+    if (typeof filterTab === 'number') {
       const fRounds = getLeadFollowUps(l);
-      if (selectedFollowupRound === 'ALL') {
-        return fRounds.some(r => Boolean(r.followUpDate && r.followUpDate.trim() !== '' && r.followUpDate !== '—')) || Boolean(l.followUpDate);
-      } else {
-        const target = fRounds.find(r => r.roundNumber === selectedFollowupRound);
-        return Boolean(target?.followUpDate && target.followUpDate.trim() !== '' && target.followUpDate !== '—');
-      }
+      const target = fRounds.find(r => r.roundNumber === filterTab);
+      return Boolean(target?.followUpDate && target.followUpDate.trim() !== '' && target.followUpDate !== '—');
     }
     return true;
   });
@@ -881,10 +866,10 @@ export function ColdCallsModule({
     return normF >= todayLocalStr;
   });
 
-  // Follow-ups Today: Strictly matches selectedDate or today's local date
+  // Follow-ups Today: Strictly matches today's local date
   const followupTodayLeadsList = leads.filter(l => {
     const normF = normalizeDateStr(l.followUpDate);
-    return normF === selectedDate || normF === todayLocalStr;
+    return normF === todayLocalStr;
   });
 
   // ─── Render ───────────────────────────────────────────────────────────────────
@@ -910,22 +895,11 @@ export function ColdCallsModule({
       ══════════════════════════════════════════════════════════════════════ */}
       {subPage === 'analytics' && (() => {
 
-        // Filter leads based on selectedDate
-        const dateLeads = leads.filter(l => {
-          const timestamp = l.callTimestamp || l.updatedAt || l.createdAt;
-          const dStr = timestamp ? getLocalYYYYMMDD(timestamp) : '';
-          const fStr = normalizeDateStr(l.followUpDate);
-          return dStr === selectedDate || fStr === selectedDate;
-        });
-
         // 1. Total Calls — contacts marked "Yes" in Call column
         const totalCallsLeads = leads.filter(l => {
-          const isYes = l.callChoice === 'YES' || l.callStatus === 'YES' || l.callStatus === 'INTERESTED' || l.callStatus === 'WARM';
-          const timestamp = l.callTimestamp || l.updatedAt || l.createdAt;
-          const dStr = timestamp ? getLocalYYYYMMDD(timestamp) : '';
-          return isYes && (dStr === selectedDate || !selectedDate);
+          return l.callChoice === 'YES' || l.callStatus === 'YES' || l.callStatus === 'INTERESTED' || l.callStatus === 'WARM';
         });
-        const totalCallsCount = totalCallsLeads.length > 0 ? totalCallsLeads.length : leads.filter(l => l.callChoice === 'YES' || l.callStatus === 'YES' || l.callStatus === 'INTERESTED' || l.callStatus === 'WARM').length;
+        const totalCallsCount = totalCallsLeads.length;
 
         // 2. Status Breakdown — all leads with call choice / status recorded
         const statusLeads = leads.filter(l => l.callChoice === 'YES' || l.callChoice === 'NO' || (l.callStatus && l.callStatus !== 'PENDING'));
@@ -948,54 +922,15 @@ export function ColdCallsModule({
           return tB - tA;
         });
 
-        const todayYYYYMMDD = new Date().toISOString().slice(0, 10);
-        const isToday = selectedDate === todayYYYYMMDD;
-        const isPast = selectedDate < todayYYYYMMDD;
-
         return (
           <div className="space-y-6">
-            {/* Top Toolbar Header with Date Filter */}
+            {/* Top Toolbar Header */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-4 rounded-2xl border border-zinc-200 shadow-sm">
               <div>
                 <h3 className="text-lg font-extrabold text-black tracking-tight flex items-center gap-2">
                   <span>Cold Calls Performance Overview</span>
                 </h3>
                 <p className="text-xs text-zinc-500 font-medium">Real-time team cold calling metrics & recent calls log</p>
-              </div>
-
-              <div className="flex items-center gap-3">
-                {/* Date Selection Filter (Max set to Today to disable future dates) */}
-                <div className="flex items-center gap-2 bg-zinc-50 px-3.5 py-2 rounded-xl border border-zinc-200 shadow-inner">
-                  <Calendar className="w-4 h-4 text-zinc-500" />
-                  <span className="text-xs font-bold text-zinc-600 uppercase tracking-wider">Date Filter:</span>
-                  <input
-                    type="date"
-                    max={todayYYYYMMDD}
-                    value={selectedDate > todayYYYYMMDD ? todayYYYYMMDD : selectedDate}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      if (val && val > todayYYYYMMDD) {
-                        setSelectedDate(todayYYYYMMDD);
-                      } else {
-                        setSelectedDate(val);
-                      }
-                    }}
-                    className="bg-transparent text-xs font-extrabold text-black outline-none cursor-pointer"
-                  />
-                </div>
-
-                {/* Dynamic Today / Past Button */}
-                <button
-                  onClick={() => setSelectedDate(todayYYYYMMDD)}
-                  className={`px-3.5 py-2 text-xs font-extrabold rounded-xl border transition-all flex items-center gap-1.5 ${
-                    isToday
-                      ? 'bg-black text-white border-black shadow-sm'
-                      : 'bg-amber-100 text-amber-900 border-amber-300 hover:bg-amber-200'
-                  }`}
-                  title={isPast ? 'Click to reset back to Today' : 'Viewing Today'}
-                >
-                  {isPast ? '📅 Past' : 'Today'}
-                </button>
               </div>
             </div>
 
@@ -1009,7 +944,7 @@ export function ColdCallsModule({
                 <div className="min-w-0 flex-1">
                   <div className="text-[11px] font-bold text-blue-700 uppercase tracking-wider">Total Calls</div>
                   <div className="text-2xl font-black text-blue-950 tracking-tight">{totalCallsCount.toLocaleString()}</div>
-                  <div className="text-[10px] font-semibold text-blue-600/90 mt-0.5 truncate">Calls marked "Yes" on {selectedDate}</div>
+                  <div className="text-[10px] font-semibold text-blue-600/90 mt-0.5 truncate">Total calls marked "Yes"</div>
                 </div>
               </div>
 
@@ -1095,7 +1030,7 @@ export function ColdCallsModule({
               <div className="flex items-center justify-between border-b border-zinc-200 pb-4">
                 <div>
                   <h3 className="text-xl font-extrabold text-black tracking-tight">Recent Calls</h3>
-                  <p className="text-xs text-zinc-500 font-medium">Calls and notes logged by team members on selected date ({selectedDate})</p>
+                  <p className="text-xs text-zinc-500 font-medium">Recent calls and notes logged by team members</p>
                 </div>
                 <div className="flex items-center gap-3">
                   <button
@@ -1113,7 +1048,7 @@ export function ColdCallsModule({
 
               {displayCallsList.length === 0 ? (
                 <div className="p-12 text-center text-sm text-zinc-400 italic bg-zinc-50 rounded-2xl border border-zinc-200">
-                  No call logs found for selected date ({selectedDate}). Select another date or add data.
+                  No call logs found. Start logging calls or import data.
                 </div>
               ) : (
                 <div className="overflow-x-auto border border-zinc-200 rounded-2xl">
@@ -1269,51 +1204,44 @@ export function ColdCallsModule({
       ══════════════════════════════════════════════════════════════════════ */}
       {subPage === 'sheet' && (
         <div className="space-y-4">
-          {/* Filter Pills */}
-          <div className="bg-white rounded-xl border border-zinc-200 p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          {/* Filter Pills on the left side */}
+          <div className="bg-white rounded-xl border border-zinc-200 p-3 flex items-center justify-between gap-3">
             <div className="flex items-center gap-2 overflow-x-auto flex-wrap">
               {([
-                ['ALL', `All (${counts.all})`, 'bg-black text-white', 'text-zinc-700 bg-zinc-100 hover:bg-zinc-200'],
-                ['INTERESTED', `Interested (${counts.interested})`, 'bg-black text-white', 'text-zinc-700 bg-zinc-100 hover:bg-zinc-200'],
-                ['WARM', `Warm (${counts.warm})`, 'bg-black text-white', 'text-zinc-700 bg-zinc-100 hover:bg-zinc-200'],
-                ['NOT_INTERESTED', `Not Interested (${counts.notInterested})`, 'bg-black text-white', 'text-zinc-700 bg-zinc-100 hover:bg-zinc-200'],
-                ['FOLLOWUPS', `Follow-ups (${counts.followups})`, 'bg-black text-white', 'text-zinc-700 bg-zinc-100 hover:bg-zinc-200'],
-              ] as [string, string, string, string][]).map(([tab, label, active, inactive]) => (
+                ['ALL', `All (${counts.all})`],
+                ['INTERESTED', `Interested (${counts.interested})`],
+                ['WARM', `Warm (${counts.warm})`],
+                ['NOT_INTERESTED', `Not Interested (${counts.notInterested})`],
+              ] as [any, string][]).map(([tab, label]) => (
                 <button
                   key={tab}
-                  onClick={() => {
-                    setFilterTab(tab as any);
-                    if (tab !== 'FOLLOWUPS') setSelectedFollowupRound('ALL');
-                  }}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${filterTab === tab ? active : inactive}`}
+                  onClick={() => setFilterTab(tab)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
+                    filterTab === tab ? 'bg-black text-white shadow-xs' : 'text-zinc-700 bg-zinc-100 hover:bg-zinc-200'
+                  }`}
                 >
                   {label}
                 </button>
               ))}
-            </div>
 
-            {/* Dynamic Follow-up Round Selector Dropdown (Shown when Follow-ups Tab is Active) */}
-            {filterTab === 'FOLLOWUPS' && (
-              <div className="flex items-center gap-2 bg-zinc-50 border border-zinc-200 rounded-lg px-2.5 py-1 text-xs">
-                <span className="text-zinc-500 font-bold">Filter Round:</span>
-                <select
-                  value={selectedFollowupRound}
-                  onChange={(e) => setSelectedFollowupRound(e.target.value === 'ALL' ? 'ALL' : Number(e.target.value))}
-                  className="bg-transparent font-extrabold text-black outline-none cursor-pointer"
-                >
-                  <option value="ALL">All Follow-ups ({counts.followups})</option>
-                  {Array.from({ length: maxFollowUpRounds }).map((_, i) => {
-                    const rNum = i + 1;
-                    const rCount = getFollowupRoundCount(rNum);
-                    return (
-                      <option key={rNum} value={rNum}>
-                        Follow up {rNum} ({rCount})
-                      </option>
-                    );
-                  })}
-                </select>
-              </div>
-            )}
+              {/* Follow-up Rounds: Follow up 1, Follow up 2, etc. directly listed on left */}
+              {Array.from({ length: maxFollowUpRounds }).map((_, i) => {
+                const roundNum = i + 1;
+                const rCount = getFollowupRoundCount(roundNum);
+                const isSelected = filterTab === roundNum;
+                return (
+                  <button
+                    key={`fu_${roundNum}`}
+                    onClick={() => setFilterTab(roundNum)}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
+                      isSelected ? 'bg-black text-white shadow-xs' : 'text-zinc-700 bg-zinc-100 hover:bg-zinc-200'
+                    }`}
+                  >
+                    Follow up {roundNum} ({rCount})
+                  </button>
+                );
+              })}
+            </div>
           </div>
 
           {/* TOOLBAR - Search Box on left | Save, Add Data, Upload Excel, Clear on right */}
@@ -1490,14 +1418,14 @@ export function ColdCallsModule({
                               title="Click to view & edit all Follow-ups and Contact details"
                               className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-black transition-all cursor-pointer shadow-xs active:scale-95 ${
                                 hasNotesOrDates
-                                  ? 'bg-[#6b21a8] text-white hover:bg-purple-900'
+                                  ? 'bg-black text-white hover:bg-zinc-800'
                                   : 'bg-zinc-100 hover:bg-zinc-200 text-zinc-800 border border-zinc-300'
                               }`}
                             >
                               <Info className="w-3.5 h-3.5" />
                               <span>Info</span>
                               <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-black ${
-                                hasNotesOrDates ? 'bg-white text-purple-900' : 'bg-zinc-200 text-zinc-700'
+                                hasNotesOrDates ? 'bg-zinc-800 text-white' : 'bg-zinc-200 text-zinc-700'
                               }`}>
                                 {followUpsCount}
                               </span>
@@ -1545,99 +1473,6 @@ export function ColdCallsModule({
             {/* Body */}
             <div className="overflow-y-auto flex-1 p-6 space-y-6 font-sans">
 
-              {/* ── Contact Details (Collapsible) ── */}
-              <div className="border border-zinc-200 rounded-xl overflow-hidden bg-zinc-50/50">
-                <button
-                  type="button"
-                  onClick={() => setShowMoreInfo(v => !v)}
-                  className="w-full flex items-center justify-between px-4 py-2.5 hover:bg-zinc-100 transition-all text-xs font-bold text-gray-700 cursor-pointer"
-                >
-                  <span className="flex items-center gap-2">
-                    <User className="w-3.5 h-3.5 text-[#00a884]" />
-                    Lead & Contact Profile Details
-                  </span>
-                  {showMoreInfo ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
-                </button>
-
-                {showMoreInfo && (
-                  <div className="p-4 border-t border-zinc-200 space-y-3 bg-white">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <InfoField
-                        icon={<Briefcase className="w-3.5 h-3.5 text-gray-400" />}
-                        label="Business Name"
-                        value={infoPopupLead.businessName || ''}
-                        onChange={v => handlePopupLeadFieldEdit('businessName', v)}
-                      />
-                      <InfoField
-                        icon={<User className="w-3.5 h-3.5 text-gray-400" />}
-                        label="Person Name"
-                        value={infoPopupLead.personName || ''}
-                        onChange={v => handlePopupLeadFieldEdit('personName', v)}
-                      />
-                      <InfoField
-                        icon={<Phone className="w-3.5 h-3.5 text-gray-400" />}
-                        label="Phone Number"
-                        value={infoPopupLead.phone || ''}
-                        onChange={v => handlePopupLeadFieldEdit('phone', v)}
-                      />
-                      <InfoField
-                        icon={<Briefcase className="w-3.5 h-3.5 text-gray-400" />}
-                        label="Designation / Role"
-                        value={infoPopupLead.role || ''}
-                        onChange={v => handlePopupLeadFieldEdit('role', v)}
-                      />
-                      <InfoField
-                        icon={<Mail className="w-3.5 h-3.5 text-gray-400" />}
-                        label="Email"
-                        value={infoPopupLead.email || ''}
-                        onChange={v => handlePopupLeadFieldEdit('email', v)}
-                      />
-                      <InfoField
-                        icon={<Globe className="w-3.5 h-3.5 text-gray-400" />}
-                        label="Website"
-                        value={infoPopupLead.businessWebsite || ''}
-                        onChange={v => handlePopupLeadFieldEdit('businessWebsite', v)}
-                        isLink
-                      />
-                      <InfoField
-                        icon={<Linkedin className="w-3.5 h-3.5 text-[#0a66c2]" />}
-                        label="LinkedIn Profile"
-                        value={infoPopupLead.linkedinProfile || ''}
-                        onChange={v => handlePopupLeadFieldEdit('linkedinProfile', v)}
-                        isLink
-                      />
-                      <InfoField
-                        icon={<Facebook className="w-3.5 h-3.5 text-[#1877f2]" />}
-                        label="Facebook Profile"
-                        value={infoPopupLead.facebookProfile || ''}
-                        onChange={v => handlePopupLeadFieldEdit('facebookProfile', v)}
-                        isLink
-                      />
-                      <InfoField
-                        icon={<Instagram className="w-3.5 h-3.5 text-[#e1306c]" />}
-                        label="Instagram Profile"
-                        value={infoPopupLead.instaProfile || ''}
-                        onChange={v => handlePopupLeadFieldEdit('instaProfile', v)}
-                        isLink
-                      />
-                    </div>
-
-                    {/* Extra Columns from uploaded Excel file */}
-                    {infoPopupLead.customFields && Object.keys(infoPopupLead.customFields).length > 0 && (
-                      <div className="border-t border-gray-200 pt-3 mt-3 space-y-2">
-                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-wider">Extra Excel Columns</p>
-                        {Object.entries(infoPopupLead.customFields).map(([k, v]) => (
-                          <div key={k} className="flex items-center gap-3 bg-gray-50 p-2.5 rounded-xl border border-gray-200 text-xs">
-                            <span className="font-bold text-gray-600 min-w-[110px]">{k}:</span>
-                            <span className="font-semibold text-black flex-1 truncate">{String(v)}</span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-
               {/* ── Multi-Stage Follow-ups Container ── */}
               <div className="space-y-5">
                 <div className="flex items-center justify-between">
@@ -1662,7 +1497,7 @@ export function ColdCallsModule({
                       {/* Follow-up Header */}
                       <div className="flex items-center justify-between border-b border-zinc-100 pb-2">
                         <div className="flex items-center gap-2">
-                          <span className="px-2.5 py-0.5 rounded-md bg-purple-100 text-purple-900 font-black text-xs">
+                          <span className="px-2.5 py-0.5 rounded-md bg-zinc-900 text-white font-black text-xs uppercase tracking-wider">
                             FOLLOW UP {round.roundNumber || rIdx + 1}
                           </span>
                           {round.calledBy && (
@@ -1838,15 +1673,108 @@ export function ColdCallsModule({
                   );
                 })}
 
-                {/* "➕ Add Follow Up" Button */}
+                {/* "ADD FOLLOW UP" Button (Capital, Black Style, Single + Icon) */}
                 <button
                   type="button"
                   onClick={handleAddFollowUpStage}
-                  className="w-full py-2.5 border-2 border-dashed border-purple-300 hover:border-purple-600 bg-purple-50/50 hover:bg-purple-50 text-purple-900 font-black text-xs rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer shadow-xs active:scale-98"
+                  className="w-full py-2.5 border-2 border-dashed border-zinc-900 hover:border-black bg-zinc-50 hover:bg-zinc-100 text-black font-black text-xs uppercase tracking-wider rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer shadow-xs active:scale-98"
                 >
-                  <Plus className="w-4 h-4 text-purple-700" />
-                  <span>+ Add Follow Up {infoPopupFollowUps.length + 1}</span>
+                  <Plus className="w-4 h-4 text-black" />
+                  <span>ADD FOLLOW UP {infoPopupFollowUps.length + 1}</span>
                 </button>
+
+                {/* ── Contact Details (Collapsible at Bottom under Add Follow Up button) ── */}
+                <div className="border border-zinc-200 rounded-xl overflow-hidden bg-zinc-50/50 mt-4">
+                  <button
+                    type="button"
+                    onClick={() => setShowMoreInfo(v => !v)}
+                    className="w-full flex items-center justify-between px-4 py-2.5 hover:bg-zinc-100 transition-all text-xs font-bold text-gray-700 cursor-pointer"
+                  >
+                    <span className="flex items-center gap-2">
+                      <User className="w-3.5 h-3.5 text-[#00a884]" />
+                      Lead & Contact Profile Details
+                    </span>
+                    {showMoreInfo ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
+                  </button>
+
+                  {showMoreInfo && (
+                    <div className="p-4 border-t border-zinc-200 space-y-3 bg-white">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <InfoField
+                          icon={<Briefcase className="w-3.5 h-3.5 text-gray-400" />}
+                          label="Business Name"
+                          value={infoPopupLead.businessName || ''}
+                          onChange={v => handlePopupLeadFieldEdit('businessName', v)}
+                        />
+                        <InfoField
+                          icon={<User className="w-3.5 h-3.5 text-gray-400" />}
+                          label="Person Name"
+                          value={infoPopupLead.personName || ''}
+                          onChange={v => handlePopupLeadFieldEdit('personName', v)}
+                        />
+                        <InfoField
+                          icon={<Phone className="w-3.5 h-3.5 text-gray-400" />}
+                          label="Phone Number"
+                          value={infoPopupLead.phone || ''}
+                          onChange={v => handlePopupLeadFieldEdit('phone', v)}
+                        />
+                        <InfoField
+                          icon={<Briefcase className="w-3.5 h-3.5 text-gray-400" />}
+                          label="Designation / Role"
+                          value={infoPopupLead.role || ''}
+                          onChange={v => handlePopupLeadFieldEdit('role', v)}
+                        />
+                        <InfoField
+                          icon={<Mail className="w-3.5 h-3.5 text-gray-400" />}
+                          label="Email"
+                          value={infoPopupLead.email || ''}
+                          onChange={v => handlePopupLeadFieldEdit('email', v)}
+                        />
+                        <InfoField
+                          icon={<Globe className="w-3.5 h-3.5 text-gray-400" />}
+                          label="Website"
+                          value={infoPopupLead.businessWebsite || ''}
+                          onChange={v => handlePopupLeadFieldEdit('businessWebsite', v)}
+                          isLink
+                        />
+                        <InfoField
+                          icon={<Linkedin className="w-3.5 h-3.5 text-[#0a66c2]" />}
+                          label="LinkedIn Profile"
+                          value={infoPopupLead.linkedinProfile || ''}
+                          onChange={v => handlePopupLeadFieldEdit('linkedinProfile', v)}
+                          isLink
+                        />
+                        <InfoField
+                          icon={<Facebook className="w-3.5 h-3.5 text-[#1877f2]" />}
+                          label="Facebook Profile"
+                          value={infoPopupLead.facebookProfile || ''}
+                          onChange={v => handlePopupLeadFieldEdit('facebookProfile', v)}
+                          isLink
+                        />
+                        <InfoField
+                          icon={<Instagram className="w-3.5 h-3.5 text-[#e1306c]" />}
+                          label="Instagram Profile"
+                          value={infoPopupLead.instaProfile || ''}
+                          onChange={v => handlePopupLeadFieldEdit('instaProfile', v)}
+                          isLink
+                        />
+                      </div>
+
+                      {/* Extra Columns from uploaded Excel file */}
+                      {infoPopupLead.customFields && Object.keys(infoPopupLead.customFields).length > 0 && (
+                        <div className="border-t border-gray-200 pt-3 mt-3 space-y-2">
+                          <p className="text-[10px] font-black text-gray-400 uppercase tracking-wider">Extra Excel Columns</p>
+                          {Object.entries(infoPopupLead.customFields).map(([k, v]) => (
+                            <div key={k} className="flex items-center gap-3 bg-gray-50 p-2.5 rounded-xl border border-gray-200 text-xs">
+                              <span className="font-bold text-gray-600 min-w-[110px]">{k}:</span>
+                              <span className="font-semibold text-black flex-1 truncate">{String(v)}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
 
@@ -1962,7 +1890,7 @@ export function ColdCallsModule({
                   <PhoneCall className="w-5 h-5 text-emerald-600" />
                   Status Breakdown
                 </h3>
-                <p className="text-xs font-semibold text-emerald-700 mt-0.5">Summary of call statuses on {selectedDate}</p>
+                <p className="text-xs font-semibold text-emerald-700 mt-0.5">Summary of all call statuses</p>
               </div>
               <button onClick={() => setShowStatusModal(false)} className="w-8 h-8 rounded-full bg-white hover:bg-gray-200 flex items-center justify-center text-gray-700 transition-all border border-gray-200 shadow-sm">
                 <X className="w-4 h-4" />
@@ -2006,7 +1934,7 @@ export function ColdCallsModule({
                   <User className="w-5 h-5 text-purple-600" />
                   Interested Leads ({leads.filter(l => l.callStatus === 'INTERESTED' || (l.callChoice === 'YES' && (l.callStatus === 'WARM' || l.callStatus === 'YES' || !l.callStatus))).length})
                 </h3>
-                <p className="text-xs font-semibold text-purple-700 mt-0.5">High potential clients logged for {selectedDate}</p>
+                <p className="text-xs font-semibold text-purple-700 mt-0.5">High potential clients recorded</p>
               </div>
               <button onClick={() => setShowInterestedModal(false)} className="w-8 h-8 rounded-full bg-white hover:bg-gray-200 flex items-center justify-center text-gray-700 transition-all border border-gray-200 shadow-sm">
                 <X className="w-4 h-4" />
@@ -2016,7 +1944,7 @@ export function ColdCallsModule({
             <div className="overflow-y-auto flex-1 p-6">
               {leads.filter(l => l.callStatus === 'INTERESTED' || (l.callChoice === 'YES' && (l.callStatus === 'WARM' || l.callStatus === 'YES' || !l.callStatus))).length === 0 ? (
                 <div className="p-12 text-center text-xs text-gray-400 font-semibold bg-gray-50 rounded-xl border border-gray-200">
-                  No interested contacts recorded for selected date ({selectedDate}).
+                  No interested contacts recorded.
                 </div>
               ) : (
                 <div className="border border-gray-200 rounded-xl overflow-hidden">
@@ -2152,7 +2080,7 @@ export function ColdCallsModule({
                   <Briefcase className="w-5 h-5 text-amber-600" />
                   Follow-ups Today ({followupTodayLeadsList.length})
                 </h3>
-                <p className="text-xs font-semibold text-amber-700 mt-0.5">Contacts scheduled for follow-up today ({selectedDate})</p>
+                <p className="text-xs font-semibold text-amber-700 mt-0.5">Contacts scheduled for follow-up today</p>
               </div>
               <button onClick={() => setShowFollowupsTodayModal(false)} className="w-8 h-8 rounded-full bg-white hover:bg-gray-200 flex items-center justify-center text-gray-700 transition-all border border-gray-200 shadow-sm">
                 <X className="w-4 h-4" />
@@ -2162,7 +2090,7 @@ export function ColdCallsModule({
             <div className="overflow-y-auto flex-1 p-6">
               {followupTodayLeadsList.length === 0 ? (
                 <div className="p-12 text-center text-xs text-gray-400 font-semibold bg-gray-50 rounded-xl border border-gray-200">
-                  No scheduled follow-up contacts found for selected date ({selectedDate}).
+                  No scheduled follow-up contacts found for today.
                 </div>
               ) : (
                 <div className="border border-gray-200 rounded-xl overflow-hidden">

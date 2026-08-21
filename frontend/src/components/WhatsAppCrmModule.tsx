@@ -1126,18 +1126,13 @@ export function WhatsAppCrmModule() {
                                   onChange={async (e) => {
                                     const newDate = e.target.value;
                                     if (!newDate) return;
-                                    const confirmed = window.confirm(`Forward follow-up for "${displayName}" from ${chat.followUpDate || todayLocalStr} to ${newDate}?`);
-                                    if (!confirmed) {
-                                      e.target.value = '';
-                                      return;
-                                    }
                                     await updateCrmMetadata(chat.jid, {
                                       followUpDate: newDate,
                                       previousFollowUpDate: chat.followUpDate || todayLocalStr,
                                     });
                                   }}
                                   className="px-2.5 py-1 bg-white border border-indigo-300 rounded-md text-xs text-indigo-950 font-bold outline-none cursor-pointer hover:border-indigo-600 focus:border-indigo-600 transition-all shadow-sm"
-                                  title="Select new date to forward follow-up"
+                                  title="Select new date to forward follow-up directly"
                                 />
                                 <span className="text-[11px] font-extrabold text-indigo-700 pr-1 flex items-center gap-0.5 select-none">
                                   Forward ⏩

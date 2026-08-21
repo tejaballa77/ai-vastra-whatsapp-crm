@@ -24,6 +24,7 @@ interface SocketContextType {
     leadStatus?: 'INTERESTED' | 'WARM_INTERESTED' | 'NOT_INTERESTED' | 'UNASSIGNED';
     callStatus?: 'YES' | 'NO';
     followUpDate?: string;
+    previousFollowUpDate?: string;
     notes?: string;
     notesList?: string[];
     tags?: string[];

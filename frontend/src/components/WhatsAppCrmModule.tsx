@@ -100,7 +100,7 @@ export function WhatsAppCrmModule() {
   const [copiedPhone, setCopiedPhone] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState<string>('');
 
-  const { chats: rawChats } = useSocket();
+  const { chats: rawChats, updateCrmMetadata } = useSocket();
 
   const BAD_NAMES = new Set(['.', 'contact', 'unsaved contact', 'unknown contact', 'whatsapp contact', '']);
   const canonicalPhone = (raw: string) => {
@@ -721,9 +721,17 @@ export function WhatsAppCrmModule() {
 
                             <td className="p-4 align-middle">
                               {chat.followUpDate ? (
-                                <span className="px-3 py-1 text-xs font-extrabold bg-zinc-100 text-black border border-black rounded-md flex items-center gap-1 w-max">
-                                  📅 {chat.followUpDate}
-                                </span>
+                                <div className="space-y-1">
+                                  <span className="px-3 py-1 text-xs font-extrabold bg-zinc-100 text-black border border-black rounded-md flex items-center gap-1 w-max">
+                                    📅 {chat.followUpDate}
+                                  </span>
+                                  {chat.previousFollowUpDate && chat.previousFollowUpDate !== chat.followUpDate && (
+                                    <div className="text-[10px] font-bold text-zinc-500 pl-1 flex items-center gap-1">
+                                      <span className="text-zinc-400 font-medium">Orig:</span>
+                                      <span className="text-zinc-600">📅 {chat.previousFollowUpDate}</span>
+                                    </div>
+                                  )}
+                                </div>
                               ) : (
                                 <span className="text-zinc-400 text-xs">None</span>
                               )}
@@ -1093,6 +1101,7 @@ export function WhatsAppCrmModule() {
                         <th className="p-3">Phone</th>
                         <th className="p-3 font-extrabold text-amber-700">Follow-up Date</th>
                         <th className="p-3">Note</th>
+                        <th className="p-3 font-extrabold text-indigo-700">Forward Date</th>
                         <th className="p-3 text-right">Action</th>
                       </tr>
                     </thead>
@@ -1104,8 +1113,37 @@ export function WhatsAppCrmModule() {
                             <td className="p-3 text-gray-400 font-mono font-bold">{idx + 1}</td>
                             <td className="p-3 font-extrabold text-black">{displayName}</td>
                             <td className="p-3 font-extrabold text-[#00a884]">📞 {formattedPhone}</td>
-                            <td className="p-3 font-extrabold text-amber-800 bg-amber-50/80 rounded">📅 {chat.followUpDate || '—'}</td>
+                            <td className="p-3 font-extrabold text-amber-800 bg-amber-50/80 rounded">
+                              📅 {chat.followUpDate || '—'}
+                            </td>
                             <td className="p-3 text-gray-600 truncate max-w-[150px]">{chat.notes || chat.notesList?.[0] || '—'}</td>
+                            <td className="p-3">
+                              <div className="flex items-center gap-1.5 bg-indigo-50 p-1 rounded-lg border border-indigo-200 w-max">
+                                <input
+                                  type="date"
+                                  defaultValue=""
+                                  min={todayLocalStr}
+                                  onChange={async (e) => {
+                                    const newDate = e.target.value;
+                                    if (!newDate) return;
+                                    const confirmed = window.confirm(`Forward follow-up for "${displayName}" from ${chat.followUpDate || todayLocalStr} to ${newDate}?`);
+                                    if (!confirmed) {
+                                      e.target.value = '';
+                                      return;
+                                    }
+                                    await updateCrmMetadata(chat.jid, {
+                                      followUpDate: newDate,
+                                      previousFollowUpDate: chat.followUpDate || todayLocalStr,
+                                    });
+                                  }}
+                                  className="px-2 py-1 bg-white border border-indigo-300 rounded text-xs text-indigo-950 font-bold outline-none cursor-pointer hover:border-indigo-600 focus:border-indigo-600 transition-all"
+                                  title="Select new date to forward follow-up"
+                                />
+                                <span className="text-[10px] font-black text-indigo-700 pr-1 flex items-center gap-0.5 select-none">
+                                  Forward ⏩
+                                </span>
+                              </div>
+                            </td>
                             <td className="p-3 text-right">
                               <button
                                 onClick={() => { setShowFollowupsTodayModal(false); handleOpenSpecificChat(cleanPhone); }}

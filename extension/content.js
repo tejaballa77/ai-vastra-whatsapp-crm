@@ -54,6 +54,7 @@ let activeFormData = {
   leadStatus: 'UNASSIGNED',
   callStatus: null,
   followUpDate: '',
+  previousFollowUpDate: '',
   notesList: []
 };
 
@@ -161,6 +162,7 @@ function syncAllCrmChats(callback) {
               leadStatus: c.leadStatus || existingMeta.leadStatus || 'UNASSIGNED',
               callStatus: c.callStatus || existingMeta.callStatus || null,
               followUpDate: c.followUpDate || existingMeta.followUpDate || '',
+              previousFollowUpDate: c.previousFollowUpDate || existingMeta.previousFollowUpDate || '',
               notesList: c.notesList || existingMeta.notesList || (c.notes ? [c.notes] : []),
               name: (hasValidName ? c.name : existingMeta.name),
               phone: c.phone || tenDigit
@@ -462,6 +464,7 @@ function fetchCrmMetadata(searchKey, displayName, domAvatar) {
           leadStatus: bLead || lLead || 'UNASSIGNED',
           callStatus: bCall || lCall || null,
           followUpDate: bFollow || lFollow || '',
+          previousFollowUpDate: chat.previousFollowUpDate || activeFormData.previousFollowUpDate || '',
           notesList: mergedNotes
         };
 
@@ -622,7 +625,12 @@ function renderCrmPanel(displayName, cleanPhone, avatarUrl, showSaveToast = fals
 
       <div>
         <div class="aivastra-section-title">FOLLOW-UP SCHEDULE</div>
-        <input type="date" id="aivastra-followup-date" class="aivastra-date-input" value="${activeFormData.followUpDate}" />
+        <input type="date" id="aivastra-followup-date" class="aivastra-date-input" value="${activeFormData.followUpDate || ''}" />
+        ${activeFormData.previousFollowUpDate && activeFormData.previousFollowUpDate !== activeFormData.followUpDate ? `
+          <div style="margin-top: 4px; font-size: 11px; font-weight: 600; color: #71717a;">
+            Forwarded from: <span style="color: #18181b;">📅 ${activeFormData.previousFollowUpDate}</span>
+          </div>
+        ` : ''}
       </div>
 
       <div style="display:flex;flex-direction:column;flex:1;">

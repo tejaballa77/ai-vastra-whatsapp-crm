@@ -9,6 +9,7 @@ export interface CRMContact {
   leadStatus: 'INTERESTED' | 'WARM_INTERESTED' | 'NOT_INTERESTED' | 'UNASSIGNED';
   callStatus?: 'YES' | 'NO';
   followUpDate?: string;
+  previousFollowUpDate?: string;
   notes?: string;
   notesList?: string[];
   tags: string[];
@@ -29,6 +30,7 @@ export interface CRMChat {
   leadStatus: 'INTERESTED' | 'WARM_INTERESTED' | 'NOT_INTERESTED' | 'UNASSIGNED';
   callStatus?: 'YES' | 'NO';
   followUpDate?: string;
+  previousFollowUpDate?: string;
   notes?: string;
   notesList?: string[];
   tags: string[];
@@ -734,6 +736,7 @@ class StorageEngine {
 
         const mergedCallStatus = primary.callStatus !== undefined ? primary.callStatus : secondary.callStatus;
         const mergedFollowUpDate = (primary.followUpDate && primary.followUpDate.trim() !== '') ? primary.followUpDate : (secondary.followUpDate || '');
+        const mergedPreviousFollowUpDate = (primary.previousFollowUpDate && primary.previousFollowUpDate.trim() !== '') ? primary.previousFollowUpDate : (secondary.previousFollowUpDate || '');
         const mergedNotes = (primary.notes && primary.notes.trim() !== '') ? primary.notes : (secondary.notes || '');
         const mergedNotesList = (primary.notesList && primary.notesList.length > 0) ? primary.notesList : (secondary.notesList || []);
 
@@ -744,6 +747,7 @@ class StorageEngine {
           leadStatus: mergedLeadStatus,
           callStatus: mergedCallStatus,
           followUpDate: mergedFollowUpDate,
+          previousFollowUpDate: mergedPreviousFollowUpDate,
           notes: mergedNotes,
           notesList: mergedNotesList,
           lastMessageAt: Math.max(existing.lastMessageAt || 0, lastMessageAt || 0),
@@ -752,7 +756,6 @@ class StorageEngine {
       }
     }
 
-    // Also include any saved CRM contacts from this.contacts (e.g. Santhosh Nellore Chandana, etc.)
     for (const [contactJid, contact] of this.contacts.entries()) {
       const resolvedKey = this.resolveJid(contactJid);
       const rawDigits = (contact.phone || resolvedKey.split('@')[0]).replace(/\D/g, '');
@@ -770,6 +773,7 @@ class StorageEngine {
           leadStatus: contact.leadStatus || 'UNASSIGNED',
           callStatus: contact.callStatus,
           followUpDate: contact.followUpDate,
+          previousFollowUpDate: contact.previousFollowUpDate,
           notes: contact.notes,
           notesList: contact.notesList,
           tags: contact.tags || [],
@@ -785,6 +789,7 @@ class StorageEngine {
           leadStatus: (existing.leadStatus && existing.leadStatus !== 'UNASSIGNED') ? existing.leadStatus : (contact.leadStatus || 'UNASSIGNED'),
           callStatus: existing.callStatus !== undefined ? existing.callStatus : contact.callStatus,
           followUpDate: existing.followUpDate || contact.followUpDate,
+          previousFollowUpDate: existing.previousFollowUpDate || contact.previousFollowUpDate,
           notes: existing.notes || contact.notes,
           notesList: (existing.notesList && existing.notesList.length > 0) ? existing.notesList : contact.notesList,
           avatarUrl: existing.avatarUrl || contact.avatarUrl,
@@ -808,24 +813,15 @@ class StorageEngine {
 
     const messageMap = new Map<string, CRMMessage>();
 
-    const appendList = (list?: CRMMessage[]) => {
-      if (list) {
-        for (const m of list) {
-          messageMap.set(m.id, m);
+    for (const key of [chatJid, rawChatJid, cleanNumber]) {
+      const list = this.messages.get(key) || [];
+      for (const m of list) {
+        if (!messageMap.has(m.id)) {
+          messageMap.set(m.id, {
+            ...m,
+            chatJid,
+          });
         }
-      }
-    };
-
-    appendList(this.messages.get(rawChatJid));
-    appendList(this.messages.get(chatJid));
-    appendList(this.messages.get(rawNumber));
-    appendList(this.messages.get(cleanNumber));
-
-    // Check LID mappings
-    for (const [lid, mappedPhone] of this.lidToJidMap.entries()) {
-      if (mappedPhone === chatJid || mappedPhone === rawChatJid || mappedPhone.includes(cleanNumber)) {
-        appendList(this.messages.get(lid));
-        appendList(this.messages.get(lid.split('@')[0]));
       }
     }
 
@@ -839,6 +835,7 @@ class StorageEngine {
     leadStatus?: 'INTERESTED' | 'WARM_INTERESTED' | 'NOT_INTERESTED' | 'UNASSIGNED';
     callStatus?: 'YES' | 'NO';
     followUpDate?: string;
+    previousFollowUpDate?: string;
     notes?: string;
     notesList?: string[];
     tags?: string[];
@@ -852,7 +849,6 @@ class StorageEngine {
     const incomingNameClean = (metadata.name || '').trim();
     const incomingNameIsValid = incomingNameClean.length > 1 && !BAD_NAMES.has(incomingNameClean.toLowerCase());
 
-    // 1. Update or create Contact strictly under canonicalJid
     let contact = this.contacts.get(canonicalJid) || this.contacts.get(jid);
     if (!contact) {
       contact = {
@@ -864,6 +860,7 @@ class StorageEngine {
         notes: metadata.notes,
         notesList: metadata.notesList || [],
         followUpDate: metadata.followUpDate,
+        previousFollowUpDate: metadata.previousFollowUpDate,
         callStatus: metadata.callStatus,
       };
     } else {
@@ -871,6 +868,7 @@ class StorageEngine {
       if (metadata.leadStatus !== undefined) contact.leadStatus = metadata.leadStatus;
       if (metadata.callStatus !== undefined) contact.callStatus = metadata.callStatus;
       if (metadata.followUpDate !== undefined) contact.followUpDate = metadata.followUpDate;
+      if (metadata.previousFollowUpDate !== undefined) contact.previousFollowUpDate = metadata.previousFollowUpDate;
       if (metadata.notes !== undefined) contact.notes = metadata.notes;
       if (metadata.notesList !== undefined) contact.notesList = metadata.notesList;
       if (metadata.tags !== undefined) contact.tags = metadata.tags;
@@ -878,7 +876,6 @@ class StorageEngine {
     }
     this.contacts.set(canonicalJid, contact);
 
-    // 2. Find and merge ANY existing chat entries for this number into canonicalJid
     let chat = this.chats.get(canonicalJid) || this.chats.get(jid);
     const keysToDelete: string[] = [];
 
@@ -894,11 +891,11 @@ class StorageEngine {
             if (c.notes) chat.notes = c.notes;
             if (c.notesList && c.notesList.length > 0) chat.notesList = c.notesList;
             if (c.followUpDate) chat.followUpDate = c.followUpDate;
+            if (c.previousFollowUpDate) chat.previousFollowUpDate = c.previousFollowUpDate;
             chat.lastMessageAt = Math.max(chat.lastMessageAt || 0, c.lastMessageAt || 0);
           }
           keysToDelete.push(k);
 
-          // Merge messages to canonicalJid
           const oldMsgs = this.messages.get(k) || [];
           if (oldMsgs.length > 0) {
             const curMsgs = this.messages.get(canonicalJid) || [];
@@ -912,7 +909,6 @@ class StorageEngine {
       }
     }
 
-    // Delete duplicate keys from chats map
     for (const k of keysToDelete) {
       this.chats.delete(k);
     }
@@ -928,6 +924,7 @@ class StorageEngine {
         leadStatus: metadata.leadStatus || 'UNASSIGNED',
         callStatus: metadata.callStatus || undefined,
         followUpDate: metadata.followUpDate || '',
+        previousFollowUpDate: metadata.previousFollowUpDate || '',
         notes: metadata.notes || '',
         notesList: metadata.notesList || [],
         tags: metadata.tags || [],
@@ -937,6 +934,7 @@ class StorageEngine {
       if (metadata.leadStatus !== undefined) chat.leadStatus = metadata.leadStatus;
       if (metadata.callStatus !== undefined) chat.callStatus = metadata.callStatus || undefined;
       if (metadata.followUpDate !== undefined) chat.followUpDate = metadata.followUpDate;
+      if (metadata.previousFollowUpDate !== undefined) chat.previousFollowUpDate = metadata.previousFollowUpDate;
       if (metadata.notes !== undefined) chat.notes = metadata.notes;
       if (metadata.notesList !== undefined) chat.notesList = metadata.notesList;
       if (metadata.tags !== undefined) chat.tags = metadata.tags;
@@ -944,14 +942,12 @@ class StorageEngine {
       if (tenDigit) chat.phone = `91${tenDigit}`;
     }
 
-    // Store ONLY under canonicalJid
     this.chats.set(canonicalJid, chat);
 
     this.saveData();
     return chat;
   }
 
-  // ==================== COLD CALLS MANAGEMENT ====================
   public getAllColdCalls(): ColdCallLead[] {
     return Array.from(this.coldCalls.values()).sort((a, b) => b.updatedAt - a.updatedAt);
   }

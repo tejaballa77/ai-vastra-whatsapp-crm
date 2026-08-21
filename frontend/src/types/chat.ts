@@ -12,6 +12,7 @@ export interface Chat {
   leadStatus: 'INTERESTED' | 'WARM_INTERESTED' | 'WARM' | 'NOT_INTERESTED' | 'UNASSIGNED';
   callStatus?: 'YES' | 'NO';
   followUpDate?: string;
+  previousFollowUpDate?: string;
   notes?: string;
   notesList?: string[];
   tags: string[];

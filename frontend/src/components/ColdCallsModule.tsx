@@ -34,6 +34,26 @@ import { useSocket } from '../context/SocketContext';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
+export type CallChoiceType = 'YES' | 'NO' | 'INVALID' | 'PENDING';
+export type CallStatusType = 'INTERESTED' | 'WARM' | 'NOT_INTERESTED' | 'NOT_CONNECTED' | 'NOT_REACHABLE' | 'INVALID' | 'PENDING' | string;
+
+export interface NoteEntry {
+  text: string;
+  date: string; // DD-MM-YYYY
+}
+
+export interface FollowUpRound {
+  id: string;
+  roundNumber: number; // 1 for Follow up 1, 2 for Follow up 2, etc.
+  callChoice: CallChoiceType;
+  callStatus: CallStatusType;
+  followUpDate?: string; // YYYY-MM-DD or DD-MM-YYYY
+  notesList?: NoteEntry[];
+  note?: string;
+  calledBy?: string;
+  updatedAt?: number;
+}
+
 export interface ColdCallLead {
   id: string;
   // Primary table columns
@@ -47,6 +67,8 @@ export interface ColdCallLead {
   linkedinProfile?: string;
   facebookProfile?: string;
   instaProfile?: string;
+  // Multi-stage Follow-ups (Follow Up 1, Follow Up 2, Follow Up 3...)
+  followUps?: FollowUpRound[];
   // Notes with timestamps
   note?: string;           // original note from Excel
   notesList?: NoteEntry[]; // user-added notes with timestamps
@@ -54,19 +76,14 @@ export interface ColdCallLead {
   name?: string;
   company?: string;
   customFields?: Record<string, any>;
-  callChoice?: 'YES' | 'NO' | 'PENDING';
-  callStatus?: 'YES' | 'NO' | 'PENDING' | 'INTERESTED' | 'NOT_INTERESTED' | 'CONNECTED' | 'BUSY' | 'NO_ANSWER' | 'CALLBACK_REQUESTED' | 'NOT_CONNECTED' | 'WARM';
+  callChoice?: CallChoiceType;
+  callStatus?: CallStatusType;
   followUpDate?: string;
   calledBy?: string;        // Logged-in username (e.g. James Mitchell)
   callTimestamp?: number;   // Timestamp of last call/note update
   callOutcome?: string;     // Call status badge
   createdAt: number;
   updatedAt: number;
-}
-
-interface NoteEntry {
-  text: string;
-  date: string; // DD-MM-YYYY
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -84,7 +101,25 @@ const getTodayDate = (): string => {
   return `${dd}-${mm}-${d.getFullYear()}`;
 };
 
-// Map raw Excel header to our field keys
+export const getLeadFollowUps = (lead: ColdCallLead): FollowUpRound[] => {
+  if (lead.followUps && lead.followUps.length > 0) {
+    return lead.followUps;
+  }
+  const choice = lead.callChoice || (lead.callStatus === 'NOT_CONNECTED' ? 'NO' : (lead.callStatus === 'NOT_REACHABLE' || lead.callStatus === 'INVALID' ? 'INVALID' : (lead.callStatus && lead.callStatus !== 'PENDING' ? 'YES' : 'PENDING')));
+  return [{
+    id: `fu_${lead.id}_1`,
+    roundNumber: 1,
+    callChoice: choice,
+    callStatus: lead.callStatus || 'PENDING',
+    followUpDate: lead.followUpDate || '',
+    note: lead.note || '',
+    notesList: lead.notesList || (lead.note ? [{ text: lead.note, date: getTodayDate() }] : []),
+    calledBy: lead.calledBy,
+    updatedAt: lead.updatedAt,
+  }];
+};
+
+// Map raw Excel header to our field keys with intelligent multi-followup detection
 const mapExcelRow = (row: Record<string, any>, idx: number): Partial<ColdCallLead> => {
   const get = (...keys: string[]) => {
     for (const k of keys) {
@@ -96,7 +131,7 @@ const mapExcelRow = (row: Record<string, any>, idx: number): Partial<ColdCallLea
     return '';
   };
 
-  const businessName  = get('businessname', 'business', 'company', 'brand', 'org') || '';
+  const businessName  = get('businessname', 'business', 'company', 'brand', 'org', 'prospectname') || '';
   const personName    = get('personname', 'person', 'contact', 'name', 'lead') || '';
   const phone         = get('phonenumber', 'phone', 'mobile', 'cell', 'number') || '';
   const businessWebsite = get('businesswebsite', 'website', 'url', 'web') || '';
@@ -105,13 +140,87 @@ const mapExcelRow = (row: Record<string, any>, idx: number): Partial<ColdCallLea
   const linkedinProfile = get('linkedin', 'linkedinprofile') || '';
   const facebookProfile = get('facebook', 'facebookprofile', 'fb') || '';
   const instaProfile  = get('insta', 'instagram', 'instaprofile') || '';
-  const note          = get('note', 'notes', 'remark', 'comment', 'description') || '';
-  const callChoice    = get('call', 'callchoice') || 'PENDING';
-  const followUpDate  = get('followupdate', 'followup', 'date') || '';
+  const calledBy      = get('callby', 'calledby', 'caller', 'agent', 'staff') || '';
+
+  // Multi-round Follow-up column extraction (Date, Follow up 1, Followup 2, Followup 3, ...)
+  const followUpRounds: FollowUpRound[] = [];
+  const roundKeysMap: { roundNum: number; keys: string[] }[] = [
+    { roundNum: 1, keys: ['followup1', 'followup-1', 'followup_1', 'follow-up1', 'follow-up 1', 'date', 'firstfollowup'] },
+    { roundNum: 2, keys: ['followup2', 'followup-2', 'followup_2', 'follow-up2', 'follow-up 2', 'secondfollowup'] },
+    { roundNum: 3, keys: ['followup3', 'followup-3', 'followup_3', 'follow-up3', 'follow-up 3', 'thirdfollowup'] },
+    { roundNum: 4, keys: ['followup4', 'followup-4', 'followup_4', 'follow-up4', 'follow-up 4'] },
+    { roundNum: 5, keys: ['followup5', 'followup-5', 'followup_5', 'follow-up5', 'follow-up 5'] },
+    { roundNum: 6, keys: ['followup6', 'followup-6', 'followup_6', 'follow-up6', 'follow-up 6'] },
+    { roundNum: 7, keys: ['followup7', 'followup-7', 'followup_7', 'follow-up7', 'follow-up 7'] },
+  ];
+
+  const inferStatusFromNote = (noteText: string): { choice: CallChoiceType; status: CallStatusType } => {
+    const low = noteText.toLowerCase();
+    if (low.includes('out of service') || low.includes('not reachable') || low.includes('invalid') || low.includes('wrong number') || low.includes('network issue')) {
+      return { choice: 'INVALID', status: low.includes('invalid') ? 'INVALID' : 'NOT_REACHABLE' };
+    }
+    if (low.includes('did not connect') || low.includes('not answering') || low.includes('busy') || low.includes('hang up') || low.includes('hangup') || low.includes('no answer')) {
+      return { choice: 'NO', status: 'NOT_CONNECTED' };
+    }
+    if (low.includes('not interested') || low.includes('no requirement') || low.includes('not related') || low.includes('no need')) {
+      return { choice: 'YES', status: 'NOT_INTERESTED' };
+    }
+    if (low.includes('interested') || low.includes('pricing') || low.includes('explain') || low.includes('call back') || low.includes('share details') || low.includes('demo')) {
+      return { choice: 'YES', status: 'INTERESTED' };
+    }
+    return { choice: 'PENDING', status: 'PENDING' };
+  };
+
+  const id = `lead_${Date.now()}_${idx}_${Math.random().toString(36).substring(2, 6)}`;
+
+  for (const { roundNum, keys } of roundKeysMap) {
+    const val = get(...keys);
+    if (val) {
+      // Extract date if present (e.g. 03-08-2026, 03/08/2026, 03 08 2026, 2026-08-03)
+      const dateMatch = val.match(/(\d{2}[-/.]\d{2}[-/.]\d{4}|\d{4}[-/.]\d{2}[-/.]\d{2}|\d{2}\s+\d{2}\s+\d{4})/);
+      let parsedDate = '';
+      if (dateMatch) {
+        const rawDate = dateMatch[0].replace(/\s+/g, '-').replace(/[\/.]/g, '-');
+        parsedDate = rawDate;
+      }
+      const rawNote = val.replace(dateMatch ? dateMatch[0] : '', '').replace(/^[\s(:,-]+|[\s)]+$/g, '').trim();
+      const { choice, status } = inferStatusFromNote(val);
+
+      followUpRounds.push({
+        id: `fu_${id}_${roundNum}`,
+        roundNumber: roundNum,
+        callChoice: choice,
+        callStatus: status,
+        followUpDate: parsedDate,
+        note: rawNote || val,
+        notesList: rawNote ? [{ text: rawNote, date: parsedDate || getTodayDate() }] : [],
+        calledBy: calledBy || undefined,
+        updatedAt: Date.now(),
+      });
+    }
+  }
+
+  // If no follow up columns found, create default Follow Up 1
+  if (followUpRounds.length === 0) {
+    const note = get('note', 'notes', 'remark', 'comment', 'description') || '';
+    const followUpDate = get('followupdate', 'followup', 'date') || '';
+    const { choice, status } = inferStatusFromNote(note);
+    followUpRounds.push({
+      id: `fu_${id}_1`,
+      roundNumber: 1,
+      callChoice: choice,
+      callStatus: status,
+      followUpDate,
+      note,
+      notesList: note ? [{ text: note, date: followUpDate || getTodayDate() }] : [],
+      calledBy: calledBy || undefined,
+      updatedAt: Date.now(),
+    });
+  }
 
   // Collect any remaining extra columns into customFields
   const customFields: Record<string, string> = {};
-  const standardKeywords = ['business', 'company', 'person', 'name', 'phone', 'website', 'role', 'email', 'linkedin', 'facebook', 'insta', 'note', 'call', 'status', 'followup'];
+  const standardKeywords = ['business', 'company', 'person', 'name', 'phone', 'website', 'role', 'email', 'linkedin', 'facebook', 'insta', 'note', 'call', 'status', 'followup', 'date'];
   for (const [k, v] of Object.entries(row)) {
     const cleanKey = k.toLowerCase().replace(/[\s_-]/g, '');
     const isStandard = standardKeywords.some(sk => cleanKey.includes(sk));
@@ -120,12 +229,11 @@ const mapExcelRow = (row: Record<string, any>, idx: number): Partial<ColdCallLea
     }
   }
 
-  const phoneDigits = phone.replace(/\D/g, '');
-  const id = `lead_${Date.now()}_${idx}_${Math.random().toString(36).substring(2, 6)}`;
+  const latestRound = followUpRounds[followUpRounds.length - 1] || followUpRounds[0];
 
   return {
     id,
-    businessName,
+    businessName: businessName || personName || 'Lead Contact',
     personName,
     phone,
     businessWebsite,
@@ -134,10 +242,13 @@ const mapExcelRow = (row: Record<string, any>, idx: number): Partial<ColdCallLea
     linkedinProfile,
     facebookProfile,
     instaProfile,
-    note,
-    notesList: [],
-    callStatus: 'PENDING',
-    followUpDate,
+    followUps: followUpRounds,
+    note: latestRound?.note || '',
+    notesList: latestRound?.notesList || [],
+    callChoice: latestRound?.callChoice || 'PENDING',
+    callStatus: latestRound?.callStatus || 'PENDING',
+    followUpDate: latestRound?.followUpDate || '',
+    calledBy: calledBy || undefined,
     customFields,
     createdAt: Date.now(),
     updatedAt: Date.now(),
@@ -173,11 +284,15 @@ export function ColdCallsModule({
   const [editedRows, setEditedRows] = useState<Map<string, Partial<ColdCallLead>>>(new Map());
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
 
-  // Note popup
-  const [notePopupLead, setNotePopupLead] = useState<ColdCallLead | null>(null);
-  const [noteInput, setNoteInput] = useState('');
+  // Selected follow-up round for filter tab ('ALL', 1, 2, 3...)
+  const [selectedFollowupRound, setSelectedFollowupRound] = useState<'ALL' | number>('ALL');
+
+  // Info & Follow-ups popup
+  const [infoPopupLead, setInfoPopupLead] = useState<ColdCallLead | null>(null);
+  const [infoPopupFollowUps, setInfoPopupFollowUps] = useState<FollowUpRound[]>([]);
+  const [newNoteInputs, setNewNoteInputs] = useState<Record<number, string>>({});
   const [showMoreInfo, setShowMoreInfo] = useState(false);
-  const [noteSaving, setNoteSaving] = useState(false);
+  const [infoSaving, setInfoSaving] = useState(false);
 
   // Add Data popup
   const [showAddPopup, setShowAddPopup] = useState(false);
@@ -197,6 +312,7 @@ export function ColdCallsModule({
       calledBy: null,
       callTimestamp: null,
       callOutcome: null,
+      followUps: [],
     };
 
     setLeads(prev => prev.map(l => l.id === lead.id ? {
@@ -206,6 +322,7 @@ export function ColdCallsModule({
       calledBy: undefined,
       callTimestamp: undefined,
       callOutcome: undefined,
+      followUps: [],
     } : l));
 
     fetch(`${getBackendUrl()}/api/cold-calls/${lead.id}`, {
@@ -224,12 +341,10 @@ export function ColdCallsModule({
   // ── Column Width Resizing State ─────────────────────────────────────────────
   const [colWidths, setColWidths] = useState<Record<string, number>>({
     index: 48,
-    businessName: 220,
-    personName: 220,
-    phone: 160,
-    followUpDate: 150,
-    note: 100,
-    status: 120,
+    businessName: 280,
+    personName: 280,
+    phone: 200,
+    info: 140,
   });
 
   const isResizingRef = useRef<{ field: string; startX: number; startWidth: number } | null>(null);
@@ -393,58 +508,149 @@ export function ColdCallsModule({
     setTimeout(() => setSaveStatus('idle'), 3000);
   };
 
-  // ── Note Popup ───────────────────────────────────────────────────────────────
-  const openNotePopup = (lead: ColdCallLead) => {
+  // ── Info & Multi-Stage Follow-ups Popup ────────────────────────────────────────
+  const openInfoPopup = (lead: ColdCallLead) => {
     const edited = editedRows.get(lead.id) || {};
-    setNotePopupLead({ ...lead, ...edited });
-    setNoteInput('');
+    const mergedLead = { ...lead, ...edited };
+    setInfoPopupLead(mergedLead);
+    setInfoPopupFollowUps(getLeadFollowUps(mergedLead));
+    setNewNoteInputs({});
     setShowMoreInfo(false);
   };
 
-  const handleAddNoteToPopup = () => {
-    const txt = noteInput.trim();
-    if (!txt || !notePopupLead) return;
-    const newEntry: NoteEntry = { text: txt, date: getTodayDate() };
-    const updatedNotesList = [newEntry, ...(notePopupLead.notesList || [])];
-    setNotePopupLead(prev => prev ? { ...prev, notesList: updatedNotesList } : null);
-    setNoteInput('');
+  const handleFollowUpFieldChange = (roundIdx: number, field: keyof FollowUpRound, value: any) => {
+    setInfoPopupFollowUps(prev => {
+      const next = [...prev];
+      const target = { ...next[roundIdx] };
+      if (field === 'callChoice') {
+        target.callChoice = value;
+        if (value === 'YES') {
+          if (!target.callStatus || target.callStatus === 'PENDING' || target.callStatus === 'NOT_CONNECTED' || target.callStatus === 'NOT_REACHABLE' || target.callStatus === 'INVALID') {
+            target.callStatus = 'INTERESTED';
+          }
+        } else if (value === 'NO') {
+          target.callStatus = 'NOT_CONNECTED';
+        } else if (value === 'INVALID') {
+          target.callStatus = 'NOT_REACHABLE';
+        } else {
+          target.callStatus = 'PENDING';
+        }
+      } else {
+        (target as any)[field] = value;
+      }
+      target.calledBy = currentUserName;
+      target.updatedAt = Date.now();
+      next[roundIdx] = target;
+      return next;
+    });
   };
 
-  const handleSaveNotePopup = async () => {
-    if (!notePopupLead) return;
-    setNoteSaving(true);
-    try {
-      const trimmedNote = noteInput.trim();
-      let updatedNotesList = [...(notePopupLead.notesList || [])];
-      if (trimmedNote) {
-        const newEntry: NoteEntry = {
-          text: trimmedNote,
-          date: getTodayDate(),
-        };
-        updatedNotesList.unshift(newEntry);
-      }
+  const handleAddFollowUpStage = () => {
+    setInfoPopupFollowUps(prev => {
+      const nextRoundNum = prev.length + 1;
+      return [
+        ...prev,
+        {
+          id: `fu_${infoPopupLead?.id || 'lead'}_${Date.now()}_${nextRoundNum}`,
+          roundNumber: nextRoundNum,
+          callChoice: 'PENDING',
+          callStatus: 'PENDING',
+          followUpDate: '',
+          notesList: [],
+          note: '',
+          calledBy: currentUserName,
+          updatedAt: Date.now(),
+        }
+      ];
+    });
+  };
 
+  const handleDeleteFollowUpStage = (roundIdx: number) => {
+    setInfoPopupFollowUps(prev => {
+      const filtered = prev.filter((_, i) => i !== roundIdx);
+      return filtered.map((r, i) => ({ ...r, roundNumber: i + 1 }));
+    });
+  };
+
+  const handleAddNoteToRound = (roundIdx: number) => {
+    const text = (newNoteInputs[roundIdx] || '').trim();
+    if (!text) return;
+    const newEntry: NoteEntry = { text, date: getTodayDate() };
+    setInfoPopupFollowUps(prev => {
+      const next = [...prev];
+      const target = { ...next[roundIdx] };
+      target.notesList = [newEntry, ...(target.notesList || [])];
+      next[roundIdx] = target;
+      return next;
+    });
+    setNewNoteInputs(prev => ({ ...prev, [roundIdx]: '' }));
+  };
+
+  const handleDeleteNoteFromRound = (roundIdx: number, noteIdx: number) => {
+    setInfoPopupFollowUps(prev => {
+      const next = [...prev];
+      const target = { ...next[roundIdx] };
+      target.notesList = (target.notesList || []).filter((_, i) => i !== noteIdx);
+      next[roundIdx] = target;
+      return next;
+    });
+  };
+
+  const handleEditNoteInRound = (roundIdx: number, noteIdx: number, text: string) => {
+    setInfoPopupFollowUps(prev => {
+      const next = [...prev];
+      const target = { ...next[roundIdx] };
+      const nList = [...(target.notesList || [])];
+      nList[noteIdx] = { ...nList[noteIdx], text };
+      target.notesList = nList;
+      next[roundIdx] = target;
+      return next;
+    });
+  };
+
+  const handleSaveInfoPopup = async () => {
+    if (!infoPopupLead) return;
+    setInfoSaving(true);
+    try {
       const now = Date.now();
+      const finalizedFollowUps = infoPopupFollowUps.map((round, idx) => {
+        const pendingText = (newNoteInputs[idx] || '').trim();
+        if (pendingText) {
+          const newEntry: NoteEntry = { text: pendingText, date: getTodayDate() };
+          return {
+            ...round,
+            notesList: [newEntry, ...(round.notesList || [])],
+          };
+        }
+        return round;
+      });
+
+      const latestRound = finalizedFollowUps[finalizedFollowUps.length - 1] || finalizedFollowUps[0];
+
       const partial: Partial<ColdCallLead> = {
-        businessName: notePopupLead.businessName,
-        personName: notePopupLead.personName,
-        phone: notePopupLead.phone,
-        businessWebsite: notePopupLead.businessWebsite,
-        role: notePopupLead.role,
-        email: notePopupLead.email,
-        linkedinProfile: notePopupLead.linkedinProfile,
-        facebookProfile: notePopupLead.facebookProfile,
-        instaProfile: notePopupLead.instaProfile,
-        note: trimmedNote || notePopupLead.note,
-        notesList: updatedNotesList,
-        callStatus: notePopupLead.callStatus,
-        followUpDate: notePopupLead.followUpDate,
+        businessName: infoPopupLead.businessName,
+        personName: infoPopupLead.personName,
+        phone: infoPopupLead.phone,
+        businessWebsite: infoPopupLead.businessWebsite,
+        role: infoPopupLead.role,
+        email: infoPopupLead.email,
+        linkedinProfile: infoPopupLead.linkedinProfile,
+        facebookProfile: infoPopupLead.facebookProfile,
+        instaProfile: infoPopupLead.instaProfile,
+        followUps: finalizedFollowUps,
+        callChoice: latestRound?.callChoice || 'PENDING',
+        callStatus: latestRound?.callStatus || 'PENDING',
+        followUpDate: latestRound?.followUpDate || '',
+        note: latestRound?.note || latestRound?.notesList?.[0]?.text || '',
+        notesList: latestRound?.notesList || [],
         calledBy: currentUserName,
         callTimestamp: now,
         updatedAt: now,
       };
 
-      const res = await fetch(`${getBackendUrl()}/api/cold-calls/${notePopupLead.id}`, {
+      setLeads(prev => prev.map(l => l.id === infoPopupLead.id ? { ...l, ...partial } : l));
+
+      const res = await fetch(`${getBackendUrl()}/api/cold-calls/${infoPopupLead.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(partial),
@@ -453,34 +659,18 @@ export function ColdCallsModule({
       if (data.success && data.lead) {
         setLeads(prev => prev.map(l => l.id === data.lead.id ? data.lead : l));
         triggerSaveToast('saved');
-        setNotePopupLead(null);
+        setInfoPopupLead(null);
       }
     } catch (e) {
-      console.error('Note save error', e);
+      console.error('Info save error', e);
     } finally {
-      setNoteSaving(false);
+      setInfoSaving(false);
     }
   };
 
-  const handleEditNoteText = (idx: number, text: string) => {
-    setNotePopupLead(prev => {
-      if (!prev) return null;
-      const updated = [...(prev.notesList || [])];
-      updated[idx] = { ...updated[idx], text };
-      return { ...prev, notesList: updated };
-    });
-  };
-
-  const handleDeleteNoteFromPopup = (idx: number) => {
-    setNotePopupLead(prev => {
-      if (!prev) return null;
-      return { ...prev, notesList: (prev.notesList || []).filter((_, i) => i !== idx) };
-    });
-  };
-
-  const handlePopupFieldEdit = (field: keyof ColdCallLead, value: string) => {
-    if (!notePopupLead) return;
-    setNotePopupLead(prev => prev ? { ...prev, [field]: value } : null);
+  const handlePopupLeadFieldEdit = (field: keyof ColdCallLead, value: string) => {
+    if (!infoPopupLead) return;
+    setInfoPopupLead(prev => prev ? { ...prev, [field]: value } : null);
   };
 
   // ── Add Data Handler ──────────────────────────────────────────────────────────
@@ -533,6 +723,24 @@ export function ColdCallsModule({
     }
   };
 
+  const maxFollowUpRounds = Math.max(
+    1,
+    ...leads.map(l => (l.followUps && l.followUps.length > 0) ? l.followUps.length : 1)
+  );
+
+  const getFollowupRoundCount = (roundNum: number) => {
+    return leads.filter(l => {
+      const fRounds = getLeadFollowUps(l);
+      const target = fRounds.find(r => r.roundNumber === roundNum);
+      return Boolean(target?.followUpDate && target.followUpDate.trim() !== '' && target.followUpDate !== '—');
+    }).length;
+  };
+
+  const totalFollowUpsCount = leads.filter(l => {
+    const fRounds = getLeadFollowUps(l);
+    return fRounds.some(r => Boolean(r.followUpDate && r.followUpDate.trim() !== '' && r.followUpDate !== '—')) || Boolean(l.followUpDate);
+  }).length;
+
   // ── Filter & Dynamic Sort ───────────────────────────────────────────────────
   const filteredLeads = leads.filter(l => {
     const q = searchQuery.toLowerCase();
@@ -540,13 +748,22 @@ export function ColdCallsModule({
       (l.businessName || '').toLowerCase().includes(q) ||
       (l.personName || l.name || '').toLowerCase().includes(q) ||
       (l.phone || '').includes(q) ||
-      (l.note || '').toLowerCase().includes(q);
+      (l.note || '').toLowerCase().includes(q) ||
+      (l.followUps || []).some(f => (f.note || '').toLowerCase().includes(q) || (f.notesList || []).some(n => n.text.toLowerCase().includes(q)));
     if (!match) return false;
     if (filterTab === 'INTERESTED') return l.callStatus === 'INTERESTED';
-    if (filterTab === 'WARM') return l.callStatus === 'YES';
+    if (filterTab === 'WARM') return l.callStatus === 'YES' || l.callStatus === 'WARM';
     if (filterTab === 'NOT_INTERESTED') return l.callStatus === 'NOT_INTERESTED';
     if (filterTab === 'PENDING') return !l.callStatus || l.callStatus === 'PENDING';
-    if (filterTab === 'FOLLOWUPS') return Boolean(l.followUpDate);
+    if (filterTab === 'FOLLOWUPS') {
+      const fRounds = getLeadFollowUps(l);
+      if (selectedFollowupRound === 'ALL') {
+        return fRounds.some(r => Boolean(r.followUpDate && r.followUpDate.trim() !== '' && r.followUpDate !== '—')) || Boolean(l.followUpDate);
+      } else {
+        const target = fRounds.find(r => r.roundNumber === selectedFollowupRound);
+        return Boolean(target?.followUpDate && target.followUpDate.trim() !== '' && target.followUpDate !== '—');
+      }
+    }
     return true;
   });
 
@@ -555,8 +772,8 @@ export function ColdCallsModule({
   // 2. Newly uploaded file rows float right below worked leads!
   // 3. Older uncalled leads float at the bottom!
   const sortedLeads = [...filteredLeads].sort((a, b) => {
-    const aWorked = (a.callChoice === 'YES' || a.callChoice === 'NO' || (Boolean(a.callStatus) && a.callStatus !== 'PENDING') || (Boolean(a.calledBy) && a.calledBy !== 'Staff' && a.calledBy !== 'Executive User') || Boolean(a.note) || (a.notesList && a.notesList.length > 0));
-    const bWorked = (b.callChoice === 'YES' || b.callChoice === 'NO' || (Boolean(b.callStatus) && b.callStatus !== 'PENDING') || (Boolean(b.calledBy) && b.calledBy !== 'Staff' && b.calledBy !== 'Executive User') || Boolean(b.note) || (b.notesList && b.notesList.length > 0));
+    const aWorked = (a.callChoice === 'YES' || a.callChoice === 'NO' || a.callChoice === 'INVALID' || (Boolean(a.callStatus) && a.callStatus !== 'PENDING') || (Boolean(a.calledBy) && a.calledBy !== 'Staff' && a.calledBy !== 'Executive User') || Boolean(a.note) || (a.notesList && a.notesList.length > 0) || (a.followUps && a.followUps.length > 1));
+    const bWorked = (b.callChoice === 'YES' || b.callChoice === 'NO' || b.callChoice === 'INVALID' || (Boolean(b.callStatus) && b.callStatus !== 'PENDING') || (Boolean(b.calledBy) && b.calledBy !== 'Staff' && b.calledBy !== 'Executive User') || Boolean(b.note) || (b.notesList && b.notesList.length > 0) || (b.followUps && b.followUps.length > 1));
 
     // Priority 1: Worked / Logged leads come FIRST at the top!
     if (aWorked && !bWorked) return -1;
@@ -578,9 +795,12 @@ export function ColdCallsModule({
   // Calculate Today's Scheduled Follow-ups
   const todayStr = getTodayDate();
   const followUpsDueTodayLeads = sortedLeads.filter(l => {
-    if (!l.followUpDate) return false;
-    const fDate = l.followUpDate.trim();
-    return fDate === todayStr || fDate === new Date().toISOString().slice(0, 10);
+    const fRounds = getLeadFollowUps(l);
+    return fRounds.some(r => {
+      if (!r.followUpDate) return false;
+      const fDate = r.followUpDate.trim();
+      return fDate === todayStr || fDate === new Date().toISOString().slice(0, 10);
+    }) || (l.followUpDate === todayStr || l.followUpDate === new Date().toISOString().slice(0, 10));
   });
 
   const callsMadeTodayCount = leads.filter(l => {
@@ -598,9 +818,9 @@ export function ColdCallsModule({
   const counts = {
     all: leads.length,
     interested: leads.filter(l => l.callStatus === 'INTERESTED').length,
-    warm: leads.filter(l => l.callStatus === 'YES').length,
+    warm: leads.filter(l => l.callStatus === 'YES' || l.callStatus === 'WARM').length,
     notInterested: leads.filter(l => l.callStatus === 'NOT_INTERESTED').length,
-    followups: leads.filter(l => Boolean(l.followUpDate)).length,
+    followups: totalFollowUpsCount,
     followupsToday: followUpsDueTodayLeads.length,
     callsToday: callsMadeTodayCount,
   };
@@ -633,25 +853,6 @@ export function ColdCallsModule({
       />
     );
   };
-
-  const InfoField = ({ icon, label, value, onChange, isLink }: { icon: React.ReactNode, label: string, value: string | undefined, onChange: (v: string) => void, isLink?: boolean }) => (
-    <div className="bg-gray-50 p-3 rounded-xl border border-gray-100 flex items-center gap-3">
-      {icon}
-      <div className="flex-1">
-        <label className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">{label}</label>
-        <input
-          value={value || ''}
-          onChange={e => onChange(e.target.value)}
-          className="w-full bg-transparent text-xs font-bold text-gray-800 outline-none"
-        />
-      </div>
-      {isLink && value && (
-        <a href={value.startsWith('http') ? value : `https://${value}`} target="_blank" rel="noreferrer" className="text-zinc-400 hover:text-black">
-          <ExternalLink className="w-3.5 h-3.5" />
-        </a>
-      )}
-    </div>
-  );
 
   const getLocalYYYYMMDD = (ts?: number | string) => {
     const d = ts ? new Date(ts) : new Date();
@@ -1024,11 +1225,11 @@ export function ColdCallsModule({
                               {outcomeBadge}
                             </td>
 
-                            {/* Note (Standard CRM Font, No Quotes, Full Note on Hover) */}
+                            {/* Note */}
                             <td 
                               className="py-3.5 px-4 max-w-xs truncate text-xs text-zinc-800 font-semibold cursor-pointer"
                               title={latestNoteText || 'No notes recorded'}
-                              onClick={() => openNotePopup(lead)}
+                              onClick={() => openInfoPopup(lead)}
                             >
                               {latestNoteText || '—'}
                             </td>
@@ -1037,10 +1238,10 @@ export function ColdCallsModule({
                             <td className="py-3.5 px-4 text-right">
                               <div className="flex items-center justify-end gap-2">
                                 <button
-                                  onClick={() => openNotePopup(lead)}
+                                  onClick={() => openInfoPopup(lead)}
                                   className="px-3 py-1.5 bg-zinc-100 hover:bg-zinc-200 text-black border border-zinc-300 font-bold text-xs rounded-lg transition-all cursor-pointer"
                                 >
-                                  Notes
+                                  Info
                                 </button>
                                 <button
                                   onClick={() => setDeleteConfirmLead(lead)}
@@ -1069,8 +1270,8 @@ export function ColdCallsModule({
       {subPage === 'sheet' && (
         <div className="space-y-4">
           {/* Filter Pills */}
-          <div className="bg-white rounded-xl border border-zinc-200 p-3 flex items-center justify-between gap-4">
-            <div className="flex items-center gap-2 overflow-x-auto">
+          <div className="bg-white rounded-xl border border-zinc-200 p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-2 overflow-x-auto flex-wrap">
               {([
                 ['ALL', `All (${counts.all})`, 'bg-black text-white', 'text-zinc-700 bg-zinc-100 hover:bg-zinc-200'],
                 ['INTERESTED', `Interested (${counts.interested})`, 'bg-black text-white', 'text-zinc-700 bg-zinc-100 hover:bg-zinc-200'],
@@ -1080,13 +1281,39 @@ export function ColdCallsModule({
               ] as [string, string, string, string][]).map(([tab, label, active, inactive]) => (
                 <button
                   key={tab}
-                  onClick={() => setFilterTab(tab as any)}
+                  onClick={() => {
+                    setFilterTab(tab as any);
+                    if (tab !== 'FOLLOWUPS') setSelectedFollowupRound('ALL');
+                  }}
                   className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${filterTab === tab ? active : inactive}`}
                 >
                   {label}
                 </button>
               ))}
             </div>
+
+            {/* Dynamic Follow-up Round Selector Dropdown (Shown when Follow-ups Tab is Active) */}
+            {filterTab === 'FOLLOWUPS' && (
+              <div className="flex items-center gap-2 bg-zinc-50 border border-zinc-200 rounded-lg px-2.5 py-1 text-xs">
+                <span className="text-zinc-500 font-bold">Filter Round:</span>
+                <select
+                  value={selectedFollowupRound}
+                  onChange={(e) => setSelectedFollowupRound(e.target.value === 'ALL' ? 'ALL' : Number(e.target.value))}
+                  className="bg-transparent font-extrabold text-black outline-none cursor-pointer"
+                >
+                  <option value="ALL">All Follow-ups ({counts.followups})</option>
+                  {Array.from({ length: maxFollowUpRounds }).map((_, i) => {
+                    const rNum = i + 1;
+                    const rCount = getFollowupRoundCount(rNum);
+                    return (
+                      <option key={rNum} value={rNum}>
+                        Follow up {rNum} ({rCount})
+                      </option>
+                    );
+                  })}
+                </select>
+              </div>
+            )}
           </div>
 
           {/* TOOLBAR - Search Box on left | Save, Add Data, Upload Excel, Clear on right */}
@@ -1109,7 +1336,7 @@ export function ColdCallsModule({
               <button
                 onClick={handleSaveAll}
                 disabled={saveStatus === 'saving'}
-                className="inline-flex items-center gap-2 px-5 py-2.5 bg-black hover:bg-zinc-800 text-white font-bold text-xs rounded-xl transition-all shadow-sm active:scale-95 disabled:opacity-60"
+                className="inline-flex items-center gap-2 px-5 py-2.5 bg-black hover:bg-zinc-800 text-white font-bold text-xs rounded-xl transition-all shadow-sm active:scale-95 disabled:opacity-60 cursor-pointer"
               >
                 {saveStatus === 'saving' ? (
                   <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
@@ -1124,7 +1351,7 @@ export function ColdCallsModule({
               {/* Add Data Button */}
               <button
                 onClick={() => { setAddForm({}); setShowAddPopup(true); }}
-                className="inline-flex items-center gap-2 px-4 py-2.5 bg-zinc-100 hover:bg-zinc-200 border border-zinc-300 text-black font-bold text-xs rounded-xl transition-all shadow-sm active:scale-95"
+                className="inline-flex items-center gap-2 px-4 py-2.5 bg-zinc-100 hover:bg-zinc-200 border border-zinc-300 text-black font-bold text-xs rounded-xl transition-all shadow-sm active:scale-95 cursor-pointer"
               >
                 <Plus className="w-3.5 h-3.5" />
                 <span>Add Data</span>
@@ -1141,7 +1368,7 @@ export function ColdCallsModule({
               <button
                 onClick={() => fileInputRef.current?.click()}
                 disabled={isUploading}
-                className="inline-flex items-center gap-2 px-4 py-2.5 bg-[#00a884] hover:bg-[#008f70] text-white font-bold text-xs rounded-xl transition-all shadow-sm active:scale-95 disabled:opacity-60"
+                className="inline-flex items-center gap-2 px-4 py-2.5 bg-[#00a884] hover:bg-[#008f70] text-white font-bold text-xs rounded-xl transition-all shadow-sm active:scale-95 disabled:opacity-60 cursor-pointer"
               >
                 {isUploading ? (
                   <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
@@ -1170,13 +1397,12 @@ export function ColdCallsModule({
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-left border-collapse border border-gray-300 text-sm">
-                  {/* Excel Headers */}
-                  {/* Excel Headers with Column Resizer Handles */}
+                  {/* Table Headers */}
                   <thead>
                     <tr className="bg-[#f3f4f6] text-gray-700 font-bold border-b border-gray-300 text-xs uppercase tracking-wider select-none">
                       <th className="py-2.5 px-3 border border-gray-300 bg-[#e5e7eb] text-gray-800 text-center" style={{ width: `${colWidths.index || 48}px` }}>#</th>
                       
-                      <th className="py-2.5 px-3 border border-gray-300 relative group" style={{ width: `${colWidths.businessName || 200}px` }}>
+                      <th className="py-2.5 px-3 border border-gray-300 relative group" style={{ width: `${colWidths.businessName || 280}px` }}>
                         <span>BUSINESS NAME</span>
                         <div
                           onMouseDown={(e) => handleMouseDownResize('businessName', e)}
@@ -1185,7 +1411,7 @@ export function ColdCallsModule({
                         />
                       </th>
 
-                      <th className="py-2.5 px-3 border border-gray-300 relative group" style={{ width: `${colWidths.personName || 200}px` }}>
+                      <th className="py-2.5 px-3 border border-gray-300 relative group" style={{ width: `${colWidths.personName || 280}px` }}>
                         <span>PERSON NAME</span>
                         <div
                           onMouseDown={(e) => handleMouseDownResize('personName', e)}
@@ -1194,7 +1420,7 @@ export function ColdCallsModule({
                         />
                       </th>
 
-                      <th className="py-2.5 px-3 border border-gray-300 relative group" style={{ width: `${colWidths.phone || 150}px` }}>
+                      <th className="py-2.5 px-3 border border-gray-300 relative group" style={{ width: `${colWidths.phone || 200}px` }}>
                         <span>PHONE NUMBER</span>
                         <div
                           onMouseDown={(e) => handleMouseDownResize('phone', e)}
@@ -1203,37 +1429,10 @@ export function ColdCallsModule({
                         />
                       </th>
 
-                      <th className="py-2.5 px-3 border border-gray-300 text-center relative group" style={{ width: `${colWidths.callChoice || 110}px` }}>
-                        <span>CALL</span>
+                      <th className="py-2.5 px-3 border border-gray-300 text-center relative group" style={{ width: `${colWidths.info || 140}px` }}>
+                        <span>INFO</span>
                         <div
-                          onMouseDown={(e) => handleMouseDownResize('callChoice', e)}
-                          className="absolute top-0 right-0 bottom-0 w-2.5 cursor-col-resize hover:bg-black/30 transition-colors z-20"
-                          title="Drag to resize column width"
-                        />
-                      </th>
-
-                      <th className="py-2.5 px-3 border border-gray-300 text-center relative group" style={{ width: `${colWidths.status || 150}px` }}>
-                        <span>STATUS</span>
-                        <div
-                          onMouseDown={(e) => handleMouseDownResize('status', e)}
-                          className="absolute top-0 right-0 bottom-0 w-2.5 cursor-col-resize hover:bg-black/30 transition-colors z-20"
-                          title="Drag to resize column width"
-                        />
-                      </th>
-
-                      <th className="py-2.5 px-3 border border-gray-300 text-center relative group" style={{ width: `${colWidths.note || 100}px` }}>
-                        <span>NOTE</span>
-                        <div
-                          onMouseDown={(e) => handleMouseDownResize('note', e)}
-                          className="absolute top-0 right-0 bottom-0 w-2.5 cursor-col-resize hover:bg-black/30 transition-colors z-20"
-                          title="Drag to resize column width"
-                        />
-                      </th>
-
-                      <th className="py-2.5 px-3 border border-gray-300 relative group" style={{ width: `${colWidths.followUpDate || 150}px` }}>
-                        <span>FOLLOW-UP DATE</span>
-                        <div
-                          onMouseDown={(e) => handleMouseDownResize('followUpDate', e)}
+                          onMouseDown={(e) => handleMouseDownResize('info', e)}
                           className="absolute top-0 right-0 bottom-0 w-2.5 cursor-col-resize hover:bg-black/30 transition-colors z-20"
                           title="Drag to resize column width"
                         />
@@ -1242,8 +1441,9 @@ export function ColdCallsModule({
                   </thead>
                   <tbody className="bg-white text-gray-900 font-normal">
                     {sortedLeads.map((lead, idx) => {
-                      const hasNotes = (lead.notesList && lead.notesList.length > 0) || Boolean(lead.note);
-                      const currentCallChoice = lead.callChoice || (lead.callStatus === 'NOT_CONNECTED' ? 'NO' : (lead.callStatus && lead.callStatus !== 'PENDING' ? 'YES' : 'PENDING'));
+                      const fRounds = getLeadFollowUps(lead);
+                      const followUpsCount = fRounds.length;
+                      const hasNotesOrDates = fRounds.some(r => Boolean(r.followUpDate || (r.notesList && r.notesList.length > 0) || r.note));
 
                       return (
                         <tr key={lead.id} className="hover:bg-blue-50/40 transition-colors">
@@ -1253,136 +1453,55 @@ export function ColdCallsModule({
                           </td>
 
                           {/* Business Name Cell */}
-                          <td className="py-2 px-3 border border-gray-300 font-semibold text-black" style={{ width: `${colWidths.businessName || 200}px` }}>
+                          <td className="py-2 px-3 border border-gray-300 font-semibold text-black" style={{ width: `${colWidths.businessName || 280}px` }}>
                             <EditableCell
                               leadId={lead.id}
                               field="businessName"
                               value={lead.businessName || ''}
-                              placeholder=""
+                              placeholder="Enter business name..."
                             />
                           </td>
 
                           {/* Person Name Cell */}
-                          <td className="py-2 px-3 border border-gray-300 font-semibold text-black" style={{ width: `${colWidths.personName || 200}px` }}>
+                          <td className="py-2 px-3 border border-gray-300 font-semibold text-black" style={{ width: `${colWidths.personName || 280}px` }}>
                             <EditableCell
                               leadId={lead.id}
                               field="personName"
                               value={lead.personName || lead.name || ''}
-                              placeholder=""
+                              placeholder="Enter person name..."
                             />
                           </td>
 
-                          {/* Phone Number Cell (Green Font - Mandatory) */}
-                          <td className="py-2 px-3 border border-gray-300 font-extrabold text-[#00a884]" style={{ width: `${colWidths.phone || 150}px` }}>
+                          {/* Phone Number Cell (Green Font) */}
+                          <td className="py-2 px-3 border border-gray-300 font-extrabold text-[#00a884]" style={{ width: `${colWidths.phone || 200}px` }}>
                             <EditableCell
                               leadId={lead.id}
                               field="phone"
                               value={lead.phone || ''}
-                              placeholder=""
+                              placeholder="Enter phone..."
                               className="text-[#00a884] font-extrabold"
                             />
                           </td>
 
-                          {/* Call Cell (Yes / No / Pending) */}
-                          <td className="py-2 px-2 border border-gray-300 text-center" style={{ width: `${colWidths.callChoice || 110}px` }}>
-                            <select
-                              value={currentCallChoice}
-                              onChange={(e) => {
-                                const val = e.target.value as 'YES' | 'NO' | 'PENDING';
-                                let newStatus = lead.callStatus;
-                                if (val === 'YES') {
-                                  if (!newStatus || newStatus === 'PENDING' || newStatus === 'NOT_CONNECTED') {
-                                    newStatus = 'INTERESTED';
-                                  }
-                                } else if (val === 'NO') {
-                                  newStatus = 'NOT_CONNECTED';
-                                } else {
-                                  newStatus = 'PENDING';
-                                }
-                                handleCellEdit(lead.id, 'callChoice', val);
-                                handleCellEdit(lead.id, 'callStatus', newStatus);
-                              }}
-                              className="w-full px-2 py-1 bg-transparent hover:bg-zinc-100 rounded text-xs font-extrabold text-black outline-none cursor-pointer border border-transparent hover:border-zinc-300"
-                            >
-                              <option value="PENDING">Pending</option>
-                              <option value="YES">Yes</option>
-                              <option value="NO">No</option>
-                            </select>
-                          </td>
-
-                          {/* Status Cell (Conditional based on Call choice) */}
-                          <td className="py-2 px-2 border border-gray-300 text-center" style={{ width: `${colWidths.status || 150}px` }}>
-                            {currentCallChoice === 'YES' ? (
-                              <select
-                                value={lead.callStatus || 'INTERESTED'}
-                                onChange={(e) => handleCellEdit(lead.id, 'callStatus', e.target.value as any)}
-                                className="w-full px-2 py-1 bg-emerald-50 text-emerald-900 border border-emerald-300 rounded text-xs font-extrabold outline-none cursor-pointer"
-                              >
-                                <option value="INTERESTED">Interested</option>
-                                <option value="NOT_INTERESTED">Not Interested</option>
-                                <option value="WARM">Warm</option>
-                                <option value="PENDING">Pending</option>
-                              </select>
-                            ) : currentCallChoice === 'NO' ? (
-                              <div className="px-2 py-1 bg-zinc-100 text-zinc-700 rounded border border-zinc-300 text-xs font-extrabold text-center select-none">
-                                Not Connected
-                              </div>
-                            ) : (
-                              <span className="text-zinc-400 italic text-xs block text-center">—</span>
-                            )}
-                          </td>
-
-                          {/* Note Cell */}
-                          <td className="py-2 px-3 border border-gray-300 text-center" style={{ width: `${colWidths.note}px` }}>
+                          {/* INFO Button Cell */}
+                          <td className="py-2 px-3 border border-gray-300 text-center" style={{ width: `${colWidths.info || 140}px` }}>
                             <button
-                              onClick={() => openNotePopup(lead)}
-                              title="Click to view / add notes"
-                              className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-bold transition-all ${
-                                hasNotes
-                                  ? 'bg-[#6b21a8] text-white hover:bg-purple-900 shadow-sm'
-                                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200 border border-gray-300'
+                              onClick={() => openInfoPopup(lead)}
+                              title="Click to view & edit all Follow-ups and Contact details"
+                              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-black transition-all cursor-pointer shadow-xs active:scale-95 ${
+                                hasNotesOrDates
+                                  ? 'bg-[#6b21a8] text-white hover:bg-purple-900'
+                                  : 'bg-zinc-100 hover:bg-zinc-200 text-zinc-800 border border-zinc-300'
                               }`}
                             >
-                              <span>Note</span>
-                              {hasNotes && (
-                                <span className="w-4 h-4 rounded-full bg-white text-purple-900 text-[10px] font-black flex items-center justify-center">
-                                  {(lead.notesList?.length || 0) + (lead.note ? 1 : 0)}
-                                </span>
-                              )}
+                              <Info className="w-3.5 h-3.5" />
+                              <span>Info</span>
+                              <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-black ${
+                                hasNotesOrDates ? 'bg-white text-purple-900' : 'bg-zinc-200 text-zinc-700'
+                              }`}>
+                                {followUpsCount}
+                              </span>
                             </button>
-                          </td>
-
-                          {/* Follow-up Date Cell (Interactive Date Calendar Selection) */}
-                          <td className={`py-2 px-2 border border-gray-300 ${lead.followUpDate ? 'font-black text-[#00a884]' : 'text-gray-400 font-normal'}`} style={{ width: `${colWidths.followUpDate || 150}px` }}>
-                            <div className={`flex items-center gap-1 w-full rounded px-1.5 py-0.5 border transition-all ${
-                              lead.followUpDate 
-                                ? 'bg-emerald-50/70 border-emerald-200 hover:border-emerald-400 focus-within:border-emerald-600 focus-within:bg-white' 
-                                : 'bg-zinc-50/40 border-transparent hover:border-zinc-300 focus-within:border-black focus-within:bg-white'
-                            }`}>
-                              <input
-                                type="date"
-                                value={normalizeDateStr(lead.followUpDate || '')}
-                                onChange={(e) => handleCellEdit(lead.id, 'followUpDate', e.target.value)}
-                                className={`w-full bg-transparent text-xs outline-none cursor-pointer ${
-                                  lead.followUpDate 
-                                    ? 'text-[#00a884] font-black' 
-                                    : 'text-gray-400 font-medium'
-                                }`}
-                              />
-                              {lead.followUpDate && (
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleCellEdit(lead.id, 'followUpDate', '');
-                                  }}
-                                  title="Clear follow-up date"
-                                  className="text-emerald-600 hover:text-red-500 p-0.5 rounded transition-colors"
-                                >
-                                  <X className="w-3.5 h-3.5" />
-                                </button>
-                              )}
-                            </div>
                           </td>
                         </tr>
                       );
@@ -1395,33 +1514,29 @@ export function ColdCallsModule({
         </div>
       )}
 
-
-
-
-
       {/* ══════════════════════════════════════════════════════════════════════
-          NOTE POPUP
+          INFO & MULTI-STAGE FOLLOW-UPS POPUP
       ══════════════════════════════════════════════════════════════════════ */}
-      {notePopupLead && (
+      {infoPopupLead && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[9999] flex items-center justify-center p-4 text-black font-sans">
-          <div className="bg-white w-full max-w-xl rounded-2xl shadow-2xl border border-gray-200 flex flex-col max-h-[90vh] overflow-hidden">
+          <div className="bg-white w-full max-w-2xl rounded-2xl shadow-2xl border border-gray-200 flex flex-col max-h-[90vh] overflow-hidden animate-in fade-in zoom-in duration-150">
 
             {/* Header */}
-            <div className="px-6 py-5 border-b border-gray-200 flex items-center justify-between bg-[#f8f9fa] rounded-t-2xl">
+            <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between bg-[#f8f9fa] rounded-t-2xl">
               <div>
-                <h3 className="text-2xl font-black text-black tracking-tight">
-                  {notePopupLead.businessName || notePopupLead.personName || 'Contact Details'}
+                <h3 className="text-xl font-black text-black tracking-tight">
+                  {infoPopupLead.businessName || infoPopupLead.personName || 'Contact Info & Follow-ups'}
                 </h3>
-                {(notePopupLead.personName || notePopupLead.phone) && (
-                  <p className="text-xs font-bold text-zinc-500 mt-1">
-                    {notePopupLead.businessName && notePopupLead.personName ? notePopupLead.personName : ''}
-                    {notePopupLead.phone ? `${notePopupLead.businessName && notePopupLead.personName ? ' · ' : ''}📞 ${notePopupLead.phone}` : ''}
+                {(infoPopupLead.personName || infoPopupLead.phone) && (
+                  <p className="text-xs font-bold text-zinc-500 mt-0.5">
+                    {infoPopupLead.personName ? infoPopupLead.personName : ''}
+                    {infoPopupLead.phone ? `${infoPopupLead.personName ? ' · ' : ''}📞 ${infoPopupLead.phone}` : ''}
                   </p>
                 )}
               </div>
               <button
-                onClick={() => setNotePopupLead(null)}
-                className="w-9 h-9 rounded-full bg-white hover:bg-gray-200 flex items-center justify-center text-gray-700 transition-all shadow-sm border border-gray-200"
+                onClick={() => setInfoPopupLead(null)}
+                className="w-8 h-8 rounded-full bg-white hover:bg-gray-200 flex items-center justify-center text-gray-700 transition-all shadow-sm border border-gray-200 cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -1430,156 +1545,88 @@ export function ColdCallsModule({
             {/* Body */}
             <div className="overflow-y-auto flex-1 p-6 space-y-6 font-sans">
 
-              {/* ── Notes Section ─────────────────────────────────────────── */}
-              <div className="space-y-3">
-                <label className="text-xs font-black text-black uppercase tracking-wider block">Notes</label>
-
-                {/* Original note */}
-                {notePopupLead.note && (
-                  <div className="p-3 rounded-xl bg-blue-50 border border-blue-200 text-xs">
-                    <input
-                      value={notePopupLead.note}
-                      onChange={e => handlePopupFieldEdit('note', e.target.value)}
-                      className="w-full bg-transparent text-blue-900 font-semibold outline-none text-xs"
-                    />
-                  </div>
-                )}
-
-                {/* Add new note */}
-                <div className="flex gap-2">
-                  <textarea
-                    rows={2}
-                    value={noteInput}
-                    onChange={e => setNoteInput(e.target.value)}
-                    onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleAddNoteToPopup(); } }}
-                    placeholder="Type a note and press Enter or click + Add Note..."
-                    className="flex-1 p-3 text-xs rounded-xl border border-gray-200 bg-gray-50 focus:bg-white focus:border-[#00a884] focus:outline-none transition-all resize-none"
-                  />
-                  <button
-                    type="button"
-                    onClick={handleAddNoteToPopup}
-                    className="self-end px-3 py-2 bg-[#00a884]/15 hover:bg-[#00a884]/25 text-[#00a884] font-bold text-xs rounded-xl transition-all flex items-center gap-1"
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                    <span>Add</span>
-                  </button>
-                </div>
-
-                {/* Saved notes list */}
-                {(notePopupLead.notesList || []).length > 0 && (
-                  <div className="space-y-2 max-h-48 overflow-y-auto">
-                    {(notePopupLead.notesList || []).map((n, i) => (
-                      <div key={i} className="p-3 rounded-xl bg-gray-50 border border-gray-200 flex items-start gap-2">
-                        <div className="flex-1 space-y-1">
-                          <input
-                            value={n.text}
-                            onChange={e => handleEditNoteText(i, e.target.value)}
-                            className="w-full bg-transparent text-xs text-gray-800 outline-none"
-                          />
-                          <p className="text-[10px] text-gray-400">📅 {n.date}</p>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => handleDeleteNoteFromPopup(i)}
-                          className="text-gray-400 hover:text-rose-600 transition-colors p-1 flex-shrink-0"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              {/* ── More Info Toggle ──────────────────────────────────────── */}
-              <div className="border-t border-gray-100 pt-4">
+              {/* ── Contact Details (Collapsible) ── */}
+              <div className="border border-zinc-200 rounded-xl overflow-hidden bg-zinc-50/50">
                 <button
                   type="button"
                   onClick={() => setShowMoreInfo(v => !v)}
-                  className="w-full flex items-center justify-between px-4 py-3 bg-gray-50 hover:bg-gray-100 rounded-xl border border-gray-200 transition-all text-xs font-bold text-gray-700"
+                  className="w-full flex items-center justify-between px-4 py-2.5 hover:bg-zinc-100 transition-all text-xs font-bold text-gray-700 cursor-pointer"
                 >
                   <span className="flex items-center gap-2">
-                    <Info className="w-3.5 h-3.5 text-[#00a884]" />
-                    More Info
+                    <User className="w-3.5 h-3.5 text-[#00a884]" />
+                    Lead & Contact Profile Details
                   </span>
                   {showMoreInfo ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
                 </button>
 
                 {showMoreInfo && (
-                  <div className="mt-3 space-y-3 px-1">
-                    {/* Business Name */}
-                    <InfoField
-                      icon={<Briefcase className="w-3.5 h-3.5 text-gray-400" />}
-                      label="Business Name"
-                      value={notePopupLead.businessName || ''}
-                      onChange={v => handlePopupFieldEdit('businessName', v)}
-                    />
-                    {/* Business Website */}
-                    <InfoField
-                      icon={<Globe className="w-3.5 h-3.5 text-gray-400" />}
-                      label="Business Website"
-                      value={notePopupLead.businessWebsite || ''}
-                      onChange={v => handlePopupFieldEdit('businessWebsite', v)}
-                      isLink
-                    />
-                    {/* Person Name */}
-                    <InfoField
-                      icon={<User className="w-3.5 h-3.5 text-gray-400" />}
-                      label="Person Name"
-                      value={notePopupLead.personName || ''}
-                      onChange={v => handlePopupFieldEdit('personName', v)}
-                    />
-                    {/* Role */}
-                    <InfoField
-                      icon={<Briefcase className="w-3.5 h-3.5 text-gray-400" />}
-                      label="Role"
-                      value={notePopupLead.role || ''}
-                      onChange={v => handlePopupFieldEdit('role', v)}
-                    />
-                    {/* Phone */}
-                    <InfoField
-                      icon={<Phone className="w-3.5 h-3.5 text-gray-400" />}
-                      label="Phone Number"
-                      value={notePopupLead.phone || ''}
-                      onChange={v => handlePopupFieldEdit('phone', v)}
-                    />
-                    {/* Email */}
-                    <InfoField
-                      icon={<Mail className="w-3.5 h-3.5 text-gray-400" />}
-                      label="Email"
-                      value={notePopupLead.email || ''}
-                      onChange={v => handlePopupFieldEdit('email', v)}
-                    />
-                    {/* LinkedIn */}
-                    <InfoField
-                      icon={<Linkedin className="w-3.5 h-3.5 text-[#0a66c2]" />}
-                      label="LinkedIn Profile"
-                      value={notePopupLead.linkedinProfile || ''}
-                      onChange={v => handlePopupFieldEdit('linkedinProfile', v)}
-                      isLink
-                    />
-                    {/* Facebook */}
-                    <InfoField
-                      icon={<Facebook className="w-3.5 h-3.5 text-[#1877f2]" />}
-                      label="Facebook Profile"
-                      value={notePopupLead.facebookProfile || ''}
-                      onChange={v => handlePopupFieldEdit('facebookProfile', v)}
-                      isLink
-                    />
-                    {/* Instagram */}
-                    <InfoField
-                      icon={<Instagram className="w-3.5 h-3.5 text-[#e1306c]" />}
-                      label="Instagram Profile"
-                      value={notePopupLead.instaProfile || ''}
-                      onChange={v => handlePopupFieldEdit('instaProfile', v)}
-                      isLink
-                    />
+                  <div className="p-4 border-t border-zinc-200 space-y-3 bg-white">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <InfoField
+                        icon={<Briefcase className="w-3.5 h-3.5 text-gray-400" />}
+                        label="Business Name"
+                        value={infoPopupLead.businessName || ''}
+                        onChange={v => handlePopupLeadFieldEdit('businessName', v)}
+                      />
+                      <InfoField
+                        icon={<User className="w-3.5 h-3.5 text-gray-400" />}
+                        label="Person Name"
+                        value={infoPopupLead.personName || ''}
+                        onChange={v => handlePopupLeadFieldEdit('personName', v)}
+                      />
+                      <InfoField
+                        icon={<Phone className="w-3.5 h-3.5 text-gray-400" />}
+                        label="Phone Number"
+                        value={infoPopupLead.phone || ''}
+                        onChange={v => handlePopupLeadFieldEdit('phone', v)}
+                      />
+                      <InfoField
+                        icon={<Briefcase className="w-3.5 h-3.5 text-gray-400" />}
+                        label="Designation / Role"
+                        value={infoPopupLead.role || ''}
+                        onChange={v => handlePopupLeadFieldEdit('role', v)}
+                      />
+                      <InfoField
+                        icon={<Mail className="w-3.5 h-3.5 text-gray-400" />}
+                        label="Email"
+                        value={infoPopupLead.email || ''}
+                        onChange={v => handlePopupLeadFieldEdit('email', v)}
+                      />
+                      <InfoField
+                        icon={<Globe className="w-3.5 h-3.5 text-gray-400" />}
+                        label="Website"
+                        value={infoPopupLead.businessWebsite || ''}
+                        onChange={v => handlePopupLeadFieldEdit('businessWebsite', v)}
+                        isLink
+                      />
+                      <InfoField
+                        icon={<Linkedin className="w-3.5 h-3.5 text-[#0a66c2]" />}
+                        label="LinkedIn Profile"
+                        value={infoPopupLead.linkedinProfile || ''}
+                        onChange={v => handlePopupLeadFieldEdit('linkedinProfile', v)}
+                        isLink
+                      />
+                      <InfoField
+                        icon={<Facebook className="w-3.5 h-3.5 text-[#1877f2]" />}
+                        label="Facebook Profile"
+                        value={infoPopupLead.facebookProfile || ''}
+                        onChange={v => handlePopupLeadFieldEdit('facebookProfile', v)}
+                        isLink
+                      />
+                      <InfoField
+                        icon={<Instagram className="w-3.5 h-3.5 text-[#e1306c]" />}
+                        label="Instagram Profile"
+                        value={infoPopupLead.instaProfile || ''}
+                        onChange={v => handlePopupLeadFieldEdit('instaProfile', v)}
+                        isLink
+                      />
+                    </div>
 
                     {/* Extra Columns from uploaded Excel file */}
-                    {notePopupLead.customFields && Object.keys(notePopupLead.customFields).length > 0 && (
+                    {infoPopupLead.customFields && Object.keys(infoPopupLead.customFields).length > 0 && (
                       <div className="border-t border-gray-200 pt-3 mt-3 space-y-2">
                         <p className="text-[10px] font-black text-gray-400 uppercase tracking-wider">Extra Excel Columns</p>
-                        {Object.entries(notePopupLead.customFields).map(([k, v]) => (
+                        {Object.entries(infoPopupLead.customFields).map(([k, v]) => (
                           <div key={k} className="flex items-center gap-3 bg-gray-50 p-2.5 rounded-xl border border-gray-200 text-xs">
                             <span className="font-bold text-gray-600 min-w-[110px]">{k}:</span>
                             <span className="font-semibold text-black flex-1 truncate">{String(v)}</span>
@@ -1590,27 +1637,240 @@ export function ColdCallsModule({
                   </div>
                 )}
               </div>
+
+              {/* ── Multi-Stage Follow-ups Container ── */}
+              <div className="space-y-5">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-sm font-black text-black uppercase tracking-wider flex items-center gap-2">
+                    <PhoneCall className="w-4 h-4 text-[#00a884]" />
+                    Follow-up Logs & History
+                  </h4>
+                  <span className="text-xs font-bold text-zinc-500">
+                    {infoPopupFollowUps.length} {infoPopupFollowUps.length === 1 ? 'Stage' : 'Stages'}
+                  </span>
+                </div>
+
+                {infoPopupFollowUps.map((round, rIdx) => {
+                  const currentCallChoice = round.callChoice || 'PENDING';
+                  const currentStatus = round.callStatus || 'PENDING';
+
+                  return (
+                    <div
+                      key={round.id || rIdx}
+                      className="p-4 rounded-xl border border-zinc-300 bg-white shadow-xs space-y-4 relative"
+                    >
+                      {/* Follow-up Header */}
+                      <div className="flex items-center justify-between border-b border-zinc-100 pb-2">
+                        <div className="flex items-center gap-2">
+                          <span className="px-2.5 py-0.5 rounded-md bg-purple-100 text-purple-900 font-black text-xs">
+                            FOLLOW UP {round.roundNumber || rIdx + 1}
+                          </span>
+                          {round.calledBy && (
+                            <span className="text-[11px] font-bold text-zinc-400">
+                              by {round.calledBy}
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Delete Stage Button (For round > 1) */}
+                        {rIdx > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteFollowUpStage(rIdx)}
+                            title="Remove this follow-up round"
+                            className="text-zinc-400 hover:text-rose-600 p-1 rounded transition-colors cursor-pointer"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
+
+                      {/* Top Row: CALL (Choice), STATUS (Conditional), FOLLOW UP DATE */}
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        {/* 1. CALL Choice */}
+                        <div>
+                          <label className="text-[10px] font-black text-zinc-500 uppercase tracking-wider block mb-1">
+                            CALL
+                          </label>
+                          <select
+                            value={currentCallChoice}
+                            onChange={(e) => handleFollowUpFieldChange(rIdx, 'callChoice', e.target.value as CallChoiceType)}
+                            className="w-full px-2.5 py-2 rounded-lg border border-zinc-300 bg-zinc-50 text-xs font-bold text-black outline-none cursor-pointer focus:bg-white focus:border-black"
+                          >
+                            <option value="PENDING">Pending</option>
+                            <option value="YES">Yes</option>
+                            <option value="NO">No</option>
+                            <option value="INVALID">Invalid</option>
+                          </select>
+                        </div>
+
+                        {/* 2. STATUS (Conditional on Call Choice) */}
+                        <div>
+                          <label className="text-[10px] font-black text-zinc-500 uppercase tracking-wider block mb-1">
+                            STATUS
+                          </label>
+                          {currentCallChoice === 'YES' ? (
+                            <select
+                              value={currentStatus}
+                              onChange={(e) => handleFollowUpFieldChange(rIdx, 'callStatus', e.target.value as CallStatusType)}
+                              className="w-full px-2.5 py-2 rounded-lg border border-emerald-300 bg-emerald-50 text-xs font-extrabold text-emerald-900 outline-none cursor-pointer focus:bg-white focus:border-emerald-600"
+                            >
+                              <option value="INTERESTED">Interested</option>
+                              <option value="WARM">Warm</option>
+                              <option value="NOT_INTERESTED">Not Interested</option>
+                              <option value="PENDING">Pending</option>
+                            </select>
+                          ) : currentCallChoice === 'NO' ? (
+                            <div className="px-2.5 py-2 rounded-lg border border-zinc-200 bg-zinc-100 text-xs font-extrabold text-zinc-700 text-center select-none">
+                              Not Connected
+                            </div>
+                          ) : currentCallChoice === 'INVALID' ? (
+                            <select
+                              value={currentStatus}
+                              onChange={(e) => handleFollowUpFieldChange(rIdx, 'callStatus', e.target.value as CallStatusType)}
+                              className="w-full px-2.5 py-2 rounded-lg border border-rose-300 bg-rose-50 text-xs font-extrabold text-rose-900 outline-none cursor-pointer focus:bg-white focus:border-rose-600"
+                            >
+                              <option value="NOT_REACHABLE">Not reachable</option>
+                              <option value="INVALID">Invalid</option>
+                            </select>
+                          ) : (
+                            <div className="px-2.5 py-2 rounded-lg border border-zinc-200 bg-zinc-50 text-xs font-semibold text-zinc-400 text-center select-none">
+                              —
+                            </div>
+                          )}
+                        </div>
+
+                        {/* 3. FOLLOW UP DATE (Calendar Picker) */}
+                        <div>
+                          <label className="text-[10px] font-black text-zinc-500 uppercase tracking-wider block mb-1">
+                            FOLLOW UP {round.roundNumber || rIdx + 1} DATE
+                          </label>
+                          <div className={`flex items-center gap-1 w-full rounded-lg px-2 py-1 border transition-all ${
+                            round.followUpDate 
+                              ? 'bg-emerald-50/70 border-emerald-200 focus-within:border-emerald-600 focus-within:bg-white' 
+                              : 'bg-zinc-50 border-zinc-300 focus-within:border-black focus-within:bg-white'
+                          }`}>
+                            <input
+                              type="date"
+                              value={normalizeDateStr(round.followUpDate || '')}
+                              onChange={(e) => handleFollowUpFieldChange(rIdx, 'followUpDate', e.target.value)}
+                              className={`w-full bg-transparent text-xs outline-none cursor-pointer ${
+                                round.followUpDate ? 'text-[#00a884] font-black' : 'text-gray-400 font-medium'
+                              }`}
+                            />
+                            {round.followUpDate && (
+                              <button
+                                type="button"
+                                onClick={() => handleFollowUpFieldChange(rIdx, 'followUpDate', '')}
+                                title="Clear date"
+                                className="text-emerald-600 hover:text-red-500 p-0.5 rounded transition-colors cursor-pointer"
+                              >
+                                <X className="w-3 h-3" />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Bottom Row: NOTE (Multiple Notes with Timestamps) */}
+                      <div className="space-y-2 pt-1 border-t border-zinc-100">
+                        <label className="text-[10px] font-black text-zinc-500 uppercase tracking-wider block">
+                          NOTES FOR FOLLOW UP {round.roundNumber || rIdx + 1}
+                        </label>
+
+                        {/* Add note box */}
+                        <div className="flex gap-2">
+                          <input
+                            type="text"
+                            value={newNoteInputs[rIdx] || ''}
+                            onChange={(e) => setNewNoteInputs(prev => ({ ...prev, [rIdx]: e.target.value }))}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                e.preventDefault();
+                                handleAddNoteToRound(rIdx);
+                              }
+                            }}
+                            placeholder="Type a note and press Enter or click + Add..."
+                            className="flex-1 px-3 py-1.5 text-xs rounded-lg border border-zinc-300 bg-zinc-50 focus:bg-white focus:border-[#00a884] focus:outline-none transition-all"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => handleAddNoteToRound(rIdx)}
+                            className="px-3 py-1.5 bg-[#00a884] hover:bg-[#008f70] text-white font-bold text-xs rounded-lg transition-all flex items-center gap-1 cursor-pointer"
+                          >
+                            <Plus className="w-3.5 h-3.5" />
+                            <span>Add</span>
+                          </button>
+                        </div>
+
+                        {/* Saved notes list for this round */}
+                        {((round.notesList || []).length > 0 || round.note) && (
+                          <div className="space-y-1.5 max-h-36 overflow-y-auto">
+                            {(round.notesList || []).map((n, nIdx) => (
+                              <div key={nIdx} className="p-2 rounded-lg bg-zinc-50 border border-zinc-200 flex items-center justify-between gap-2 text-xs">
+                                <div className="flex-1 flex items-center gap-2 min-w-0">
+                                  <input
+                                    value={n.text}
+                                    onChange={(e) => handleEditNoteInRound(rIdx, nIdx, e.target.value)}
+                                    className="flex-1 bg-transparent text-xs text-gray-800 font-medium outline-none"
+                                  />
+                                  <span className="text-[10px] text-zinc-400 whitespace-nowrap">📅 {n.date}</span>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteNoteFromRound(rIdx, nIdx)}
+                                  className="text-zinc-400 hover:text-rose-600 p-0.5 rounded cursor-pointer"
+                                >
+                                  <Trash2 className="w-3 h-3" />
+                                </button>
+                              </div>
+                            ))}
+                            {/* Fallback legacy single note */}
+                            {round.note && (round.notesList || []).length === 0 && (
+                              <div className="p-2 rounded-lg bg-blue-50 border border-blue-200 text-xs text-blue-900 font-medium">
+                                {round.note}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+
+                {/* "➕ Add Follow Up" Button */}
+                <button
+                  type="button"
+                  onClick={handleAddFollowUpStage}
+                  className="w-full py-2.5 border-2 border-dashed border-purple-300 hover:border-purple-600 bg-purple-50/50 hover:bg-purple-50 text-purple-900 font-black text-xs rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer shadow-xs active:scale-98"
+                >
+                  <Plus className="w-4 h-4 text-purple-700" />
+                  <span>+ Add Follow Up {infoPopupFollowUps.length + 1}</span>
+                </button>
+              </div>
             </div>
 
             {/* Footer */}
-            <div className="px-5 py-4 border-t border-gray-200 bg-[#f0f2f5] rounded-b-2xl flex items-center justify-between">
+            <div className="px-6 py-3 border-t border-gray-200 bg-gray-50 flex items-center justify-end gap-3 rounded-b-2xl">
               <button
-                onClick={() => setNotePopupLead(null)}
-                className="px-4 py-2 text-xs font-semibold text-gray-600 hover:text-gray-900 transition-colors"
+                type="button"
+                onClick={() => setInfoPopupLead(null)}
+                className="px-4 py-2 bg-zinc-100 hover:bg-zinc-200 text-zinc-800 font-bold text-xs rounded-xl transition-all cursor-pointer"
               >
-                Close
+                Cancel
               </button>
               <button
-                onClick={handleSaveNotePopup}
-                disabled={noteSaving}
-                className="inline-flex items-center gap-2 px-5 py-2.5 bg-[#00a884] hover:bg-[#008f70] text-white font-bold text-xs rounded-xl transition-all shadow-md active:scale-95 disabled:opacity-60"
+                type="button"
+                onClick={handleSaveInfoPopup}
+                disabled={infoSaving}
+                className="px-6 py-2 bg-black hover:bg-zinc-800 text-white font-black text-xs rounded-xl transition-all shadow-sm active:scale-95 disabled:opacity-60 flex items-center gap-2 cursor-pointer"
               >
-                {noteSaving ? (
+                {infoSaving ? (
                   <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
                 ) : (
                   <Save className="w-3.5 h-3.5" />
                 )}
-                <span>{noteSaving ? 'Saving...' : '💾 Save Info'}</span>
+                <span>{infoSaving ? 'Saving...' : 'Save Changes'}</span>
               </button>
             </div>
           </div>
@@ -1787,7 +2047,7 @@ export function ColdCallsModule({
                           <td className="p-3 text-gray-600 truncate max-w-[150px]">{lead.note || lead.notesList?.[0]?.text || '—'}</td>
                           <td className="p-3 text-right">
                             <button
-                              onClick={() => { setShowInterestedModal(false); openNotePopup(lead); }}
+                              onClick={() => { setShowInterestedModal(false); openInfoPopup(lead); }}
                               className="px-3 py-1 bg-purple-100 hover:bg-purple-200 text-purple-900 font-bold text-xs rounded-lg transition-all border border-purple-300"
                             >
                               Notes
@@ -1858,7 +2118,7 @@ export function ColdCallsModule({
                           <td className="p-3 text-gray-600 truncate max-w-[150px]">{lead.note || lead.notesList?.[0]?.text || '—'}</td>
                           <td className="p-3 text-right">
                             <button
-                              onClick={() => { setShowScheduledModal(false); openNotePopup(lead); }}
+                              onClick={() => { setShowScheduledModal(false); openInfoPopup(lead); }}
                               className="px-3 py-1 bg-indigo-100 hover:bg-indigo-200 text-indigo-900 font-bold text-xs rounded-lg transition-all border border-indigo-300"
                             >
                               Notes
@@ -1929,7 +2189,7 @@ export function ColdCallsModule({
                           <td className="p-3 text-gray-600 truncate max-w-[150px]">{lead.note || lead.notesList?.[0]?.text || '—'}</td>
                           <td className="p-3 text-right">
                             <button
-                              onClick={() => { setShowFollowupsTodayModal(false); openNotePopup(lead); }}
+                              onClick={() => { setShowFollowupsTodayModal(false); openInfoPopup(lead); }}
                               className="px-3 py-1 bg-amber-100 hover:bg-amber-200 text-amber-900 font-bold text-xs rounded-lg transition-all border border-amber-300"
                             >
                               Notes

@@ -53,6 +53,21 @@ export interface NoteEntry {
   date: string; // DD-MM-YYYY
 }
 
+export type CallChoiceType = 'YES' | 'NO' | 'INVALID' | 'PENDING';
+export type CallStatusType = 'INTERESTED' | 'WARM' | 'NOT_INTERESTED' | 'NOT_CONNECTED' | 'NOT_REACHABLE' | 'INVALID' | 'PENDING' | string;
+
+export interface FollowUpRound {
+  id: string;
+  roundNumber: number; // 1, 2, 3...
+  callChoice?: CallChoiceType;
+  callStatus?: CallStatusType;
+  followUpDate?: string; // YYYY-MM-DD or DD-MM-YYYY
+  notesList?: NoteEntry[];
+  note?: string;
+  calledBy?: string;
+  updatedAt?: number;
+}
+
 export interface ColdCallLead {
   id: string;
   // Core display columns
@@ -66,17 +81,19 @@ export interface ColdCallLead {
   linkedinProfile?: string;
   facebookProfile?: string;
   instaProfile?: string;
-  // Notes
+  // Multi-stage Follow-ups (Follow Up 1, Follow Up 2, Follow Up 3...)
+  followUps?: FollowUpRound[];
+  // Notes & legacy fields
   note?: string;            // Original note from Excel
   notesList?: NoteEntry[];  // User-added notes with timestamps
   // Status & tracking
-  callChoice?: 'YES' | 'NO' | 'PENDING';
-  callStatus?: 'YES' | 'NO' | 'PENDING' | 'INTERESTED' | 'NOT_INTERESTED' | 'CONNECTED' | 'BUSY' | 'NO_ANSWER' | 'CALLBACK_REQUESTED' | 'NOT_CONNECTED' | 'WARM';
+  callChoice?: CallChoiceType;
+  callStatus?: CallStatusType;
   followUpDate?: string;
   // Multi-user & tracking
   calledBy?: string;        // Logged-in username (e.g. James Mitchell)
   callTimestamp?: number;   // Timestamp of last call/note update
-  callOutcome?: string;     // Outcome badge (INTERESTED, NOT_INTERESTED, BUSY, NO_ANSWER, CALLBACK_REQUESTED, CONNECTED, PENDING)
+  callOutcome?: string;     // Outcome badge
   // Legacy compatibility
   name?: string;
   company?: string;
@@ -923,10 +940,13 @@ class StorageEngine {
         linkedinProfile: lead.linkedinProfile !== undefined ? lead.linkedinProfile : (existing?.linkedinProfile || ''),
         facebookProfile: lead.facebookProfile !== undefined ? lead.facebookProfile : (existing?.facebookProfile || ''),
         instaProfile: lead.instaProfile !== undefined ? lead.instaProfile : (existing?.instaProfile || ''),
+        // Multi-stage Follow-ups
+        followUps: lead.followUps !== undefined ? lead.followUps : (existing?.followUps || []),
         // Notes
         note: lead.note !== undefined ? lead.note : (existing?.note || ''),
         notesList: (lead.notesList && lead.notesList.length > 0) ? lead.notesList : (existing?.notesList || []),
         // Status
+        callChoice: lead.callChoice !== undefined ? lead.callChoice : existing?.callChoice,
         callStatus: existing?.callStatus || lead.callStatus || 'PENDING',
         followUpDate: lead.followUpDate !== undefined ? lead.followUpDate : (existing?.followUpDate || ''),
         // Multi-user & tracking
@@ -957,6 +977,7 @@ class StorageEngine {
     const updated: ColdCallLead = {
       ...existing,
       ...partial,
+      followUps: partial.followUps !== undefined ? partial.followUps : existing.followUps,
       callChoice: (partial.callChoice === null || (partial.callChoice as any) === '') ? undefined : (partial.callChoice !== undefined ? partial.callChoice : existing.callChoice),
       callStatus: partial.callStatus || (partial.callChoice === null ? 'PENDING' : existing.callStatus || 'PENDING'),
       calledBy: (partial.calledBy === null || partial.calledBy === '' || partial.calledBy === 'Executive User' || partial.calledBy === 'Staff')

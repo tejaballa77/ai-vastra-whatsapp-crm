@@ -752,6 +752,46 @@ class StorageEngine {
       }
     }
 
+    // Also include any saved CRM contacts from this.contacts (e.g. Santhosh Nellore Chandana, etc.)
+    for (const [contactJid, contact] of this.contacts.entries()) {
+      const resolvedKey = this.resolveJid(contactJid);
+      const rawDigits = (contact.phone || resolvedKey.split('@')[0]).replace(/\D/g, '');
+      const dedupeKey = this.canonicalPhone(rawDigits) || contact.name?.trim().toLowerCase() || resolvedKey;
+
+      if (!uniqueMap.has(dedupeKey)) {
+        const contactChat: CRMChat = {
+          jid: resolvedKey,
+          name: contact.name || this.formatPhoneFallback(rawDigits),
+          phone: contact.phone || rawDigits,
+          unreadCount: 0,
+          lastMessagePreview: contact.notes || 'No messages',
+          lastMessageAt: 0,
+          isGroup: false,
+          leadStatus: contact.leadStatus || 'UNASSIGNED',
+          callStatus: contact.callStatus,
+          followUpDate: contact.followUpDate,
+          notes: contact.notes,
+          notesList: contact.notesList,
+          tags: contact.tags || [],
+          avatarUrl: contact.avatarUrl,
+        };
+        uniqueMap.set(dedupeKey, contactChat);
+      } else {
+        const existing = uniqueMap.get(dedupeKey)!;
+        uniqueMap.set(dedupeKey, {
+          ...existing,
+          name: (existing.name && !BAD_NAMES.has(existing.name.toLowerCase().trim())) ? existing.name : (contact.name || existing.name),
+          phone: existing.phone || contact.phone,
+          leadStatus: (existing.leadStatus && existing.leadStatus !== 'UNASSIGNED') ? existing.leadStatus : (contact.leadStatus || 'UNASSIGNED'),
+          callStatus: existing.callStatus !== undefined ? existing.callStatus : contact.callStatus,
+          followUpDate: existing.followUpDate || contact.followUpDate,
+          notes: existing.notes || contact.notes,
+          notesList: (existing.notesList && existing.notesList.length > 0) ? existing.notesList : contact.notesList,
+          avatarUrl: existing.avatarUrl || contact.avatarUrl,
+        });
+      }
+    }
+
     return Array.from(uniqueMap.values()).sort((a, b) => {
       const aIsSaved = (a.leadStatus && a.leadStatus !== 'UNASSIGNED') || a.callStatus === 'YES' || Boolean(a.followUpDate);
       const bIsSaved = (b.leadStatus && b.leadStatus !== 'UNASSIGNED') || b.callStatus === 'YES' || Boolean(b.followUpDate);

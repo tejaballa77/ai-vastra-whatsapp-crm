@@ -569,45 +569,61 @@ export function ColdCallsModule({
     });
   };
 
-  const handleAddNoteToRound = (roundIdx: number) => {
-    const text = (newNoteInputs[roundIdx] || '').trim();
-    if (!text) return;
-    const newEntry: NoteEntry = { text, date: getTodayDate() };
-    setInfoPopupFollowUps(prev => {
-      const next = [...prev];
-      const target = { ...next[roundIdx] };
-      const currentList = getRoundNotesList(target);
-      target.notesList = [newEntry, ...currentList];
-      next[roundIdx] = target;
-      return next;
-    });
-    setNewNoteInputs(prev => ({ ...prev, [roundIdx]: '' }));
-    setSelectedNoteIndex(prev => ({ ...prev, [roundIdx]: 0 }));
-  };
-
-  const handleDeleteNoteFromRound = (roundIdx: number, noteIdx: number) => {
-    setInfoPopupFollowUps(prev => {
-      const next = [...prev];
-      const target = { ...next[roundIdx] };
-      const currentList = getRoundNotesList(target);
-      target.notesList = currentList.filter((_, i) => i !== noteIdx);
-      if (target.notesList.length === 0) target.note = '';
-      next[roundIdx] = target;
-      return next;
-    });
-    setSelectedNoteIndex(prev => ({ ...prev, [roundIdx]: 0 }));
-  };
-
-  const handleEditNoteInRound = (roundIdx: number, noteIdx: number, text: string) => {
+  const handleUpdateActiveNoteText = (roundIdx: number, text: string) => {
     setInfoPopupFollowUps(prev => {
       const next = [...prev];
       const target = { ...next[roundIdx] };
       const currentList = [...getRoundNotesList(target)];
-      if (currentList[noteIdx]) {
-        currentList[noteIdx] = { ...currentList[noteIdx], text };
+      const activeIdx = selectedNoteIndex[roundIdx] ?? 0;
+
+      if (currentList.length === 0) {
+        if (text) {
+          currentList.push({ text, date: getTodayDate() });
+        }
+      } else {
+        if (currentList[activeIdx]) {
+          currentList[activeIdx] = { ...currentList[activeIdx], text };
+        } else {
+          currentList[activeIdx] = { text, date: getTodayDate() };
+        }
       }
       target.notesList = currentList;
+      target.note = currentList[0]?.text || '';
       next[roundIdx] = target;
+      return next;
+    });
+  };
+
+  const handleAddNewNoteSlot = (roundIdx: number) => {
+    setInfoPopupFollowUps(prev => {
+      const next = [...prev];
+      const target = { ...next[roundIdx] };
+      const currentList = [...getRoundNotesList(target)];
+      
+      const newSlotIdx = currentList.length;
+      currentList.push({ text: '', date: getTodayDate() });
+      
+      target.notesList = currentList;
+      next[roundIdx] = target;
+      setSelectedNoteIndex(prevIdxs => ({ ...prevIdxs, [roundIdx]: newSlotIdx }));
+      return next;
+    });
+  };
+
+  const handleDeleteActiveNote = (roundIdx: number) => {
+    setInfoPopupFollowUps(prev => {
+      const next = [...prev];
+      const target = { ...next[roundIdx] };
+      const currentList = [...getRoundNotesList(target)];
+      const activeIdx = selectedNoteIndex[roundIdx] ?? 0;
+
+      const updated = currentList.filter((_, i) => i !== activeIdx);
+      target.notesList = updated;
+      target.note = updated[0]?.text || '';
+      next[roundIdx] = target;
+      
+      const newActiveIdx = Math.max(0, Math.min(activeIdx, updated.length - 1));
+      setSelectedNoteIndex(prevIdxs => ({ ...prevIdxs, [roundIdx]: newActiveIdx }));
       return next;
     });
   };
@@ -1401,7 +1417,7 @@ export function ColdCallsModule({
                               leadId={lead.id}
                               field="businessName"
                               value={lead.businessName || ''}
-                              placeholder="Enter business name..."
+                              placeholder=""
                             />
                           </td>
 
@@ -1411,7 +1427,7 @@ export function ColdCallsModule({
                               leadId={lead.id}
                               field="personName"
                               value={lead.personName || lead.name || ''}
-                              placeholder="Enter person name..."
+                              placeholder=""
                             />
                           </td>
 
@@ -1421,7 +1437,7 @@ export function ColdCallsModule({
                               leadId={lead.id}
                               field="phone"
                               value={lead.phone || ''}
-                              placeholder="Enter phone..."
+                              placeholder=""
                               className="text-[#00a884] font-extrabold"
                             />
                           </td>
@@ -1504,9 +1520,10 @@ export function ColdCallsModule({
                   const currentCallChoice = round.callChoice || 'PENDING';
                   const currentStatus = round.callStatus || 'PENDING';
                   const notesList = getRoundNotesList(round);
-                  const notesCount = notesList.length;
-                  const activeNoteIdx = Math.min(selectedNoteIndex[rIdx] ?? 0, Math.max(0, notesCount - 1));
-                  const selectedNote = notesCount > 0 ? notesList[activeNoteIdx] : null;
+                  const notesCount = Math.max(1, notesList.length);
+                  const activeNoteIdx = Math.min(selectedNoteIndex[rIdx] ?? 0, notesCount - 1);
+                  const currentNote = notesList[activeNoteIdx];
+                  const currentNoteText = currentNote ? currentNote.text : '';
 
                   return (
                     <div
@@ -1626,31 +1643,33 @@ export function ColdCallsModule({
                         </div>
                       </div>
 
-                      {/* Bottom Row: NOTES with + Add and Notes Dropdown Selector */}
-                      <div className="space-y-2 pt-1 border-t border-zinc-100">
-                        <label className="text-[10px] font-black text-zinc-500 uppercase tracking-wider block">
-                          NOTES FOR FOLLOW UP {round.roundNumber || rIdx + 1}
-                        </label>
+                      {/* Bottom Row: NOTES with Direct In-Box Editing, + Add, and Notes Dropdown */}
+                      <div className="space-y-1.5 pt-1 border-t border-zinc-100">
+                        <div className="flex items-center justify-between">
+                          <label className="text-[10px] font-black text-zinc-500 uppercase tracking-wider block">
+                            NOTES FOR FOLLOW UP {round.roundNumber || rIdx + 1}
+                          </label>
+                          {currentNote?.date && (
+                            <span className="text-[10px] font-bold text-zinc-400">
+                              📅 {currentNote.date}
+                            </span>
+                          )}
+                        </div>
 
-                        {/* Input Row: Type note + Add button + Notes dropdown */}
+                        {/* Input Row: Direct Note message box + Add button + Notes dropdown */}
                         <div className="flex items-center gap-2">
                           <input
                             type="text"
-                            value={newNoteInputs[rIdx] || ''}
-                            onChange={(e) => setNewNoteInputs(prev => ({ ...prev, [rIdx]: e.target.value }))}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter') {
-                                e.preventDefault();
-                                handleAddNoteToRound(rIdx);
-                              }
-                            }}
-                            placeholder="Type a note and click + Add..."
-                            className="flex-1 h-9 px-3 text-xs rounded-lg border border-zinc-300 bg-zinc-50 focus:bg-white focus:border-[#00a884] focus:outline-none transition-all font-medium text-black"
+                            value={currentNoteText}
+                            onChange={(e) => handleUpdateActiveNoteText(rIdx, e.target.value)}
+                            placeholder={`Type Note ${activeNoteIdx + 1}...`}
+                            className="flex-1 h-9 px-3 text-xs rounded-lg border border-zinc-300 bg-zinc-50 focus:bg-white focus:border-[#00a884] focus:outline-none transition-all font-semibold text-black"
                           />
                           <button
                             type="button"
-                            onClick={() => handleAddNoteToRound(rIdx)}
+                            onClick={() => handleAddNewNoteSlot(rIdx)}
                             className="h-9 px-3.5 bg-[#00a884] hover:bg-[#008f70] text-white font-bold text-xs rounded-lg transition-all flex items-center gap-1 cursor-pointer flex-shrink-0 shadow-xs active:scale-95"
+                            title="Add a new note"
                           >
                             <Plus className="w-3.5 h-3.5" />
                             <span>Add</span>
@@ -1660,48 +1679,27 @@ export function ColdCallsModule({
                           <select
                             value={activeNoteIdx}
                             onChange={(e) => setSelectedNoteIndex(prev => ({ ...prev, [rIdx]: Number(e.target.value) }))}
-                            disabled={notesCount === 0}
-                            className="h-9 px-3 rounded-lg border border-zinc-300 bg-zinc-100 hover:bg-zinc-200 text-black font-extrabold text-xs outline-none cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0"
+                            className="h-9 px-3 rounded-lg border border-zinc-300 bg-zinc-100 hover:bg-zinc-200 text-black font-extrabold text-xs outline-none cursor-pointer flex-shrink-0"
                           >
-                            {notesCount === 0 ? (
-                              <option value={0}>0 Notes</option>
-                            ) : (
-                              notesList.map((_, nIdx) => (
-                                <option key={nIdx} value={nIdx}>
-                                  Note {nIdx + 1}
-                                </option>
-                              ))
-                            )}
+                            {Array.from({ length: notesCount }).map((_, nIdx) => (
+                              <option key={nIdx} value={nIdx}>
+                                Note {nIdx + 1}
+                              </option>
+                            ))}
                           </select>
-                        </div>
 
-                        {/* Active Selected Note Display Card */}
-                        {notesCount > 0 && selectedNote && (
-                          <div className="p-2.5 rounded-lg bg-zinc-50 border border-zinc-200 flex items-center justify-between gap-3 text-xs">
-                            <div className="flex-1 flex items-center gap-2 min-w-0">
-                              <span className="text-[10px] font-black text-zinc-600 bg-zinc-200 px-2 py-0.5 rounded flex-shrink-0 uppercase">
-                                Note {activeNoteIdx + 1}
-                              </span>
-                              <input
-                                value={selectedNote.text}
-                                onChange={(e) => handleEditNoteInRound(rIdx, activeNoteIdx, e.target.value)}
-                                className="flex-1 bg-transparent text-xs text-black font-bold outline-none"
-                                placeholder="Edit note..."
-                              />
-                              <span className="text-[10px] text-zinc-400 whitespace-nowrap flex-shrink-0 font-medium">
-                                📅 {selectedNote.date}
-                              </span>
-                            </div>
+                          {/* Delete Note Button (If there are multiple notes or current note is filled) */}
+                          {notesList.length > 0 && (
                             <button
                               type="button"
-                              onClick={() => handleDeleteNoteFromRound(rIdx, activeNoteIdx)}
-                              title="Delete this note"
-                              className="text-zinc-400 hover:text-rose-600 p-1 rounded transition-colors cursor-pointer flex-shrink-0"
+                              onClick={() => handleDeleteActiveNote(rIdx)}
+                              title="Delete current note"
+                              className="h-9 px-2 text-zinc-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer flex items-center justify-center flex-shrink-0"
                             >
-                              <Trash2 className="w-3.5 h-3.5" />
+                              <Trash2 className="w-4 h-4" />
                             </button>
-                          </div>
-                        )}
+                          )}
+                        </div>
                       </div>
                     </div>
                   );

@@ -6779,3 +6779,65 @@ Whether you save a contact on WhatsApp Web or on your Mobile Phone 2 days later,
 
 ---
 
+### ❓ Query #127
+
+**User Request:**
+
+```text
+<USER_REQUEST>
+See, you did not implement it yet. There is no change. The same error is happening again and again. In the first picture, the first row is the contact I have been testing with. I have sent three messages with that contact number, and three messages have been delivered by auto-replies. That number has been displayed in the warm section, and I have entered some data in the extension that has shifted from the warm section to the all section. But you can see in the first picture, I have edited that contact as Teja. And when I open the CRM, Teja has not been reflected. The number is only there, and in the first picture, you can see in the extension that Teja has been reflected, but the data is not there. The extension is very fresh. So you need to sort out this error. This is a very easy one you have implemented before only. When that contact WhatsApp account is connected to the auto-replies, you can easily fetch the contact details and everything. If a number is saved or not saved or edited, whatever it is happening in that WhatsApp account, you can easily fetch those information. So by that approach, you can easily reflect the edited name, and the old data should be reflected in the extension too. So that if that is reflected, then the name which I have saved will be reflected into the CRM automatically. So you need to do this. Sort out this error immediately. 
+</USER_REQUEST>
+<ADDITIONAL_METADATA>
+The current local time is: 2026-09-01T00:02:07+05:30.
+</ADDITIONAL_METADATA>
+```
+
+**AI Solution & Explanation:**
+
+### 🎯 THE EXACT REASON FOR "TEJA" LOADING BLANK HAS BEEN DISCOVERED & FIXED!
+
+Commit: **`e51983e`** in repository **`https://github.com/tejaballa77/ai-vastra-whatsapp-crm`**
+
+---
+
+### 🔍 Technical Breakdown of What Happened in your Screenshots:
+
+1. **In Picture 2 (CRM Dashboard)**: The lead was stored under **`+91 91217 22674`** with notes `"wertyuio (31-08-2026)"`.
+2. **In Picture 1 (WhatsApp Web)**: You renamed **`+91 91217 22674`** to **`Teja`**.
+3. **The Extension Extraction Gap**: When you opened **`Teja`**, the extension looked for `crm_meta_Teja`, which did not exist yet. `extractPhoneNumberFromDom()` was missing WhatsApp's hidden avatar URL parameter (`u=919121722674`), so it couldn't link **`Teja`** to **`919121722674`**, causing the form to load blank!
+
+---
+
+### 🛠️ What was Fixed in `extension/content.js`:
+
+1. **Avatar Image Phone Extraction**: `extractPhoneNumberFromDom()` now scans WhatsApp Web's internal avatar image parameters (`u=919121722674`) in `#main header` and `#pane-side`.
+2. **Instant Phone & Notes Linking**: When you open **`Teja`**, the extension extracts **`919121722674`**, queries the database, and **immediately populates your notes `"wertyuio (31-08-2026)"`, Call Status `YES`, and Follow-up Date `04/09/2026`**!
+3. **Instant CRM Dashboard Name Update**: When you click **`💾 Save Contact Info`**, the backend updates SQLite row 1's name from **`+91 91217 22674`** to **`Teja`**, and the CRM Dashboard updates row 1 to display **`Teja`**!
+
+---
+
+### 🔄 STEP 1: Reload Extension in Chrome (5 Seconds)
+
+1. Go to **`chrome://extensions`** in Chrome.
+2. Click the **Reload (↻)** icon on **AI Vastra Sales CRM Extension**.
+3. Refresh WhatsApp Web (**`F5`**).
+
+---
+
+### 🚀 STEP 2: Update Server with `git pull origin main`
+
+Run this command on your server terminal:
+
+```bash
+cd /home/crm-nicedigitals/htdocs/crm.nicedigitalsgroup.com && git pull origin main && npm --prefix backend run build && npm --prefix frontend run build && pm2 restart all
+```
+
+---
+
+### 📇 RESULT:
+Open **`Teja`** on WhatsApp Web:
+- All your notes (**`"wertyuio (31-08-2026)"`**) will load into the extension panel instantly!
+- Clicking **`💾 Save Contact Info`** will update the CRM Dashboard to display **`Teja`** with 100% of your notes intact!
+
+---
+

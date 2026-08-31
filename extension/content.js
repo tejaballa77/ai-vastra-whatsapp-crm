@@ -282,7 +282,6 @@ function extractProfileNameFromDom() {
   return null;
 }
 
-// Robust extraction of active contact phone number from active left pane item, header, or contact drawer
 function extractPhoneNumberFromDom() {
   // 1. Check active chat item in left pane
   try {
@@ -291,10 +290,12 @@ function extractPhoneNumberFromDom() {
       const cachedPhone = activeItem.getAttribute('data-aivastra-phone');
       if (cachedPhone && cachedPhone.length >= 10) return cachedPhone;
 
-      const img = activeItem.querySelector('img');
-      if (img && img.src) {
-        const match = img.src.match(/u=(\d{10,15})/);
-        if (match && match[1]) return match[1];
+      const imgs = activeItem.querySelectorAll('img');
+      for (const img of imgs) {
+        if (img.src) {
+          const match = img.src.match(/u=(\d{10,15})/);
+          if (match && match[1]) return match[1];
+        }
       }
 
       const itemSpans = activeItem.querySelectorAll('span');
@@ -308,10 +309,18 @@ function extractPhoneNumberFromDom() {
     }
   } catch (e) {}
 
-  // 2. Check main chat header & subtitle
+  // 2. Check main chat header & subtitle & avatar images
   try {
     const mainHeader = document.querySelector('#main header');
     if (mainHeader) {
+      const headerImgs = mainHeader.querySelectorAll('img');
+      for (const img of headerImgs) {
+        if (img.src) {
+          const match = img.src.match(/u=(\d{10,15})/);
+          if (match && match[1]) return match[1];
+        }
+      }
+
       const headerSpans = mainHeader.querySelectorAll('span');
       for (const s of headerSpans) {
         const t = (s.getAttribute('title') || s.textContent || '').trim();
@@ -320,12 +329,6 @@ function extractPhoneNumberFromDom() {
           return digits;
         }
       }
-
-      const headerImg = mainHeader.querySelector('img');
-      if (headerImg && headerImg.src) {
-        const match = headerImg.src.match(/u=(\d{10,15})/);
-        if (match && match[1]) return match[1];
-      }
     }
   } catch (e) {}
 
@@ -333,6 +336,14 @@ function extractPhoneNumberFromDom() {
   try {
     const drawer = document.querySelector('[role="region"], [data-testid="contact-info-drawer"]');
     if (drawer) {
+      const imgs = drawer.querySelectorAll('img');
+      for (const img of imgs) {
+        if (img.src) {
+          const match = img.src.match(/u=(\d{10,15})/);
+          if (match && match[1]) return match[1];
+        }
+      }
+
       const spans = drawer.querySelectorAll('span');
       for (const s of spans) {
         const t = (s.getAttribute('title') || s.textContent || '').trim();

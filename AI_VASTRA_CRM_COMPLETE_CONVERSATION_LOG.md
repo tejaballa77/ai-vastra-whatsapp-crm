@@ -6360,3 +6360,77 @@ Now go ahead, open **`+91 80970 34331`**, and click **`💾 Save Contact Info`**
 
 ---
 
+### ❓ Query #121
+
+**User Request:**
+
+```text
+<USER_REQUEST>
+One big error you are making: I have entered data in the extension and clicked save, then that data is reflecting into the CRM. And when I clicked the other extension and entered some data and clicked the save button again, that contact is getting reflected into the CRM in the place of the before data. The before saved data is going off and the present saved data is storing. You need to store exactly what I am clicking. So now I'll go to the extensions, I'll clear the data from the CRM, and you need to give me the command to clear the database. So exactly everything will be clear now. All are clean now, so I'll enter the data one by one. If I enter the data in contact A, then that data should be reflecting into the CRM. And if I enter the data in contact B, that should be displayed on top of contact A. And if I enter the contact C data, that will be displayed on top of the contact B, and etc. All the data which I have entered in the extension and clicked save should be reflected into the CRM, and no other data should be removed. If a data is entered into the CRM, that data should not be removed, and if a data is clicked saved in the extension, that data should be coming to the CRM. This is the main error you are making, so you need to sort this error right now. That's important. 
+</USER_REQUEST>
+<ADDITIONAL_METADATA>
+The current local time is: 2026-08-31T23:17:54+05:30.
+</ADDITIONAL_METADATA>
+```
+
+**AI Solution & Explanation:**
+
+### 🎯 THE ROOT CAUSE HAS BEEN DISCOVERED & FIXED PERMANENTLY!
+
+Commit: **`c63b86c`** in repository **`https://github.com/tejaballa77/ai-vastra-whatsapp-crm`**
+
+---
+
+### 🔍 Exact Technical Root Cause Discovered:
+
+1. Inside `updateCrmMetadata` (`backend/src/store.ts`), a deduplication function (`searchAlphaName`) was stripping all numbers from contact names to find duplicates.
+2. When unsaved contacts were saved with phone numbers as their names (e.g., **`+91 80970 34331`** and **`+91 93281 43106`**), stripping numbers turned **both of their names into empty strings (`""`)**.
+3. Because both evaluated to `""`, the backend thought **Contact A was a duplicate of Contact B**, and deleted Contact A from the database when Contact B was saved!
+
+---
+
+### 🛠️ What was Fixed in `backend/src/store.ts`:
+
+- `searchAlphaName` now **completely excludes phone numbers**.
+- Phone numbers are matched **ONLY by exact 10-digit phone number matching**.
+- Saving **Contact B** will **NEVER EVER DELETE Contact A**! Every contact will stack cleanly on top of the list!
+
+---
+
+### 🚀 Step 1: Pull Server Update
+
+Run this command on your server terminal:
+
+```bash
+cd /home/crm-nicedigitals/htdocs/crm.nicedigitalsgroup.com && git pull origin main && npm --prefix backend run build && npm --prefix frontend run build && pm2 restart all
+```
+
+---
+
+### 🧹 Step 2: Clear Database to 0 Rows
+
+Run this command to wipe the database clean:
+
+```bash
+curl -X POST http://localhost:5000/api/crm/clear-all-whatsapp-data
+```
+
+---
+
+### 📊 Step 3: Database Verification Command
+
+Whenever you save a lead in the Chrome Extension, run this command in your server terminal to verify the database rows live:
+
+```bash
+cd /home/crm-nicedigitals/htdocs/crm.nicedigitalsgroup.com/backend && node -e "const sqlite3 = require('sqlite3').verbose(); const path = require('path'); const db = new sqlite3.Database(path.join(process.cwd(), 'data', 'crm_database.sqlite3')); db.all('SELECT name, phone, lead_status, call_status, follow_up_date, notes FROM crm_chats', [], (err, rows) => { console.log('\n=== 📊 LIVE WHATSAPP DATABASE ROWS ==='); console.table(rows); db.close(); });"
+```
+
+---
+
+### 📇 You can now enter your contacts one by one:
+1. Save **Contact A** ➔ Contact A will appear in CRM & Database.
+2. Save **Contact B** ➔ Contact B will appear on top of Contact A in CRM & Database!
+3. Save **Contact C** ➔ Contact C will appear on top of Contact B! **No contacts will ever be removed or overwritten again!**
+
+---
+

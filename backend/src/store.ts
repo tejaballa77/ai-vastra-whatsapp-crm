@@ -1309,7 +1309,11 @@ class StorageEngine {
     const nowTimestamp = Date.now();
 
     // Un-blacklist contact keys when user explicitly saves new data
-    const searchAlphaName = incomingNameIsValid ? incomingNameClean.toLowerCase().replace(/\+?\d+/g, '').replace(/[^a-z0-9]/g, '').trim() : '';
+    const isPurePhoneInput = incomingNameClean.replace(/\D/g, '').length >= 7;
+    const searchAlphaName = (incomingNameIsValid && !isPurePhoneInput)
+      ? incomingNameClean.toLowerCase().replace(/\+?\d+/g, '').replace(/[^a-z0-9]/g, '').trim()
+      : '';
+
     const unBlacklistKeys = [
       canonicalJid.toLowerCase(),
       jid.toLowerCase(),
@@ -1332,10 +1336,12 @@ class StorageEngine {
     for (const [ck, cObj] of this.contacts.entries()) {
       const cPhoneDigits = (cObj.phone || ck.split('@')[0]).replace(/\D/g, '');
       const cTen = this.canonicalPhone(cPhoneDigits);
-      const cAlpha = (cObj.name || '').toLowerCase().replace(/\+?\d+/g, '').replace(/[^a-z0-9]/g, '').trim();
+      const cNameClean = (cObj.name || '').toLowerCase().trim();
+      const cIsPhone = cNameClean.replace(/\D/g, '').length >= 7;
+      const cAlpha = (cObj.name && !cIsPhone) ? cNameClean.replace(/\+?\d+/g, '').replace(/[^a-z0-9]/g, '').trim() : '';
 
       const matchPhone = Boolean(tenDigit && tenDigit.length === 10 && cTen === tenDigit);
-      const matchName = Boolean(searchAlphaName && searchAlphaName.length >= 2 && cAlpha === searchAlphaName);
+      const matchName = Boolean(searchAlphaName && searchAlphaName.length >= 3 && cAlpha === searchAlphaName);
 
       if (ck === canonicalJid || ck === jid || matchPhone || matchName) {
         matchingContactKeys.push(ck);
@@ -1352,10 +1358,12 @@ class StorageEngine {
     for (const [chk, chObj] of this.chats.entries()) {
       const chPhoneDigits = (chObj.phone || chk.split('@')[0]).replace(/\D/g, '');
       const chTen = this.canonicalPhone(chPhoneDigits);
-      const chAlpha = (chObj.name || '').toLowerCase().replace(/\+?\d+/g, '').replace(/[^a-z0-9]/g, '').trim();
+      const chNameClean = (chObj.name || '').toLowerCase().trim();
+      const chIsPhone = chNameClean.replace(/\D/g, '').length >= 7;
+      const chAlpha = (chObj.name && !chIsPhone) ? chNameClean.replace(/\+?\d+/g, '').replace(/[^a-z0-9]/g, '').trim() : '';
 
       const matchPhone = Boolean(tenDigit && tenDigit.length === 10 && chTen === tenDigit);
-      const matchName = Boolean(searchAlphaName && searchAlphaName.length >= 2 && chAlpha === searchAlphaName);
+      const matchName = Boolean(searchAlphaName && searchAlphaName.length >= 3 && chAlpha === searchAlphaName);
 
       if (chk === canonicalJid || chk === jid || matchPhone || matchName) {
         matchingChatKeys.push(chk);

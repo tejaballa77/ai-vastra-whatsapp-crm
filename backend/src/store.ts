@@ -982,6 +982,41 @@ class StorageEngine {
     return msg;
   }
 
+  public updateContactNameFromBaileys(jid: string, newName: string) {
+    if (!jid || !newName) return;
+    const BAD_NAMES = new Set(['.', 'contact', 'unsaved contact', 'unknown contact', 'ai vastra sales agent', 'ai sales agent', 'ai vastra', 'me', '']);
+    const cleanName = newName.trim();
+    if (cleanName.length < 2 || BAD_NAMES.has(cleanName.toLowerCase())) return;
+
+    const resolvedKey = this.resolveJid(jid);
+    const cleanDigits = resolvedKey.split('@')[0].replace(/\D/g, '');
+    const tenDigit = this.canonicalPhone(cleanDigits);
+
+    let updatedAny = false;
+
+    for (const [k, c] of this.contacts.entries()) {
+      const cDigits = (c.phone || k).replace(/\D/g, '');
+      if (k === resolvedKey || (tenDigit && tenDigit.length === 10 && cDigits.endsWith(tenDigit))) {
+        c.name = cleanName;
+        updatedAny = true;
+      }
+    }
+
+    for (const [k, c] of this.chats.entries()) {
+      const cDigits = (c.phone || k).replace(/\D/g, '');
+      if (k === resolvedKey || (tenDigit && tenDigit.length === 10 && cDigits.endsWith(tenDigit))) {
+        c.name = cleanName;
+        updatedAny = true;
+      }
+    }
+
+    if (updatedAny && tenDigit && tenDigit.length === 10) {
+      dbManager.query(`UPDATE crm_contacts SET name = ? WHERE jid = ? OR phone LIKE ?`, [cleanName, resolvedKey, `%${tenDigit}%`]).catch(() => {});
+      dbManager.query(`UPDATE crm_chats SET name = ? WHERE jid = ? OR phone LIKE ?`, [cleanName, resolvedKey, `%${tenDigit}%`]).catch(() => {});
+      this.saveData();
+    }
+  }
+
   public markChatAsRead(rawJid: string) {
     const jid = this.resolveJid(rawJid);
     const clean = jid.split('@')[0];

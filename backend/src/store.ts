@@ -1712,12 +1712,9 @@ class StorageEngine {
       }
     }
 
-    if (cleanDigits && cleanDigits.length >= 7) {
-      dbManager.query(`DELETE FROM crm_chats WHERE jid LIKE ? OR phone LIKE ?`, [`%${cleanDigits}%`, `%${cleanDigits}%`]).catch(() => {});
-      dbManager.query(`DELETE FROM crm_contacts WHERE jid LIKE ? OR phone LIKE ?`, [`%${cleanDigits}%`, `%${cleanDigits}%`]).catch(() => {});
-      dbManager.query(`DELETE FROM crm_messages WHERE chat_jid LIKE ?`, [`%${cleanDigits}%`]).catch(() => {});
-      dbManager.query(`DELETE FROM cold_calls WHERE phone LIKE ?`, [`%${cleanDigits}%`]).catch(() => {});
-    }
+    dbManager.query(`DELETE FROM crm_chats WHERE jid = ? OR jid = ? OR name = ? OR (phone IS NOT NULL AND phone != '' AND phone LIKE ?)`, [jid, rawJid, rawName, `%${cleanDigits}%`]).catch(() => {});
+    dbManager.query(`DELETE FROM crm_contacts WHERE jid = ? OR jid = ? OR name = ? OR (phone IS NOT NULL AND phone != '' AND phone LIKE ?)`, [jid, rawJid, rawName, `%${cleanDigits}%`]).catch(() => {});
+    dbManager.query(`DELETE FROM crm_messages WHERE chat_jid = ? OR chat_jid = ? OR chat_jid LIKE ?`, [jid, rawJid, `%${cleanDigits}%`]).catch(() => {});
 
     this.saveData();
   }

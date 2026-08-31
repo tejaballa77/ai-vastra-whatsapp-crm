@@ -389,8 +389,7 @@ function detectActiveContact(force = false) {
       const domPhone = extractPhoneNumberFromDom();
       if (domPhone && domPhone.length >= 10) {
         cleanDigits = domPhone;
-      } else if (activePhoneClean && activePhoneClean.length >= 10) {
-        // Preserve existing phone number when chat title transitions from unsaved to saved contact name
+      } else if (activePhoneClean && activePhoneClean.length >= 10 && activeDisplayName === targetTitle) {
         cleanDigits = activePhoneClean;
       }
     }
@@ -406,8 +405,18 @@ function detectActiveContact(force = false) {
       const oldPhone = activePhoneClean;
       activeContactKey = contactKey;
       activeDisplayName = displayTitle;
-      activePhoneClean = cleanDigits || oldPhone;
+      activePhoneClean = cleanDigits.length >= 10 ? cleanDigits : (activeDisplayName === targetTitle ? oldPhone : '');
       activeAvatarUrl = domAvatar;
+
+      // Reset active form data immediately to prevent cross-chat data bleeding
+      activeFormData = {
+        leadStatus: 'UNASSIGNED',
+        callStatus: null,
+        followUpDate: '',
+        previousFollowUpDate: '',
+        notesList: [],
+        aiDisabled: false
+      };
 
       // Immediately bridge existing cache to newly saved name
       if (oldPhone && displayTitle && displayTitle.replace(/\D/g, '').length < 10) {
@@ -493,17 +502,17 @@ function fetchCrmMetadata(searchKey, displayName, domAvatar) {
         if (response && response.success && response.chat) {
           const chat = response.chat;
           
-          const bLead = chat.leadStatus !== undefined ? chat.leadStatus : activeFormData.leadStatus;
-          const bCall = chat.callStatus !== undefined && chat.callStatus !== null ? chat.callStatus : activeFormData.callStatus;
-          const bFollow = (chat.followUpDate && chat.followUpDate.trim() !== '' && chat.followUpDate !== '—') ? chat.followUpDate : activeFormData.followUpDate;
-          const bPrevFollow = chat.previousFollowUpDate || activeFormData.previousFollowUpDate || '';
-
+          const localNotes = parseNotesList(localData?.notes, localData?.notesList);
           const backendNotes = parseNotesList(chat.notes, chat.notesList);
-          const localNotes = activeFormData.notesList || [];
           const mergedNotes = [...backendNotes];
           for (const n of localNotes) {
             if (!mergedNotes.includes(n)) mergedNotes.push(n);
           }
+
+          const bLead = chat.leadStatus !== undefined && chat.leadStatus !== 'UNASSIGNED' ? chat.leadStatus : (localData?.leadStatus || 'UNASSIGNED');
+          const bCall = chat.callStatus !== undefined && chat.callStatus !== null ? chat.callStatus : (localData?.callStatus || null);
+          const bFollow = (chat.followUpDate && chat.followUpDate.trim() !== '' && chat.followUpDate !== '—') ? chat.followUpDate : (localData?.followUpDate || '');
+          const bPrevFollow = chat.previousFollowUpDate || localData?.previousFollowUpDate || '';
 
           activeFormData = {
             leadStatus: bLead,

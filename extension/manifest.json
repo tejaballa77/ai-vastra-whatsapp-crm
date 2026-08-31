@@ -1,0 +1,70 @@
+{
+  "manifest_version": 3,
+  "name": "AI Vastra - WhatsApp Web CRM Extension",
+  "version": "1.2.0",
+  "description": "Integrates AI Vastra CRM workspace directly into WhatsApp Web (web.whatsapp.com) and enables direct embedding of WhatsApp Web inside your CRM dashboard.",
+  "permissions": [
+    "activeTab",
+    "storage",
+    "scripting",
+    "declarativeNetRequest"
+  ],
+  "host_permissions": [
+    "https://web.whatsapp.com/*",
+    "https://crm.nicedigitalsgroup.com/*",
+    "http://localhost:3000/*",
+    "http://localhost:5000/*"
+  ],
+  "declarative_net_request": {
+    "rule_resources": [
+      {
+        "id": "ruleset_1",
+        "enabled": true,
+        "path": "rules.json"
+      }
+    ]
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://web.whatsapp.com/*"
+      ],
+      "js": [
+        "top_override.js"
+      ],
+      "run_at": "document_start",
+      "all_frames": true
+    },
+    {
+      "matches": [
+        "https://web.whatsapp.com/*"
+      ],
+      "js": [
+        "content.js"
+      ],
+      "css": [
+        "styles.css"
+      ],
+      "run_at": "document_end",
+      "all_frames": true
+    }
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "AI Vastra CRM Extension Settings"
+  },
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "styles.css",
+        "top_override.js"
+      ],
+      "matches": [
+        "https://web.whatsapp.com/*"
+      ]
+    }
+  ]
+}

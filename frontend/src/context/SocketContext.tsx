@@ -30,6 +30,7 @@ interface SocketContextType {
     tags?: string[];
     aiDisabled?: boolean;
   }) => Promise<void>;
+  removeChatFromState: (targetJid: string, targetPhone?: string, targetName?: string) => void;
   isHistorySyncing: boolean;
   syncedMessageCount: number;
 }
@@ -60,6 +61,25 @@ export const SocketProvider = ({ children }: { children: ReactNode }) => {
   const [isHistorySyncing, setIsHistorySyncing] = useState<boolean>(false);
   const [syncedMessageCount, setSyncedMessageCount] = useState<number>(0);
 
+  const removeChatFromState = (targetJid: string, targetPhone?: string, targetName?: string) => {
+    setChats((prev) => {
+      const updated = prev.filter((c) => {
+        const matchJid = Boolean(targetJid && (c.jid === targetJid || (targetPhone && c.jid.includes(targetPhone))));
+        const matchPhone = Boolean(targetPhone && targetPhone.length >= 7 && (c.phone || '').includes(targetPhone));
+        const matchName = Boolean(targetName && targetName.length >= 2 && (c.name || '').toLowerCase().trim() === targetName.toLowerCase().trim());
+        return !(matchJid || matchPhone || matchName);
+      });
+      try {
+        if (updated.length > 0) {
+          localStorage.setItem('crm_cached_chats', JSON.stringify(updated));
+        } else {
+          localStorage.removeItem('crm_cached_chats');
+        }
+      } catch (e) {}
+      return updated;
+    });
+  };
+
   useEffect(() => {
     const s = io(getBackendUrl(), {
       transports: ['websocket', 'polling'],
@@ -89,9 +109,15 @@ export const SocketProvider = ({ children }: { children: ReactNode }) => {
     });
 
     s.on('chats_updated', (updatedChats: Chat[]) => {
-      if (Array.isArray(updatedChats) && updatedChats.length > 0) {
+      if (Array.isArray(updatedChats)) {
         setChats(updatedChats);
-        try { localStorage.setItem('crm_cached_chats', JSON.stringify(updatedChats)); } catch (e) {}
+        try {
+          if (updatedChats.length > 0) {
+            localStorage.setItem('crm_cached_chats', JSON.stringify(updatedChats));
+          } else {
+            localStorage.removeItem('crm_cached_chats');
+          }
+        } catch (e) {}
         setIsHistorySyncing(false);
       }
     });
@@ -100,9 +126,15 @@ export const SocketProvider = ({ children }: { children: ReactNode }) => {
       fetch(`${getBackendUrl()}/api/chats`)
         .then((res) => res.json())
         .then((data) => {
-          if (Array.isArray(data) && data.length > 0) {
+          if (Array.isArray(data)) {
             setChats(data);
-            try { localStorage.setItem('crm_cached_chats', JSON.stringify(data)); } catch (e) {}
+            try {
+              if (data.length > 0) {
+                localStorage.setItem('crm_cached_chats', JSON.stringify(data));
+              } else {
+                localStorage.removeItem('crm_cached_chats');
+              }
+            } catch (e) {}
             setIsHistorySyncing(false);
           }
         })
@@ -235,6 +267,7 @@ export const SocketProvider = ({ children }: { children: ReactNode }) => {
         disconnectSession,
         reconnectSession,
         updateCrmMetadata,
+        removeChatFromState,
         isHistorySyncing,
         syncedMessageCount,
       }}

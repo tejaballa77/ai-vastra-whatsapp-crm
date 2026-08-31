@@ -117,7 +117,7 @@ export function WhatsAppCrmModule() {
   const [showClearConfirmModal, setShowClearConfirmModal] = useState<boolean>(false);
   const [contactToClear, setContactToClear] = useState<Chat | null>(null);
 
-  const { sessionState, chats: rawChats, updateCrmMetadata } = useSocket();
+  const { sessionState, chats: rawChats, updateCrmMetadata, removeChatFromState } = useSocket();
 
   const [hasLoadedOnce, setHasLoadedOnce] = useState<boolean>(false);
 
@@ -475,6 +475,12 @@ export function WhatsAppCrmModule() {
     if (!target) return;
     const targetJid = target.jid || (target.phone ? `${target.phone}@s.whatsapp.net` : '');
     const targetPhone = target.phone ? target.phone.replace(/\D/g, '') : '';
+    const targetName = target.name || '';
+
+    // Optimistically remove lead from CRM dashboard table and browser local storage immediately
+    if (removeChatFromState) {
+      removeChatFromState(targetJid, targetPhone, targetName);
+    }
 
     setEditingContact(null);
     setClearTargetChat(null);
@@ -486,7 +492,7 @@ export function WhatsAppCrmModule() {
       await fetch(`${getBackendUrl()}/api/crm/contact/clear`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ jid: targetJid, phone: targetPhone, name: target.name }),
+        body: JSON.stringify({ jid: targetJid, phone: targetPhone, name: targetName }),
       }).catch(() => {});
     } catch (err) {
       console.error('Failed to clear lead:', err);

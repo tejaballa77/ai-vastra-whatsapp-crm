@@ -551,7 +551,6 @@ function fetchCrmMetadata(searchKey, displayName, domAvatar) {
         renderCrmPanel(activeDisplayName || displayName, activePhoneClean, resolvedAvatar);
         injectChatListBadges();
       });
-    });
 }
 
 function saveCrmMetadata() {

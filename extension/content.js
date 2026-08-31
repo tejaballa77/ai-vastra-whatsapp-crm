@@ -389,8 +389,6 @@ function detectActiveContact(force = false) {
       const domPhone = extractPhoneNumberFromDom();
       if (domPhone && domPhone.length >= 10) {
         cleanDigits = domPhone;
-      } else if (activePhoneClean && activePhoneClean.length >= 10 && activeDisplayName === targetTitle) {
-        cleanDigits = activePhoneClean;
       }
     }
 
@@ -402,10 +400,9 @@ function detectActiveContact(force = false) {
     const isNameChanged = Boolean(displayTitle && activeDisplayName !== displayTitle);
 
     if (isNewContact || isNameChanged || force) {
-      const oldPhone = activePhoneClean;
       activeContactKey = contactKey;
       activeDisplayName = displayTitle;
-      activePhoneClean = cleanDigits.length >= 10 ? cleanDigits : (activeDisplayName === targetTitle ? oldPhone : '');
+      activePhoneClean = cleanDigits.length >= 10 ? cleanDigits : '';
       activeAvatarUrl = domAvatar;
 
       // Reset active form data immediately to prevent cross-chat data bleeding
@@ -417,20 +414,6 @@ function detectActiveContact(force = false) {
         notesList: [],
         aiDisabled: false
       };
-
-      // Immediately bridge existing cache to newly saved name
-      if (oldPhone && displayTitle && displayTitle.replace(/\D/g, '').length < 10) {
-        const existingMeta = chatsMetadataMap[oldPhone] || chatsMetadataMap[tenDigit];
-        if (existingMeta) {
-          const metaObj = { ...existingMeta, name: displayTitle, phone: activePhoneClean };
-          chatsMetadataMap[displayTitle] = metaObj;
-          chatsMetadataMap[displayTitle.toLowerCase().trim()] = metaObj;
-          const saveKeys = {};
-          saveKeys[`crm_meta_${displayTitle}`] = metaObj;
-          saveKeys[`crm_meta_${displayTitle.toLowerCase().trim()}`] = metaObj;
-          safeStorageSet(saveKeys);
-        }
-      }
 
       fetchCrmMetadata(contactKey, displayTitle, domAvatar);
     }

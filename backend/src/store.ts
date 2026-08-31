@@ -1297,9 +1297,10 @@ class StorageEngine {
     manuallySaved?: boolean;
   }) {
     const jid = this.resolveJid(rawJid);
-    const rawDigits = (metadata.phone || rawJid).replace(/\D/g, '') || jid.split('@')[0].replace(/\D/g, '');
+    const hasExplicitPhone = Boolean(metadata.phone && metadata.phone.replace(/\D/g, '').length >= 10);
+    const rawDigits = hasExplicitPhone ? metadata.phone!.replace(/\D/g, '') : (rawJid.replace(/\D/g, '').length >= 10 ? rawJid.replace(/\D/g, '') : '');
     const tenDigit = this.canonicalPhone(rawDigits);
-    const canonicalJid = jid.endsWith('@g.us') ? jid : (tenDigit.length >= 10 ? `91${tenDigit}@s.whatsapp.net` : jid);
+    const canonicalJid = jid.endsWith('@g.us') ? jid : (tenDigit.length === 10 ? `91${tenDigit}@s.whatsapp.net` : jid);
 
     const BAD_NAMES = new Set(['.', 'contact', 'unsaved contact', 'unknown contact', 'ai vastra sales agent', 'ai sales agent', 'ai vastra', 'me', '']);
     const incomingNameClean = (metadata.name || '').trim();

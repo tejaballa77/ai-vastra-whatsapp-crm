@@ -558,24 +558,26 @@ function saveCrmMetadata() {
   activeFormData.aiDisabled = true;
 
   let domPhone = extractPhoneNumberFromDom();
-  let cleanDigits = (activePhoneClean || domPhone || activeContactKey).replace(/\D/g, '');
+  let titleDigits = activeDisplayName.replace(/\D/g, '');
+  let cleanDigits = domPhone ? domPhone.replace(/\D/g, '') : (titleDigits.length >= 10 ? titleDigits : '');
   if (cleanDigits.length < 10 && chatsMetadataMap[activeDisplayName]?.phone) {
-    cleanDigits = chatsMetadataMap[activeDisplayName].phone.replace(/\D/g, '');
+    const cachedP = chatsMetadataMap[activeDisplayName].phone.replace(/\D/g, '');
+    if (cachedP.length >= 10) cleanDigits = cachedP;
   }
-  const tenDigit = (cleanDigits.length === 12 && cleanDigits.startsWith('91')) ? cleanDigits.slice(2) : cleanDigits;
+  const tenDigit = (cleanDigits.length === 12 && cleanDigits.startsWith('91')) ? cleanDigits.slice(2) : (cleanDigits.length === 10 ? cleanDigits : '');
   if (cleanDigits.length === 10) cleanDigits = '91' + cleanDigits;
 
   const targetJid = cleanDigits.length >= 10
     ? `${cleanDigits}@s.whatsapp.net`
     : `${activeContactKey}@s.whatsapp.net`;
 
-  // Update activePhoneClean cache
+  // Update activePhoneClean cache ONLY if valid 10+ digit phone belongs to this chat
   if (cleanDigits.length >= 10) activePhoneClean = cleanDigits;
 
   // Use phone number as display name fallback if name is invalid (".", "Contact", empty)
   const badNames = ['.', 'contact', 'unsaved contact', ''];
   const effectiveName = (!activeDisplayName || badNames.includes(activeDisplayName.toLowerCase().trim()))
-    ? (activePhoneClean || activeContactKey)
+    ? (cleanDigits || activeContactKey)
     : activeDisplayName;
 
   const metaObj = { ...activeFormData, name: effectiveName, phone: cleanDigits || activeContactKey };

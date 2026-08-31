@@ -469,6 +469,15 @@ function fetchCrmMetadata(searchKey, displayName, domAvatar) {
         notesList: parseNotesList(localData.notes, localData.notesList),
         aiDisabled: Boolean(localData.aiDisabled || localData.leadStatus === 'WARM' || localData.leadStatus === 'WARM_INTERESTED')
       };
+      if (isValidName && (validPhoneClean || validTenDigit)) {
+        const meta = { ...localData, name: displayName, phone: validPhoneClean || queryPhone };
+        chatsMetadataMap[displayName] = meta;
+        chatsMetadataMap[displayName.toLowerCase().trim()] = meta;
+        safeStorageSet({
+          [`crm_meta_${displayName}`]: meta,
+          [`crm_meta_${displayName.toLowerCase().trim()}`]: meta
+        });
+      }
     } else {
       activeFormData = {
         leadStatus: 'UNASSIGNED',

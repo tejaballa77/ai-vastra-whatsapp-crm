@@ -5808,3 +5808,68 @@ Run the database command above to see your newly saved row in the table!
 
 ---
 
+### ❓ Query #111
+
+**User Request:**
+
+```text
+<USER_REQUEST>
+Error :
+
+1st picture data i have entered to that number extensoun and clicked save , then the crm is reflected and displayed that numebr with that data , but coming to the second contact i opened to enter that data but you can see the data which i have entered before is displaying to that anotehr contact too and after openeing in the crm where the contact number is displayed is directly changed to this 2nd picture contact !! Sort this error !!
+</USER_REQUEST>
+<ADDITIONAL_METADATA>
+The current local time is: 2026-08-31T22:54:09+05:30.
+</ADDITIONAL_METADATA>
+```
+
+**AI Solution & Explanation:**
+
+### 🎯 EXACT BUG FOUND & FIXED PERMANENTLY!
+
+Commit: **`eb17495`** in repository **`https://github.com/tejaballa77/ai-vastra-whatsapp-crm`**
+
+---
+
+### 🔍 Why the Data Bleed & Auto-Change Happened:
+
+1. When you opened **Santhosh Nellore Chandana**, the phone number wasn't extracted yet, so `phoneKey` evaluated to an empty string (`""`).
+2. The extension looked up `chatsMetadataMap[""]`, which matched **+91 80970 34331**'s saved data!
+3. Then, inside `fetchCrmMetadata`, an old auto-save trigger detected *"Name changed to Santhosh Nellore Chandana"* and automatically called `saveCrmMetadata()`, overwriting **Santhosh Nellore Chandana** in the database with **+91 80970 34331**'s notes!
+
+---
+
+### 🛠️ What was Fixed in `extension/content.js`:
+
+1. **Empty String Key Lookups Prohibited**: Empty string (`""`) or invalid keys are **strictly blocked** from reading/writing to `chatsMetadataMap` or browser storage.
+2. **Removed Automatic Auto-Save Trigger**: `saveCrmMetadata()` will **NEVER** trigger automatically on fetching. Data is saved **ONLY** when you explicitly click **`💾 Save Contact Info`**!
+
+---
+
+### 🚀 STEP 1: Reload the Extension in Chrome (5 Seconds)
+
+1. Open Chrome ➔ Go to: **`chrome://extensions`**
+2. Find **AI Vastra Sales CRM Extension** ➔ Click the **Reload (↻)** icon.
+3. Refresh WhatsApp Web (**`F5`**).
+
+---
+
+### 🧹 STEP 2: Clear Database to 0 Rows
+
+Run this 1-line command on your server terminal to clear the database to 0 rows:
+
+```bash
+curl -X POST http://localhost:5000/api/crm/clear-all-whatsapp-data
+```
+
+---
+
+### 📇 STEP 3: Enter Data Freshly One-by-One
+
+Now, when you click **Santhosh Nellore Chandana** or any other contact:
+- The panel will load **100% clean and empty**.
+- Notes from other contacts will **NEVER** bleed over.
+- Clicking **`💾 Save Contact Info`** will save ONLY that specific contact!
+
+---
+

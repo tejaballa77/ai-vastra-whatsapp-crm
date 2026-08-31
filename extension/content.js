@@ -631,7 +631,10 @@ function saveCrmMetadata() {
       body: JSON.stringify(payload)
     })
       .then((res) => res.json())
-      .then((data) => console.log('[AI Vastra Extension] Direct sync success:', data))
+      .then((data) => {
+        console.log('[AI Vastra Extension] Direct sync success:', data);
+        fetchCrmMetadata(activeContactKey, effectiveName, activeAvatarUrl);
+      })
       .catch((e) => console.warn('[AI Vastra Extension] Direct sync fallback:', e));
   } catch (e) {}
 

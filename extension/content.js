@@ -449,25 +449,27 @@ function fetchCrmMetadata(searchKey, displayName, domAvatar) {
   if (tenDigit) storageKeys.push(`crm_meta_${tenDigit}`);
   if (isValidName) storageKeys.push(`crm_meta_${displayName}`);
 
-  safeStorageGet(null, (stored) => {
-    const s = stored || {};
-    let localData = s[`crm_meta_${searchKey}`] ||
-      (activePhoneClean ? s[`crm_meta_${activePhoneClean}`] : null) ||
-      (tenDigit ? s[`crm_meta_${tenDigit}`] : null) ||
+    const validSearchKey = (searchKey && searchKey.trim() !== '') ? searchKey : null;
+    const validPhoneClean = (activePhoneClean && activePhoneClean.length >= 10) ? activePhoneClean : null;
+    const validTenDigit = (tenDigit && tenDigit.length >= 10) ? tenDigit : null;
+
+    let localData = (validSearchKey ? s[`crm_meta_${validSearchKey}`] : null) ||
+      (validPhoneClean ? s[`crm_meta_${validPhoneClean}`] : null) ||
+      (validTenDigit ? s[`crm_meta_${validTenDigit}`] : null) ||
       (isValidName ? s[`crm_meta_${displayName}`] : null) ||
       (isValidName ? s[`crm_meta_${displayName.toLowerCase().trim()}`] : null) ||
-      chatsMetadataMap[displayName] ||
-      chatsMetadataMap[displayName?.toLowerCase()?.trim()] ||
-      chatsMetadataMap[searchKey] ||
-      chatsMetadataMap[activePhoneClean] ||
-      chatsMetadataMap[tenDigit];
+      (isValidName ? chatsMetadataMap[displayName] : null) ||
+      (isValidName ? chatsMetadataMap[displayName?.toLowerCase()?.trim()] : null) ||
+      (validSearchKey ? chatsMetadataMap[validSearchKey] : null) ||
+      (validPhoneClean ? chatsMetadataMap[validPhoneClean] : null) ||
+      (validTenDigit ? chatsMetadataMap[validTenDigit] : null);
 
-    if (!localData && activePhoneClean) {
+    if (!localData && validPhoneClean && validTenDigit) {
       // Find any storage entry matching activePhoneClean
       for (const [k, val] of Object.entries(s)) {
         if (k.startsWith('crm_meta_') && val && typeof val === 'object') {
           const valPhone = (val.phone || k).replace(/\D/g, '');
-          if (valPhone && (valPhone.endsWith(tenDigit) || tenDigit.endsWith(valPhone))) {
+          if (valPhone && (valPhone.endsWith(validTenDigit) || validTenDigit.endsWith(valPhone))) {
             localData = val;
             break;
           }
@@ -495,7 +497,7 @@ function fetchCrmMetadata(searchKey, displayName, domAvatar) {
       };
     }
 
-    const queryPhone = (activePhoneClean || searchKey || '').replace(/\D/g, '');
+    const queryPhone = (validPhoneClean || validSearchKey || '').replace(/\D/g, '');
     safeSendMessage({ action: 'FETCH_CRM_METADATA', phoneClean: queryPhone, searchKey, displayName }, (response) => {
       let resolvedAvatar = domAvatar || activeAvatarUrl;
 
@@ -530,17 +532,11 @@ function fetchCrmMetadata(searchKey, displayName, domAvatar) {
           
           const effectiveDisplayName = (currentNameIsValid ? displayName : (backendNameIsPhoneOrBad ? displayName : chat.name));
 
-          const meta = { ...activeFormData, name: effectiveDisplayName, phone: activePhoneClean || queryPhone };
-          if (searchKey) chatsMetadataMap[searchKey] = meta;
-          if (activePhoneClean) chatsMetadataMap[activePhoneClean] = meta;
-          if (queryPhone) chatsMetadataMap[queryPhone] = meta;
+          const meta = { ...activeFormData, name: effectiveDisplayName, phone: validPhoneClean || queryPhone };
+          if (validSearchKey) chatsMetadataMap[validSearchKey] = meta;
+          if (validPhoneClean) chatsMetadataMap[validPhoneClean] = meta;
+          if (queryPhone && queryPhone.length >= 10) chatsMetadataMap[queryPhone] = meta;
           if (isValidName) chatsMetadataMap[displayName] = meta;
-
-          if (backendNameIsPhoneOrBad && currentNameIsValid) {
-            console.log('[AI Vastra Extension] Syncing newly saved contact name to backend CRM:', displayName);
-            activeDisplayName = displayName;
-            saveCrmMetadata();
-          }
         } else if (!localData) {
           activeFormData = {
             leadStatus: 'UNASSIGNED',

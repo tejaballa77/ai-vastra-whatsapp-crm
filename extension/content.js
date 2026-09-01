@@ -538,10 +538,10 @@ function fetchCrmMetadata(searchKey, displayName, domAvatar) {
         if (queryPhone && queryPhone.length >= 10) chatsMetadataMap[queryPhone] = meta;
         if (isValidName) chatsMetadataMap[displayName] = meta;
 
-        // ✅ AUTO NAME REFLECTION: If extension has a valid saved name (e.g. "Monu")
-        // but backend still stores this lead as a phone number (e.g. "+91 81308 11826"),
-        // automatically push the name update to backend — NO need for user to click Save!
-        if (currentNameIsValid && backendNameIsPhoneOrBad) {
+        // ✅ AUTO NAME REFLECTION: Whenever backend name doesn't match current display name
+        // (e.g. name was "Monu" but user renamed to "Monu Kumar"), auto-push to backend.
+        // This fires for phone→name AND name→new-name edits dynamically!
+        if (currentNameIsValid && chat.name !== displayName) {
           // Extract phone from the JID returned by backend (most reliable source)
           const chatJidPhone = (chat.jid || '').split('@')[0].replace(/\D/g, '');
           const resolvedPhone = validPhoneClean || queryPhone || chatJidPhone;

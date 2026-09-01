@@ -347,6 +347,7 @@ export function ColdCallsModule({
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
   const [infoPopupLead, setInfoPopupLead] = useState<ColdCallLead | null>(null);
   const [infoPopupFollowUps, setInfoPopupFollowUps] = useState<FollowUpRound[]>([]);
+  const [initialModalSnapshot, setInitialModalSnapshot] = useState<string>('');
   const [noteInputText, setNoteInputText] = useState('');
   const [showMoreInfo, setShowMoreInfo] = useState(false);
   const [infoSaving, setInfoSaving] = useState(false);
@@ -886,7 +887,7 @@ export function ColdCallsModule({
     setInfoPopupLead(mergedLead);
     const initialFollowUps = getLeadFollowUps(mergedLead);
     const defaultDate = formatDateDDMMYYYY(mergedLead.createdAt);
-    setInfoPopupFollowUps(initialFollowUps.length > 0 ? initialFollowUps : [{
+    const followUpsToSet = initialFollowUps.length > 0 ? initialFollowUps : [{
       id: `fu_${mergedLead.id || 'lead'}_1`,
       roundNumber: 1,
       callChoice: mergedLead.callChoice || 'PENDING',
@@ -899,10 +900,32 @@ export function ColdCallsModule({
           }))
         : (mergedLead.note ? [{ text: mergedLead.note, date: mergedLead.followUpDate || defaultDate }] : []),
       note: mergedLead.note || '',
-      calledBy: mergedLead.calledBy || currentUserName,
-    }]);
+      calledBy: mergedLead.calledBy || undefined,
+    }];
+    setInfoPopupFollowUps(followUpsToSet);
     setNoteInputText('');
     setShowMoreInfo(false);
+
+    // Capture initial snapshot of modal data to detect whether user actually edited anything
+    const round0 = followUpsToSet[0] || { roundNumber: 1, callChoice: 'PENDING', callStatus: 'PENDING', notesList: [] };
+    const currentNotes = getRoundNotesList(round0, mergedLead.createdAt);
+    const snapshot = JSON.stringify({
+      businessName: (mergedLead.businessName || '').trim(),
+      personName: (mergedLead.personName || mergedLead.name || '').trim(),
+      phone: (mergedLead.phone || '').trim(),
+      businessWebsite: (mergedLead.businessWebsite || '').trim(),
+      role: (mergedLead.role || '').trim(),
+      email: (mergedLead.email || '').trim(),
+      linkedinProfile: (mergedLead.linkedinProfile || '').trim(),
+      facebookProfile: (mergedLead.facebookProfile || '').trim(),
+      instaProfile: (mergedLead.instaProfile || '').trim(),
+      clientLanguage: (mergedLead.clientLanguage || '').trim(),
+      callChoice: round0.callChoice || 'PENDING',
+      callStatus: round0.callStatus || 'PENDING',
+      followUpDate: round0.followUpDate || '',
+      notesList: currentNotes.map(n => (n.text || '').trim()),
+    });
+    setInitialModalSnapshot(snapshot);
   };
 
   const handleFollowUpFieldChange = (roundIdx: number, field: keyof FollowUpRound, value: any) => {
@@ -925,7 +948,6 @@ export function ColdCallsModule({
       } else {
         (target as any)[field] = value;
       }
-      target.calledBy = currentUserName;
       target.updatedAt = Date.now();
       next[roundIdx] = target;
       return next;
@@ -981,16 +1003,6 @@ export function ColdCallsModule({
 
   const handleSaveInfoPopup = async () => {
     if (!infoPopupLead) return;
-    const isClaimed = Boolean(
-      infoPopupLead.calledBy &&
-      infoPopupLead.calledBy.trim().length > 0 &&
-      infoPopupLead.calledBy !== 'Executive User' &&
-      infoPopupLead.calledBy !== 'Staff'
-    );
-    if (isClaimed && infoPopupLead.calledBy !== currentUserName) {
-      showAlert(`This contact is claimed by ${infoPopupLead.calledBy}. Only ${infoPopupLead.calledBy} has permission to edit or save changes.`, 'Contact Claimed & Locked', 'warning');
-      return;
-    }
     setInfoSaving(true);
     try {
       const now = Date.now();
@@ -1005,10 +1017,39 @@ export function ColdCallsModule({
       const finalizedFollowUps = [round0];
       const latestRound = round0;
 
-      const isResettingToPending = (latestRound?.callChoice === 'PENDING' || !latestRound?.callChoice) && 
-                                   (latestRound?.callStatus === 'PENDING' || !latestRound?.callStatus);
-      
-      const newCalledBy = isResettingToPending ? '' : (infoPopupLead.calledBy || currentUserName);
+      const currentNotes = getRoundNotesList(latestRound, infoPopupLead.createdAt);
+      const currentSnapshot = JSON.stringify({
+        businessName: (infoPopupLead.businessName || '').trim(),
+        personName: (infoPopupLead.personName || infoPopupLead.name || '').trim(),
+        phone: (infoPopupLead.phone || '').trim(),
+        businessWebsite: (infoPopupLead.businessWebsite || '').trim(),
+        role: (infoPopupLead.role || '').trim(),
+        email: (infoPopupLead.email || '').trim(),
+        linkedinProfile: (infoPopupLead.linkedinProfile || '').trim(),
+        facebookProfile: (infoPopupLead.facebookProfile || '').trim(),
+        instaProfile: (infoPopupLead.instaProfile || '').trim(),
+        clientLanguage: (infoPopupLead.clientLanguage || '').trim(),
+        callChoice: latestRound?.callChoice || 'PENDING',
+        callStatus: latestRound?.callStatus || 'PENDING',
+        followUpDate: latestRound?.followUpDate || '',
+        notesList: currentNotes.map(n => (n.text || '').trim()),
+      });
+
+      const isDataChanged = currentSnapshot !== initialModalSnapshot;
+
+      // Update BDM (calledBy) to current user ONLY IF data was edited/changed!
+      // If user just opened the popup, did not edit anything, and clicked Save -> keep existing calledBy intact!
+      let newCalledBy = infoPopupLead.calledBy;
+      if (isDataChanged) {
+        newCalledBy = currentUserName;
+      } else if (!newCalledBy || newCalledBy === 'Executive User' || newCalledBy === 'Staff') {
+        const isStatusEntered = (latestRound?.callChoice && latestRound.callChoice !== 'PENDING') || 
+                               (latestRound?.callStatus && latestRound.callStatus !== 'PENDING') || 
+                               Boolean(latestRound?.followUpDate);
+        if (isStatusEntered) {
+          newCalledBy = currentUserName;
+        }
+      }
 
       const partial: Partial<ColdCallLead> = {
         businessName: infoPopupLead.businessName,
@@ -1026,10 +1067,10 @@ export function ColdCallsModule({
         followUpDate: latestRound?.followUpDate || '',
         note: latestRound?.note || latestRound?.notesList?.[0]?.text || '',
         notesList: latestRound?.notesList || [],
-        calledBy: newCalledBy,
+        calledBy: newCalledBy || undefined,
         clientLanguage: infoPopupLead.clientLanguage || '',
-        callTimestamp: newCalledBy ? now : undefined,
-        updatedAt: now,
+        callTimestamp: isDataChanged ? now : (infoPopupLead.callTimestamp || now),
+        updatedAt: isDataChanged ? now : (infoPopupLead.updatedAt || now),
       };
 
       setLeads(prev => prev.map(l => l.id === infoPopupLead.id ? { ...l, ...partial } : l));
@@ -1563,7 +1604,7 @@ export function ColdCallsModule({
                         activeSelectedLeadId === l.id && 
                         (!getLeadStatusDisplay(l) || getLeadStatusDisplay(l).trim().length === 0)
                       );
-                      const isRowDisabled = Boolean(isClaimedByOther || (activeUnfinishedLead && activeUnfinishedLead.id !== lead.id));
+                      const isRowDisabled = false;
 
                       const isCompletedRow = hasEnteredStatus || (isClaimed && !isActiveInCall);
 
@@ -1808,9 +1849,9 @@ export function ColdCallsModule({
                     <h3 className="text-2xl font-black text-black tracking-tight truncate">
                       {infoPopupLead.businessName || infoPopupLead.personName || 'Contact Info & Follow-up'}
                     </h3>
-                    {isClaimedByOther && (
-                      <span className="px-2.5 py-0.5 bg-amber-100 text-amber-900 border border-amber-300 rounded-full text-xs font-black flex-shrink-0">
-                        🔒 Claimed by {infoPopupLead.calledBy} (View Only)
+                    {isClaimed && (
+                      <span className="px-2.5 py-0.5 bg-blue-50 text-blue-900 border border-blue-200 rounded-full text-xs font-black flex-shrink-0">
+                        BDM: {infoPopupLead.calledBy}
                       </span>
                     )}
                   </div>
@@ -1828,9 +1869,8 @@ export function ColdCallsModule({
                     <span className="text-xs font-black text-zinc-600 uppercase tracking-wider">Client Language:</span>
                     <select
                       value={infoPopupLead.clientLanguage || ''}
-                      disabled={isClaimedByOther}
                       onChange={(e) => setInfoPopupLead(prev => prev ? { ...prev, clientLanguage: e.target.value } : null)}
-                      className={`text-sm font-extrabold text-black bg-transparent outline-none ${isClaimedByOther ? 'cursor-not-allowed opacity-80' : 'cursor-pointer'}`}
+                      className="text-sm font-extrabold text-black bg-transparent outline-none cursor-pointer"
                     >
                       <option value="">-- Select Language --</option>
                       <option value="Telugu">Telugu</option>
@@ -2008,9 +2048,7 @@ export function ColdCallsModule({
                             <tr className="bg-zinc-100/90 text-zinc-700 font-extrabold border-b border-zinc-200 text-xs uppercase tracking-wider sticky top-0 z-10 backdrop-blur-xs">
                               <th className="py-2.5 px-4 w-36">Date</th>
                               <th className="py-2.5 px-4">Note</th>
-                              {!isClaimedByOther && (
-                                <th className="py-2.5 px-3 w-12 text-center">Action</th>
-                              )}
+                              <th className="py-2.5 px-3 w-12 text-center">Action</th>
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-zinc-100 font-medium">
@@ -2024,18 +2062,16 @@ export function ColdCallsModule({
                                 <td className="py-3 px-4 align-top text-black font-semibold text-sm leading-relaxed whitespace-pre-wrap break-words">
                                   {noteItem.text}
                                 </td>
-                                {!isClaimedByOther && (
-                                  <td className="py-3 px-3 align-top text-center">
-                                    <button
-                                      type="button"
-                                      onClick={() => handleEditNoteEntry(nIdx)}
-                                      title="Edit this note"
-                                      className="text-zinc-600 hover:text-[#00a884] hover:bg-emerald-50 p-1.5 rounded-lg transition-colors cursor-pointer inline-flex items-center justify-center"
-                                    >
-                                      <Pencil className="w-4 h-4" />
-                                    </button>
-                                  </td>
-                                )}
+                                <td className="py-3 px-3 align-top text-center">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleEditNoteEntry(nIdx)}
+                                    title="Edit this note"
+                                    className="text-zinc-600 hover:text-[#00a884] hover:bg-emerald-50 p-1.5 rounded-lg transition-colors cursor-pointer inline-flex items-center justify-center"
+                                  >
+                                    <Pencil className="w-4 h-4" />
+                                  </button>
+                                </td>
                               </tr>
                             ))}
                           </tbody>
@@ -2145,50 +2181,36 @@ export function ColdCallsModule({
 
               {/* Footer */}
               <div className="px-7 py-3.5 border-t border-gray-200 bg-gray-50 flex items-center justify-between gap-3 rounded-b-2xl">
-                {!isClaimedByOther && (
-                  <button
-                    type="button"
-                    onClick={handleClearLeadFromModal}
-                    className="px-4 py-2.5 bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 font-extrabold text-xs rounded-xl transition-all cursor-pointer flex items-center gap-1.5 shadow-2xs active:scale-95"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                    <span>Clear / Delete Lead</span>
-                  </button>
-                )}
+                <button
+                  type="button"
+                  onClick={handleClearLeadFromModal}
+                  className="px-4 py-2.5 bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 font-extrabold text-xs rounded-xl transition-all cursor-pointer flex items-center gap-1.5 shadow-2xs active:scale-95"
+                >
+                  <Trash2 className="w-4 h-4" />
+                  <span>Clear / Delete Lead</span>
+                </button>
 
                 <div className="flex items-center gap-3 ml-auto">
-                  {isClaimedByOther ? (
-                    <button
-                      type="button"
-                      onClick={() => setInfoPopupLead(null)}
-                      className="px-6 py-2.5 bg-black hover:bg-zinc-800 text-white font-bold text-sm rounded-xl transition-all cursor-pointer shadow-sm"
-                    >
-                      Close
-                    </button>
-                  ) : (
-                    <>
-                      <button
-                        type="button"
-                        onClick={() => setInfoPopupLead(null)}
-                        className="px-5 py-2.5 bg-zinc-100 hover:bg-zinc-200 text-zinc-800 font-bold text-sm rounded-xl transition-all cursor-pointer"
-                      >
-                        Cancel
-                      </button>
-                      <button
-                        type="button"
-                        onClick={handleSaveInfoPopup}
-                        disabled={infoSaving}
-                        className="px-7 py-2.5 bg-black hover:bg-zinc-800 text-white font-black text-sm rounded-xl transition-all shadow-sm active:scale-95 disabled:opacity-60 flex items-center gap-2 cursor-pointer"
-                      >
-                        {infoSaving ? (
-                          <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                        ) : (
-                          <Save className="w-4 h-4" />
-                        )}
-                        <span>{infoSaving ? 'Saving...' : 'Save Changes'}</span>
-                      </button>
-                    </>
-                  )}
+                  <button
+                    type="button"
+                    onClick={() => setInfoPopupLead(null)}
+                    className="px-5 py-2.5 bg-zinc-100 hover:bg-zinc-200 text-zinc-800 font-bold text-sm rounded-xl transition-all cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSaveInfoPopup}
+                    disabled={infoSaving}
+                    className="px-7 py-2.5 bg-black hover:bg-zinc-800 text-white font-black text-sm rounded-xl transition-all shadow-sm active:scale-95 disabled:opacity-60 flex items-center gap-2 cursor-pointer"
+                  >
+                    {infoSaving ? (
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    ) : (
+                      <Save className="w-4 h-4" />
+                    )}
+                    <span>{infoSaving ? 'Saving...' : 'Save Changes'}</span>
+                  </button>
                 </div>
               </div>
             </div>

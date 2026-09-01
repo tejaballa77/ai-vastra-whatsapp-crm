@@ -7505,3 +7505,24 @@ Let me also add one more critical fix — after the auto-name push, re-fetch and
 
 ---
 
+### ❓ Query #141
+
+**User Request:**
+
+```text
+<USER_REQUEST>
+Yeah it worked , After saving a contact the contact name is reflected to the crm and in the extnesion the old ddata is alos there thats fine but i have edited that contact again , i mean i just changed the name to check whether its working properly and dynamically or not , but after changing name again , the name first saved is there but again edited name is not getting reflected to the crm , in the extension its getting reflected thats good but in the crm old name only there !!
+
+See you need to make this very dynamic , if name edited then that name should come into crm , once look into this and make this reflecting into crm as dynamic !! I htink you got my point !!
+</USER_REQUEST>
+<ADDITIONAL_METADATA>
+The current local time is: 2026-09-01T09:15:39+05:30.
+</ADDITIONAL_METADATA>
+```
+
+**AI Solution & Explanation:**
+
+Got it! The fix is simple. The auto-name-reflection condition only fires when the backend name is a **phone number**. But now after renaming "Monu" to a new name, the backend has "Monu" (a valid name, not a phone) — so the condition `backendNameIsPhoneOrBad` is `false` and the update never fires. I need to make it fire **any time the backend name doesn't match the current display name**.
+
+---
+

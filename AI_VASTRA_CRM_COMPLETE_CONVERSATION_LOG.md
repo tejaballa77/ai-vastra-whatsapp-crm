@@ -7377,3 +7377,72 @@ I can see the exact problem now. On line 484, `queryPhone` is used **before it's
 
 ---
 
+### ❓ Query #137
+
+**User Request:**
+
+```text
+<USER_REQUEST>
+Ill test from starting now !! I mean ill enter some dtaa in the extension for an unsaved contact and after taht reflecting into the crm , ill save wiht a name ,so the name should refletc to extension , crm and database and in extension old entered data with this saved name should be there ! SHould i test now ?
+</USER_REQUEST>
+<ADDITIONAL_METADATA>
+The current local time is: 2026-09-01T08:58:43+05:30.
+</ADDITIONAL_METADATA>
+```
+
+**AI Solution & Explanation:**
+
+**YES! Test now!** 🚀
+
+Here is exactly what should happen step by step:
+
+---
+
+### 🧪 TEST FLOW:
+
+**Step 1** → Open an unsaved contact on WhatsApp Web (just a phone number like `+91 XXXXX XXXXX`)
+
+**Step 2** → Enter data in the extension:
+- Lead Status: `Interested`
+- Call Status: `Yes`
+- Follow-up Date: any date
+- Notes: write something like `"Test note 01-09-2026"`
+- Click **`💾 Save Contact Info`**
+
+**Step 3** → Check CRM Dashboard → that phone number row should appear with your data ✅
+
+**Step 4** → Now save that contact on your mobile phone or WhatsApp Web with a name (e.g. `"Rahul Sharma"`)
+
+**Step 5** → Open that chat on WhatsApp Web (it will now show "Rahul Sharma" at the top)
+
+**Step 6** → The extension should:
+- Show **"Rahul Sharma"** at the top ✅
+- Show **`Interested`, `Yes`, your date, your note** below ✅
+
+**Step 7** → Check CRM Dashboard → row should now show **"Rahul Sharma"** (not the phone number) ✅
+
+---
+
+**Go ahead and test!** Tell me what you see at each step 👍
+
+---
+
+### ❓ Query #138
+
+**User Request:**
+
+```text
+<USER_REQUEST>
+YEah half the work has been implemented. you can see the above 1st picture contatc i have saved wuith the name you can see , teh dtaa in the extension i have entered before saving the contact and after saving i have opened the extension you can see the old data is there thats good , but coming to the crm the name is not shifted , i mean the name is not relfected , so do i need to click Save chnages again ! So that the name will be reflected , should i proceed or do you implement an automatic instant name reflection after saving !!
+</USER_REQUEST>
+<ADDITIONAL_METADATA>
+The current local time is: 2026-09-01T09:02:41+05:30.
+</ADDITIONAL_METADATA>
+```
+
+**AI Solution & Explanation:**
+
+**Great progress! 🎉 Extension is working perfectly!** Now I'll implement **automatic name reflection** — no need to click Save again. When the extension detects a saved name like "Kanakam Lakshmi Devi" but the backend still has a phone number, it will auto-update the CRM instantly.
+
+---
+

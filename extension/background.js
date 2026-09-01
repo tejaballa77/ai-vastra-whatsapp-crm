@@ -58,6 +58,49 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             if (activeChat) return sendResponse({ success: true, chat: activeChat });
           }
 
+          // 3. Fallback: Check if searchName contains a number that matches a stored phone/jid
+          if (searchName && searchName.replace(/\D/g, '').length >= 10) {
+            const cleanSearchDigits = searchName.replace(/\D/g, '');
+            const tenDigit = (cleanSearchDigits.length === 12 && cleanSearchDigits.startsWith('91'))
+              ? cleanSearchDigits.slice(2)
+              : cleanSearchDigits;
+            const full12 = cleanSearchDigits.length === 10 ? '91' + cleanSearchDigits : cleanSearchDigits;
+
+            const activeChat = (Array.isArray(chats) ? chats : []).find((c) => {
+              const cleanJidNum = (c.jid || '').split('@')[0].replace(/\D/g, '');
+              const cleanPhone = (c.phone || '').replace(/\D/g, '');
+              return (
+                cleanJidNum === full12 ||
+                cleanJidNum === tenDigit ||
+                cleanPhone === full12 ||
+                cleanPhone === tenDigit
+              );
+            });
+            if (activeChat) return sendResponse({ success: true, chat: activeChat });
+          }
+
+          // 4. CRITICAL FALLBACK: searching by saved name (e.g. "Teja Balla") but lead is stored as phone "+91 91217 22674"
+          // Find the most recently updated un-named phone lead that has CRM data entered
+          if (searchName && !badNames.includes(searchName) && searchName.replace(/\D/g, '').length < 10) {
+            const unnamedLeads = (Array.isArray(chats) ? chats : []).filter((c) => {
+              if (!c.name) return false;
+              const cNameDigits = c.name.replace(/\D/g, '');
+              const hasData = (c.leadStatus && c.leadStatus !== 'UNASSIGNED') ||
+                (c.notes && c.notes.trim()) ||
+                (c.notesList && c.notesList.length > 0) ||
+                c.callStatus ||
+                (c.followUpDate && c.followUpDate.trim());
+              // Name is a phone number format (un-named contact)
+              return cNameDigits.length >= 7 && hasData;
+            });
+
+            if (unnamedLeads.length > 0) {
+              // Return the most recently saved un-named lead
+              unnamedLeads.sort((a, b) => (b.updatedAt || b.lastMessageAt || 0) - (a.updatedAt || a.lastMessageAt || 0));
+              return sendResponse({ success: true, chat: unnamedLeads[0] });
+            }
+          }
+
           sendResponse({ success: true, chat: null });
         })
         .catch((err) => sendResponse({ success: false, error: err.message }));

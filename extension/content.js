@@ -437,6 +437,7 @@ function fetchCrmMetadata(searchKey, displayName, domAvatar) {
 
   const rawClean = (activePhoneClean || searchKey || '').replace(/\D/g, '');
   const tenDigit = (rawClean.length === 12 && rawClean.startsWith('91')) ? rawClean.slice(2) : rawClean;
+  const queryPhone = (activePhoneClean || tenDigit || '').replace(/\D/g, '');
 
   const storageKeys = [`crm_meta_${searchKey}`];
   if (activePhoneClean) storageKeys.push(`crm_meta_${activePhoneClean}`);
@@ -459,7 +460,6 @@ function fetchCrmMetadata(searchKey, displayName, domAvatar) {
       (validTenDigit ? chatsMetadataMap[validTenDigit] : null);
 
     if (!localData && validPhoneClean && validTenDigit) {
-      // Find any storage entry matching activePhoneClean
       for (const [k, val] of Object.entries(s)) {
         if (k.startsWith('crm_meta_') && val && typeof val === 'object') {
           const valPhone = (val.phone || k).replace(/\D/g, '');
@@ -500,61 +500,49 @@ function fetchCrmMetadata(searchKey, displayName, domAvatar) {
       };
     }
 
-    const queryPhone = (validPhoneClean || validSearchKey || '').replace(/\D/g, '');
     safeSendMessage({ action: 'FETCH_CRM_METADATA', phoneClean: queryPhone, searchKey, displayName }, (response) => {
       let resolvedAvatar = domAvatar || activeAvatarUrl;
 
-        if (response && response.success && response.chat) {
-          const chat = response.chat;
-          
-          const localNotes = parseNotesList(localData?.notes, localData?.notesList);
-          const backendNotes = parseNotesList(chat.notes, chat.notesList);
-          const mergedNotes = [...backendNotes];
-          for (const n of localNotes) {
-            if (!mergedNotes.includes(n)) mergedNotes.push(n);
-          }
-
-          const bLead = chat.leadStatus !== undefined && chat.leadStatus !== 'UNASSIGNED' ? chat.leadStatus : (localData?.leadStatus || 'UNASSIGNED');
-          const bCall = chat.callStatus !== undefined && chat.callStatus !== null ? chat.callStatus : (localData?.callStatus || null);
-          const bFollow = (chat.followUpDate && chat.followUpDate.trim() !== '' && chat.followUpDate !== '—') ? chat.followUpDate : (localData?.followUpDate || '');
-          const bPrevFollow = chat.previousFollowUpDate || localData?.previousFollowUpDate || '';
-
-          activeFormData = {
-            leadStatus: bLead,
-            callStatus: bCall,
-            followUpDate: bFollow,
-            previousFollowUpDate: bPrevFollow,
-            notesList: mergedNotes,
-            aiDisabled: Boolean(chat.aiDisabled || chat.leadStatus === 'WARM' || chat.leadStatus === 'WARM_INTERESTED')
-          };
-
-          if (!resolvedAvatar && chat.avatarUrl) resolvedAvatar = chat.avatarUrl;
-
-          const backendNameIsPhoneOrBad = !chat.name || badNames.includes(chat.name.toLowerCase().trim()) || chat.name.replace(/\D/g, '').length >= 10;
-          const currentNameIsValid = displayName && !badNames.includes(displayName.toLowerCase().trim()) && displayName.replace(/\D/g, '').length < 10;
-          
-          const effectiveDisplayName = (currentNameIsValid ? displayName : (backendNameIsPhoneOrBad ? displayName : chat.name));
-
-          const meta = { ...activeFormData, name: effectiveDisplayName, phone: validPhoneClean || queryPhone };
-          if (validSearchKey) chatsMetadataMap[validSearchKey] = meta;
-          if (validPhoneClean) chatsMetadataMap[validPhoneClean] = meta;
-          if (queryPhone && queryPhone.length >= 10) chatsMetadataMap[queryPhone] = meta;
-          if (isValidName) chatsMetadataMap[displayName] = meta;
-        } else if (!localData) {
-          activeFormData = {
-            leadStatus: 'UNASSIGNED',
-            callStatus: null,
-            followUpDate: '',
-            previousFollowUpDate: '',
-            notesList: []
-          };
+      if (response && response.success && response.chat) {
+        const chat = response.chat;
+        const localNotes = parseNotesList(localData?.notes, localData?.notesList);
+        const backendNotes = parseNotesList(chat.notes, chat.notesList);
+        const mergedNotes = [...backendNotes];
+        for (const n of localNotes) {
+          if (!mergedNotes.includes(n)) mergedNotes.push(n);
         }
 
-        activeAvatarUrl = resolvedAvatar;
-        renderCrmPanel(activeDisplayName || displayName, activePhoneClean, resolvedAvatar);
-        injectChatListBadges();
-      });
+        const bLead = chat.leadStatus !== undefined && chat.leadStatus !== 'UNASSIGNED' ? chat.leadStatus : (localData?.leadStatus || 'UNASSIGNED');
+        const bCall = chat.callStatus !== undefined && chat.callStatus !== null ? chat.callStatus : (localData?.callStatus || null);
+        const bFollow = (chat.followUpDate && chat.followUpDate.trim() !== '' && chat.followUpDate !== '—') ? chat.followUpDate : (localData?.followUpDate || '');
+        const bPrevFollow = chat.previousFollowUpDate || localData?.previousFollowUpDate || '';
+
+        activeFormData = {
+          leadStatus: bLead,
+          callStatus: bCall,
+          followUpDate: bFollow,
+          previousFollowUpDate: bPrevFollow,
+          notesList: mergedNotes,
+          aiDisabled: Boolean(chat.aiDisabled || chat.leadStatus === 'WARM' || chat.leadStatus === 'WARM_INTERESTED')
+        };
+
+        if (!resolvedAvatar && chat.avatarUrl) resolvedAvatar = chat.avatarUrl;
+
+        const backendNameIsPhoneOrBad = !chat.name || badNames.includes(chat.name.toLowerCase().trim()) || chat.name.replace(/\D/g, '').length >= 10;
+        const currentNameIsValid = displayName && !badNames.includes(displayName.toLowerCase().trim()) && displayName.replace(/\D/g, '').length < 10;
+        const effectiveDisplayName = (currentNameIsValid ? displayName : (backendNameIsPhoneOrBad ? displayName : chat.name));
+
+        const meta = { ...activeFormData, name: effectiveDisplayName, phone: validPhoneClean || queryPhone };
+        if (validSearchKey) chatsMetadataMap[validSearchKey] = meta;
+        if (validPhoneClean) chatsMetadataMap[validPhoneClean] = meta;
+        if (queryPhone && queryPhone.length >= 10) chatsMetadataMap[queryPhone] = meta;
+        if (isValidName) chatsMetadataMap[displayName] = meta;
+      }
+      activeAvatarUrl = resolvedAvatar;
+      renderCrmPanel(activeDisplayName || displayName, activePhoneClean, resolvedAvatar);
+      injectChatListBadges();
     });
+  });
 }
 
 function saveCrmMetadata() {

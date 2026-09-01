@@ -538,20 +538,37 @@ function fetchCrmMetadata(searchKey, displayName, domAvatar) {
         if (queryPhone && queryPhone.length >= 10) chatsMetadataMap[queryPhone] = meta;
         if (isValidName) chatsMetadataMap[displayName] = meta;
 
-        // ✅ AUTO NAME REFLECTION: If extension has a valid saved name (e.g. "Kanakam Lakshmi Devi")
-        // but backend still stores this lead as a phone number (e.g. "+91 91217 22674"),
+        // ✅ AUTO NAME REFLECTION: If extension has a valid saved name (e.g. "Monu")
+        // but backend still stores this lead as a phone number (e.g. "+91 81308 11826"),
         // automatically push the name update to backend — NO need for user to click Save!
         if (currentNameIsValid && backendNameIsPhoneOrBad) {
-          const autoPayload = {
-            jid: chat.jid || (queryPhone ? `${queryPhone}@s.whatsapp.net` : ''),
-            name: displayName,
-            phone: validPhoneClean || queryPhone || (chat.jid || '').split('@')[0]
-          };
-          if (autoPayload.jid) {
+          // Extract phone from the JID returned by backend (most reliable source)
+          const chatJidPhone = (chat.jid || '').split('@')[0].replace(/\D/g, '');
+          const resolvedPhone = validPhoneClean || queryPhone || chatJidPhone;
+          const resolvedJid = chat.jid || (resolvedPhone ? `${resolvedPhone}@s.whatsapp.net` : '');
+
+          if (resolvedJid) {
+            const autoPayload = {
+              jid: resolvedJid,
+              name: displayName,
+              phone: resolvedPhone,
+              leadStatus: activeFormData.leadStatus,
+              callStatus: activeFormData.callStatus,
+              followUpDate: activeFormData.followUpDate || undefined,
+              notesList: activeFormData.notesList,
+              notes: activeFormData.notesList.join('\n\n'),
+              manuallySaved: false
+            };
             fetch(`${DEFAULT_API_BASE}/api/crm/contact`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify(autoPayload)
+            }).then(r => r.json()).then(() => {
+              // Update local cache with phone → name mapping
+              if (chatJidPhone) {
+                chatsMetadataMap[chatJidPhone] = { ...activeFormData, name: displayName, phone: resolvedPhone };
+                chatsMetadataMap[displayName] = chatsMetadataMap[chatJidPhone];
+              }
             }).catch(() => {});
           }
         }

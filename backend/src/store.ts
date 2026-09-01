@@ -1412,6 +1412,26 @@ class StorageEngine {
       }
     }
 
+    // Intelligent Fallback: If no exact match found, but incoming name is a valid contact name (e.g. "Teja Balla"):
+    // Match the existing un-named phone lead (e.g. "+91 91217 22674") so notes and fields are 100% preserved!
+    if (matchingChatKeys.length === 0 && incomingNameIsValid && !isPurePhoneInput) {
+      for (const [chk, chObj] of this.chats.entries()) {
+        const cName = (chObj.name || '').trim();
+        const cDigits = (chObj.phone || chk.split('@')[0]).replace(/\D/g, '');
+        if (cDigits.length >= 7 && (cName === cDigits || cName.replace(/\D/g, '').length >= 7 || BAD_NAMES.has(cName.toLowerCase()))) {
+          matchingChatKeys.push(chk);
+          const list: any[] = chObj.notesList || (chObj.notes ? [chObj.notes] : []);
+          for (const n of list) {
+            const textStr = typeof n === 'string' ? n : (n && typeof n === 'object' ? n.text : '');
+            if (textStr && !oldNotesList.some((on: any) => (typeof on === 'string' ? on : (on && typeof on === 'object' ? on.text : '')) === textStr)) {
+              oldNotesList.push(n);
+            }
+          }
+          break;
+        }
+      }
+    }
+
     // Handle user notes & allow dynamic note deletions
     let finalNotesList: any[] = [];
     if (Array.isArray(metadata.notesList)) {

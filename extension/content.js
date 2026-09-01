@@ -537,6 +537,24 @@ function fetchCrmMetadata(searchKey, displayName, domAvatar) {
         if (validPhoneClean) chatsMetadataMap[validPhoneClean] = meta;
         if (queryPhone && queryPhone.length >= 10) chatsMetadataMap[queryPhone] = meta;
         if (isValidName) chatsMetadataMap[displayName] = meta;
+
+        // ✅ AUTO NAME REFLECTION: If extension has a valid saved name (e.g. "Kanakam Lakshmi Devi")
+        // but backend still stores this lead as a phone number (e.g. "+91 91217 22674"),
+        // automatically push the name update to backend — NO need for user to click Save!
+        if (currentNameIsValid && backendNameIsPhoneOrBad) {
+          const autoPayload = {
+            jid: chat.jid || (queryPhone ? `${queryPhone}@s.whatsapp.net` : ''),
+            name: displayName,
+            phone: validPhoneClean || queryPhone || (chat.jid || '').split('@')[0]
+          };
+          if (autoPayload.jid) {
+            fetch(`${DEFAULT_API_BASE}/api/crm/contact`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(autoPayload)
+            }).catch(() => {});
+          }
+        }
       }
       activeAvatarUrl = resolvedAvatar;
       renderCrmPanel(activeDisplayName || displayName, activePhoneClean, resolvedAvatar);

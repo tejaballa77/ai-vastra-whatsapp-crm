@@ -79,12 +79,10 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             if (activeChat) return sendResponse({ success: true, chat: activeChat });
           }
 
-          // 4. SAFE FALLBACK: Only when phoneClean is provided (extracted from data-id/DOM)
-          // but the phone doesn't match anything stored yet — match by jid digits directly
-          if (cleanSearchDigits.length >= 7) {
-            const tenD = cleanSearchDigits.length >= 10
-              ? (cleanSearchDigits.length === 12 && cleanSearchDigits.startsWith('91') ? cleanSearchDigits.slice(2) : cleanSearchDigits)
-              : cleanSearchDigits;
+          // 4. SAFE FALLBACK: Only when phoneClean has 10+ digits (extracted from data-id/DOM)
+          // but didn't match stored records — do a suffix match on JID digits
+          if (cleanSearchDigits.length >= 10) {
+            const tenD = (cleanSearchDigits.length === 12 && cleanSearchDigits.startsWith('91')) ? cleanSearchDigits.slice(2) : cleanSearchDigits;
             const phoneMatch = (Array.isArray(chats) ? chats : []).find((c) => {
               const jidNum = (c.jid || '').split('@')[0].replace(/\D/g, '');
               const pNum = (c.phone || '').replace(/\D/g, '');

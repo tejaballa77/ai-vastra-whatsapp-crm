@@ -147,18 +147,6 @@ function syncAllCrmChats(callback) {
           const badNames = ['.', 'contact', 'unsaved contact', 'unknown contact', 'whatsapp contact', ''];
           const hasValidName = Boolean(c.name && c.name.trim() && !badNames.includes(c.name.trim().toLowerCase()) && c.name.trim().replace(/\D/g, '').length < 10);
 
-          // 4. CRITICAL FALLBACK: find ANY lead with CRM data when name changed
-          // This handles: phone→name AND name→new-name edits dynamically
-          if (c.name && !badNames.includes(c.name) && c.name.replace(/\D/g, '').length < 10) {
-            const leadsWithData = (Array.isArray(response.chats) ? response.chats : []).filter((lead) => {
-              const hasData = (lead.leadStatus && lead.leadStatus !== 'UNASSIGNED') ||
-                (lead.notes && lead.notes.trim()) ||
-                (lead.notesList && lead.notesList.length > 0) ||
-                lead.callStatus ||
-                (lead.followUpDate && lead.followUpDate.trim());
-              return hasData;
-            });
-          }
 
           const hasInfo = Boolean(
             hasValidName ||

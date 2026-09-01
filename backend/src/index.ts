@@ -153,7 +153,7 @@ app.post('/api/messages/send', async (req, res) => {
 const handleCrmUpdate = (req: express.Request, res: express.Response) => {
   const bodyJid = req.body.jid;
   const paramJid = req.params.jid;
-  const { name, phone, leadStatus, callStatus, followUpDate, previousFollowUpDate, notes, notesList, tags, isAutoWarm, manuallySaved } = req.body;
+  const { name, phone, leadStatus, callStatus, followUpDate, previousFollowUpDate, notes, notesList, tags, aiDisabled, isAutoWarm, manuallySaved } = req.body;
   const targetJid = paramJid || bodyJid || (phone ? `${phone}@s.whatsapp.net` : '');
 
   if (!targetJid) {
@@ -170,6 +170,7 @@ const handleCrmUpdate = (req: express.Request, res: express.Response) => {
     notes,
     notesList,
     tags,
+    aiDisabled,
     isAutoWarm,
     manuallySaved,
   });

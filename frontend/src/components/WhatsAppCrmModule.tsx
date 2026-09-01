@@ -262,7 +262,9 @@ export function WhatsAppCrmModule() {
         notes: mergedNotes,
         notesList: mergedNotesList,
         manuallySaved: Boolean(existing.manuallySaved || c.manuallySaved),
-        updatedAt: Math.max(existing.updatedAt || 0, c.updatedAt || 0, Date.now()),
+        // Preserve the real edit time. Using Date.now() here made unchanged
+        // duplicate records jump to the top on every socket refresh/poll.
+        updatedAt: Math.max(existing.updatedAt || 0, c.updatedAt || 0),
       });
     }
   }

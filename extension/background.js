@@ -20,13 +20,15 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         .then((chats) => {
           const searchName = (request.displayName || request.searchKey || '').toLowerCase().trim();
           const badNames = ['.', 'contact', 'unsaved contact', 'unknown contact', 'whatsapp contact', ''];
+          const search = (request.phoneClean || '').toLowerCase().trim();
+          const cleanSearchDigits = search.replace(/\D/g, '');
 
           // 1. Try matching by display name first if it's a named lead
-          if (searchName && !badNames.includes(searchName) && searchName.replace(/\D/g, '').length < 10) {
+          if (cleanSearchDigits.length < 10 && searchName && !badNames.includes(searchName) && searchName.replace(/\D/g, '').length < 10) {
             const activeChatByName = (Array.isArray(chats) ? chats : []).find((c) => {
               if (!c.name) return false;
               const cName = c.name.toLowerCase().trim();
-              return cName === searchName || cName.includes(searchName) || searchName.includes(cName);
+              return cName === searchName;
             });
 
             if (activeChatByName) {
@@ -35,9 +37,6 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
           }
 
           // 2. Otherwise match by 10/12-digit phone number
-          const search = (request.phoneClean || '').toLowerCase().trim();
-          const cleanSearchDigits = search.replace(/\D/g, '');
-
           if (cleanSearchDigits.length >= 10) {
             const tenDigit = (cleanSearchDigits.length === 12 && cleanSearchDigits.startsWith('91'))
               ? cleanSearchDigits.slice(2)

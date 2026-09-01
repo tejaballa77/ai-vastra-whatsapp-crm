@@ -79,25 +79,21 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             if (activeChat) return sendResponse({ success: true, chat: activeChat });
           }
 
-          // 4. CRITICAL FALLBACK: searching by saved name (e.g. "Teja Balla") but lead is stored as phone "+91 91217 22674"
-          // Find the most recently updated un-named phone lead that has CRM data entered
+          // 4. CRITICAL FALLBACK: find ANY lead with CRM data when name doesn't match
+          // This handles: phone→name AND name→new-name edits dynamically
           if (searchName && !badNames.includes(searchName) && searchName.replace(/\D/g, '').length < 10) {
-            const unnamedLeads = (Array.isArray(chats) ? chats : []).filter((c) => {
-              if (!c.name) return false;
-              const cNameDigits = c.name.replace(/\D/g, '');
+            const leadsWithData = (Array.isArray(chats) ? chats : []).filter((c) => {
               const hasData = (c.leadStatus && c.leadStatus !== 'UNASSIGNED') ||
                 (c.notes && c.notes.trim()) ||
                 (c.notesList && c.notesList.length > 0) ||
                 c.callStatus ||
                 (c.followUpDate && c.followUpDate.trim());
-              // Name is a phone number format (un-named contact)
-              return cNameDigits.length >= 7 && hasData;
+              return hasData;
             });
 
-            if (unnamedLeads.length > 0) {
-              // Return the most recently saved un-named lead
-              unnamedLeads.sort((a, b) => (b.updatedAt || b.lastMessageAt || 0) - (a.updatedAt || a.lastMessageAt || 0));
-              return sendResponse({ success: true, chat: unnamedLeads[0] });
+            if (leadsWithData.length > 0) {
+              leadsWithData.sort((a, b) => (b.updatedAt || b.lastMessageAt || 0) - (a.updatedAt || a.lastMessageAt || 0));
+              return sendResponse({ success: true, chat: leadsWithData[0] });
             }
           }
 

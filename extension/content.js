@@ -147,6 +147,19 @@ function syncAllCrmChats(callback) {
           const badNames = ['.', 'contact', 'unsaved contact', 'unknown contact', 'whatsapp contact', ''];
           const hasValidName = Boolean(c.name && c.name.trim() && !badNames.includes(c.name.trim().toLowerCase()) && c.name.trim().replace(/\D/g, '').length < 10);
 
+          // 4. CRITICAL FALLBACK: find ANY lead with CRM data when name changed
+          // This handles: phone→name AND name→new-name edits dynamically
+          if (c.name && !badNames.includes(c.name) && c.name.replace(/\D/g, '').length < 10) {
+            const leadsWithData = (Array.isArray(response.chats) ? response.chats : []).filter((lead) => {
+              const hasData = (lead.leadStatus && lead.leadStatus !== 'UNASSIGNED') ||
+                (lead.notes && lead.notes.trim()) ||
+                (lead.notesList && lead.notesList.length > 0) ||
+                lead.callStatus ||
+                (lead.followUpDate && lead.followUpDate.trim());
+              return hasData;
+            });
+          }
+
           const hasInfo = Boolean(
             hasValidName ||
             (c.leadStatus && c.leadStatus !== 'UNASSIGNED') ||
@@ -283,12 +296,19 @@ function extractProfileNameFromDom() {
 }
 
 function extractPhoneNumberFromDom() {
-  // 1. Check active chat item in left pane
+  // 0. Try extracting from WhatsApp data-id attribute on active chat list item (most reliable!)
   try {
-    const activeItem = document.querySelector('#pane-side [aria-selected="true"], #pane-side [data-selected="true"]');
+    const activeItem = document.querySelector(
+      '#pane-side [data-id], #pane-side [aria-selected="true"], #pane-side [data-selected="true"]'
+    );
     if (activeItem) {
       const cachedPhone = activeItem.getAttribute('data-aivastra-phone');
       if (cachedPhone && cachedPhone.length >= 10) return cachedPhone;
+
+      // data-id often contains phone@s.whatsapp.net or false_phone@s.whatsapp.net
+      const dataId = activeItem.getAttribute('data-id') || '';
+      const dataIdMatch = dataId.match(/(\d{10,15})@s\.whatsapp\.net/);
+      if (dataIdMatch && dataIdMatch[1]) return dataIdMatch[1];
 
       const imgs = activeItem.querySelectorAll('img');
       for (const img of imgs) {
@@ -304,6 +324,25 @@ function extractPhoneNumberFromDom() {
         const digits = t.replace(/\D/g, '');
         if (digits.length >= 10 && digits.length <= 15 && /^[1-9]/.test(digits)) {
           return digits;
+        }
+      }
+    }
+  } catch (e) {}
+
+  // 1. Try all chat list items matching by title/name then grab their data-id
+  try {
+    const allItems = document.querySelectorAll('#pane-side [data-id]');
+    const mainTitle = (document.querySelector('#main header span[dir="auto"]')?.textContent || '').trim();
+    if (mainTitle) {
+      for (const item of allItems) {
+        const spans = item.querySelectorAll('span');
+        for (const sp of spans) {
+          const t = (sp.getAttribute('title') || sp.textContent || '').trim();
+          if (t === mainTitle) {
+            const dataId = item.getAttribute('data-id') || '';
+            const m = dataId.match(/(\d{10,15})@s\.whatsapp\.net/);
+            if (m && m[1]) return m[1];
+          }
         }
       }
     }

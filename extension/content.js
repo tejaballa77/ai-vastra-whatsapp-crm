@@ -441,8 +441,8 @@ function fetchCrmMetadata(searchKey, displayName, domAvatar) {
   const storageKeys = [`crm_meta_${searchKey}`];
   if (activePhoneClean) storageKeys.push(`crm_meta_${activePhoneClean}`);
   if (tenDigit) storageKeys.push(`crm_meta_${tenDigit}`);
-  if (isValidName) storageKeys.push(`crm_meta_${displayName}`);
-
+  safeStorageGet(storageKeys, (s) => {
+    s = s || {};
     const validSearchKey = (searchKey && searchKey.trim() !== '') ? searchKey : null;
     const validPhoneClean = (activePhoneClean && activePhoneClean.length >= 10) ? activePhoneClean : null;
     const validTenDigit = (tenDigit && tenDigit.length >= 10) ? tenDigit : null;
@@ -554,6 +554,7 @@ function fetchCrmMetadata(searchKey, displayName, domAvatar) {
         renderCrmPanel(activeDisplayName || displayName, activePhoneClean, resolvedAvatar);
         injectChatListBadges();
       });
+    });
 }
 
 function saveCrmMetadata() {

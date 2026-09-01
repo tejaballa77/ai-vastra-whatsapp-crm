@@ -107,11 +107,21 @@ app.post('/api/session/reset', async (req, res) => {
 
 // 3c. AI Auto-Reply status and toggle endpoints
 app.get('/api/ai/status', (req, res) => {
-  res.json({ enabled: waEngine.aiAutoReplyEnabled });
+  res.json({ enabled: false, locked: waEngine.autoReplyHardDisabled });
 });
 
 app.post('/api/ai/toggle', (req, res) => {
   const { enabled } = req.body;
+  if (waEngine.autoReplyHardDisabled) {
+    waEngine.aiAutoReplyEnabled = false;
+    io.emit('ai_status', { enabled: false, locked: true });
+    return res.status(423).json({
+      success: false,
+      enabled: false,
+      locked: true,
+      message: 'AI auto replies are permanently disabled by the server safety lock.',
+    });
+  }
   if (typeof enabled === 'boolean') {
     waEngine.aiAutoReplyEnabled = enabled;
   } else {

@@ -20,7 +20,11 @@ export class WhatsAppEngine {
   public status: 'DISCONNECTED' | 'CONNECTING' | 'QR_READY' | 'CONNECTED' = 'DISCONNECTED';
   public currentQrCode: string | null = null;
   public meJid: string | null = null;
-  public aiAutoReplyEnabled: boolean = true;
+  // Global safety lock: auto replies remain disabled across every restart.
+  // Remove this lock only through a reviewed code change when the owner asks
+  // to restore automatic replies.
+  public readonly autoReplyHardDisabled: boolean = true;
+  public aiAutoReplyEnabled: boolean = false;
   private pendingDebounceMap = new Map<string, { timeout: NodeJS.Timeout; messages: string[]; senderJid: string }>();
   private botSentMessageIds = new Set<string>();
   private botSendingChats = new Set<string>();

@@ -79,22 +79,18 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             if (activeChat) return sendResponse({ success: true, chat: activeChat });
           }
 
-          // 4. CRITICAL FALLBACK: find ANY lead with CRM data when name doesn't match
-          // This handles: phone→name AND name→new-name edits dynamically
-          if (searchName && !badNames.includes(searchName) && searchName.replace(/\D/g, '').length < 10) {
-            const leadsWithData = (Array.isArray(chats) ? chats : []).filter((c) => {
-              const hasData = (c.leadStatus && c.leadStatus !== 'UNASSIGNED') ||
-                (c.notes && c.notes.trim()) ||
-                (c.notesList && c.notesList.length > 0) ||
-                c.callStatus ||
-                (c.followUpDate && c.followUpDate.trim());
-              return hasData;
+          // 4. SAFE FALLBACK: Only when phoneClean is provided (extracted from data-id/DOM)
+          // but the phone doesn't match anything stored yet — match by jid digits directly
+          if (cleanSearchDigits.length >= 7) {
+            const tenD = cleanSearchDigits.length >= 10
+              ? (cleanSearchDigits.length === 12 && cleanSearchDigits.startsWith('91') ? cleanSearchDigits.slice(2) : cleanSearchDigits)
+              : cleanSearchDigits;
+            const phoneMatch = (Array.isArray(chats) ? chats : []).find((c) => {
+              const jidNum = (c.jid || '').split('@')[0].replace(/\D/g, '');
+              const pNum = (c.phone || '').replace(/\D/g, '');
+              return jidNum.endsWith(tenD) || pNum.endsWith(tenD) || tenD.endsWith(jidNum.slice(-10));
             });
-
-            if (leadsWithData.length > 0) {
-              leadsWithData.sort((a, b) => (b.updatedAt || b.lastMessageAt || 0) - (a.updatedAt || a.lastMessageAt || 0));
-              return sendResponse({ success: true, chat: leadsWithData[0] });
-            }
+            if (phoneMatch) return sendResponse({ success: true, chat: phoneMatch });
           }
 
           sendResponse({ success: true, chat: null });

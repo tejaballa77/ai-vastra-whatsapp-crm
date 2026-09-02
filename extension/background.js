@@ -18,79 +18,53 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       fetch(`${baseUrl}/api/chats`)
         .then((res) => res.json())
         .then((chats) => {
-          const searchName = (request.displayName || request.searchKey || '').toLowerCase().trim();
+          const allChats = Array.isArray(chats) ? chats : [];
           const badNames = ['.', 'contact', 'unsaved contact', 'unknown contact', 'whatsapp contact', ''];
 
-          // 1. Try matching by display name first if it's a named lead
-          if (searchName && !badNames.includes(searchName) && searchName.replace(/\D/g, '').length < 10) {
-            const activeChatByName = (Array.isArray(chats) ? chats : []).find((c) => {
-              if (!c.name) return false;
-              const cName = c.name.toLowerCase().trim();
-              return cName === searchName || cName.includes(searchName) || searchName.includes(cName);
-            });
+          // ------------------------------------------------------------------
+          // STEP 1: Phone / JID lookup — most reliable, always tried first.
+          // We check both the request.phoneClean field AND any digits inside
+          // request.searchKey (in case the contact title IS the phone number).
+          // ------------------------------------------------------------------
+          const rawSearch = (request.phoneClean || request.searchKey || '').replace(/\D/g, '');
+          if (rawSearch.length >= 10) {
+            const tenDigit = (rawSearch.length === 12 && rawSearch.startsWith('91'))
+              ? rawSearch.slice(2)
+              : rawSearch;
+            const full12 = tenDigit.length === 10 ? '91' + tenDigit : rawSearch;
 
-            if (activeChatByName) {
-              return sendResponse({ success: true, chat: activeChatByName });
-            }
-          }
-
-          // 2. Otherwise match by 10/12-digit phone number
-          const search = (request.phoneClean || '').toLowerCase().trim();
-          const cleanSearchDigits = search.replace(/\D/g, '');
-
-          if (cleanSearchDigits.length >= 10) {
-            const tenDigit = (cleanSearchDigits.length === 12 && cleanSearchDigits.startsWith('91'))
-              ? cleanSearchDigits.slice(2)
-              : cleanSearchDigits;
-            const full12 = cleanSearchDigits.length === 10 ? '91' + cleanSearchDigits : cleanSearchDigits;
-
-            const activeChat = (Array.isArray(chats) ? chats : []).find((c) => {
-              const cleanJidNum = (c.jid || '').split('@')[0].replace(/\D/g, '');
-              const cleanPhone = (c.phone || '').replace(/\D/g, '');
-              return (
-                cleanJidNum === full12 ||
-                cleanJidNum === tenDigit ||
-                cleanPhone === full12 ||
-                cleanPhone === tenDigit
-              );
-            });
-
-            if (activeChat) return sendResponse({ success: true, chat: activeChat });
-          }
-
-          // 3. Fallback: Check if searchName contains a number that matches a stored phone/jid
-          if (searchName && searchName.replace(/\D/g, '').length >= 10) {
-            const cleanSearchDigits = searchName.replace(/\D/g, '');
-            const tenDigit = (cleanSearchDigits.length === 12 && cleanSearchDigits.startsWith('91'))
-              ? cleanSearchDigits.slice(2)
-              : cleanSearchDigits;
-            const full12 = cleanSearchDigits.length === 10 ? '91' + cleanSearchDigits : cleanSearchDigits;
-
-            const activeChat = (Array.isArray(chats) ? chats : []).find((c) => {
-              const cleanJidNum = (c.jid || '').split('@')[0].replace(/\D/g, '');
-              const cleanPhone = (c.phone || '').replace(/\D/g, '');
-              return (
-                cleanJidNum === full12 ||
-                cleanJidNum === tenDigit ||
-                cleanPhone === full12 ||
-                cleanPhone === tenDigit
-              );
-            });
-            if (activeChat) return sendResponse({ success: true, chat: activeChat });
-          }
-
-          // 4. SAFE FALLBACK: Only when phoneClean has 10+ digits (extracted from data-id/DOM)
-          // but didn't match stored records — do a suffix match on JID digits
-          if (cleanSearchDigits.length >= 10) {
-            const tenD = (cleanSearchDigits.length === 12 && cleanSearchDigits.startsWith('91')) ? cleanSearchDigits.slice(2) : cleanSearchDigits;
-            const phoneMatch = (Array.isArray(chats) ? chats : []).find((c) => {
+            const byPhone = allChats.find((c) => {
               const jidNum = (c.jid || '').split('@')[0].replace(/\D/g, '');
-              const pNum = (c.phone || '').replace(/\D/g, '');
-              return jidNum.endsWith(tenD) || pNum.endsWith(tenD) || tenD.endsWith(jidNum.slice(-10));
+              const pNum   = (c.phone || '').replace(/\D/g, '');
+              // Exact match only — no suffix/partial matching
+              return (
+                jidNum === full12 || jidNum === tenDigit ||
+                pNum   === full12 || pNum   === tenDigit
+              );
             });
-            if (phoneMatch) return sendResponse({ success: true, chat: phoneMatch });
+
+            if (byPhone) return sendResponse({ success: true, chat: byPhone });
           }
 
+          // ------------------------------------------------------------------
+          // STEP 2: Exact display-name lookup — only when the contact has a
+          // proper saved name (not a phone number or generic placeholder).
+          // Uses EXACT equality, not partial/includes, to prevent collisions.
+          // ------------------------------------------------------------------
+          const searchName = (request.displayName || request.searchKey || '').toLowerCase().trim();
+          const nameIsValid = searchName &&
+            !badNames.includes(searchName) &&
+            searchName.replace(/\D/g, '').length < 10;   // not a phone-number title
+
+          if (nameIsValid) {
+            const byName = allChats.find((c) => {
+              const cName = (c.name || '').toLowerCase().trim();
+              return cName === searchName;  // EXACT match only
+            });
+            if (byName) return sendResponse({ success: true, chat: byName });
+          }
+
+          // No match found — return null so the extension shows a clean panel
           sendResponse({ success: true, chat: null });
         })
         .catch((err) => sendResponse({ success: false, error: err.message }));

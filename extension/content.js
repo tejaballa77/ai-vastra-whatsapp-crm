@@ -61,6 +61,11 @@ let activeFormData = {
 let isPanelVisible = true;
 let chatsMetadataMap = {};
 
+// Generation counter — incremented on every chat switch.
+// Async callbacks compare their captured generation with this value
+// and silently discard the result if the user has already moved on.
+let fetchRequestGeneration = 0;
+
 // Create or get the injected CRM sidepanel container
 function ensureCrmPanel() {
   let panel = document.getElementById('aivastra-crm-panel');
@@ -168,13 +173,11 @@ function syncAllCrmChats(callback) {
               name: (hasValidName ? c.name : existingMeta.name),
               phone: c.phone || tenDigit
             };
+            // Index ONLY by phone/JID — never by display name to prevent collision
             if (tenDigit) chatsMetadataMap[tenDigit] = meta;
-            if (rawNum) chatsMetadataMap[rawNum] = meta;
+            if (rawNum && rawNum !== tenDigit) chatsMetadataMap[rawNum] = meta;
             if (c.jid) chatsMetadataMap[c.jid] = meta;
-            if (c.name && hasValidName) {
-              chatsMetadataMap[c.name.trim()] = meta;
-              chatsMetadataMap[c.name.trim().toLowerCase()] = meta;
-            }
+            // Intentionally NOT storing under c.name — name keys cause cross-contact collisions
           }
         }
       }
@@ -443,7 +446,8 @@ function detectActiveContact(force = false) {
       activePhoneClean = cleanDigits.length >= 10 ? cleanDigits : '';
       activeAvatarUrl = domAvatar;
 
-      // Reset active form data immediately to prevent cross-chat data bleeding
+      // Reset active form data immediately to prevent cross-chat data bleeding.
+      // This blank state is what the user sees while the backend fetch is in-flight.
       activeFormData = {
         leadStatus: 'UNASSIGNED',
         callStatus: null,
@@ -453,12 +457,17 @@ function detectActiveContact(force = false) {
         aiDisabled: false
       };
 
-      fetchCrmMetadata(contactKey, displayTitle, domAvatar);
+      // Show the blank panel immediately so the user never sees the previous chat's data
+      renderCrmPanel(displayTitle, cleanDigits.length >= 10 ? cleanDigits : '', domAvatar);
+
+      // Bump the generation so any in-flight response for the PREVIOUS chat is discarded
+      fetchRequestGeneration++;
+      fetchCrmMetadata(contactKey, displayTitle, domAvatar, fetchRequestGeneration);
     }
   } catch (e) {}
 }
 
-function fetchCrmMetadata(searchKey, displayName, domAvatar) {
+function fetchCrmMetadata(searchKey, displayName, domAvatar, generation) {
   const badNames = ['.', 'contact', 'unsaved contact', 'unknown contact', 'whatsapp contact', ''];
   const isValidName = displayName && !badNames.includes(displayName.toLowerCase().trim()) && displayName.replace(/\D/g, '').length < 10;
 
@@ -466,31 +475,34 @@ function fetchCrmMetadata(searchKey, displayName, domAvatar) {
   const tenDigit = (rawClean.length === 12 && rawClean.startsWith('91')) ? rawClean.slice(2) : rawClean;
   const queryPhone = (activePhoneClean || tenDigit || '').replace(/\D/g, '');
 
-  const storageKeys = [`crm_meta_${searchKey}`];
-  if (activePhoneClean) storageKeys.push(`crm_meta_${activePhoneClean}`);
-  if (tenDigit) storageKeys.push(`crm_meta_${tenDigit}`);
-  safeStorageGet(storageKeys, (s) => {
+  // Phone-only storage keys — never use name as a key to avoid cross-contact collisions
+  const storageKeys = [];
+  if (activePhoneClean && activePhoneClean.length >= 10) storageKeys.push(`crm_meta_${activePhoneClean}`);
+  if (tenDigit && tenDigit.length >= 10 && tenDigit !== activePhoneClean) storageKeys.push(`crm_meta_${tenDigit}`);
+  if (searchKey && /^\d{10,15}$/.test(searchKey.replace(/\D/g, '')) && !storageKeys.includes(`crm_meta_${searchKey}`)) storageKeys.push(`crm_meta_${searchKey}`);
+
+  safeStorageGet(storageKeys.length > 0 ? storageKeys : ['__noop__'], (s) => {
+    // STALE GUARD: discard if user has already switched to a different chat
+    if (generation !== fetchRequestGeneration) return;
+
     s = s || {};
-    const validSearchKey = (searchKey && searchKey.trim() !== '') ? searchKey : null;
     const validPhoneClean = (activePhoneClean && activePhoneClean.length >= 10) ? activePhoneClean : null;
     const validTenDigit = (tenDigit && tenDigit.length >= 10) ? tenDigit : null;
+    const validSearchKey = (searchKey && searchKey.trim() !== '') ? searchKey : null;
 
-    let localData = (validSearchKey ? s[`crm_meta_${validSearchKey}`] : null) ||
-      (validPhoneClean ? s[`crm_meta_${validPhoneClean}`] : null) ||
+    // Lookup by phone/JID ONLY — name-based keys are intentionally excluded
+    let localData = (validPhoneClean ? s[`crm_meta_${validPhoneClean}`] : null) ||
       (validTenDigit ? s[`crm_meta_${validTenDigit}`] : null) ||
-      (isValidName ? s[`crm_meta_${displayName}`] : null) ||
-      (isValidName ? s[`crm_meta_${displayName.toLowerCase().trim()}`] : null) ||
-      (isValidName ? chatsMetadataMap[displayName] : null) ||
-      (isValidName ? chatsMetadataMap[displayName?.toLowerCase()?.trim()] : null) ||
-      (validSearchKey ? chatsMetadataMap[validSearchKey] : null) ||
       (validPhoneClean ? chatsMetadataMap[validPhoneClean] : null) ||
-      (validTenDigit ? chatsMetadataMap[validTenDigit] : null);
+      (validTenDigit ? chatsMetadataMap[validTenDigit] : null) ||
+      (validSearchKey && /^\d{10,15}$/.test((validSearchKey || '').replace(/\D/g, '')) ? chatsMetadataMap[validSearchKey] : null);
 
-    if (!localData && validPhoneClean && validTenDigit) {
+    // Exact phone match only — no suffix/prefix matching to prevent wrong-contact hits
+    if (!localData && (validPhoneClean || validTenDigit)) {
       for (const [k, val] of Object.entries(s)) {
         if (k.startsWith('crm_meta_') && val && typeof val === 'object') {
-          const valPhone = (val.phone || k).replace(/\D/g, '');
-          if (valPhone && (valPhone.endsWith(validTenDigit) || validTenDigit.endsWith(valPhone))) {
+          const valPhone = (val.phone || '').replace(/\D/g, '');
+          if (valPhone && (valPhone === validTenDigit || valPhone === validPhoneClean)) {
             localData = val;
             break;
           }
@@ -528,19 +540,25 @@ function fetchCrmMetadata(searchKey, displayName, domAvatar) {
     }
 
     safeSendMessage({ action: 'FETCH_CRM_METADATA', phoneClean: queryPhone, searchKey, displayName }, (response) => {
+      // STALE GUARD: discard if user has already switched to a different chat
+      if (generation !== fetchRequestGeneration) return;
+
       let resolvedAvatar = domAvatar || activeAvatarUrl;
 
       if (response && response.success && response.chat) {
         const chat = response.chat;
-        const localNotes = parseNotesList(localData?.notes, localData?.notesList);
+        // Backend is the authoritative source — use backend data directly,
+        // fall back to local cache only if backend field is empty/unassigned.
         const backendNotes = parseNotesList(chat.notes, chat.notesList);
+        const localNotes = parseNotesList(localData?.notes, localData?.notesList);
+        // Prefer backend notes; add any local-only notes that aren't already there
         const mergedNotes = [...backendNotes];
         for (const n of localNotes) {
-          if (!mergedNotes.includes(n)) mergedNotes.push(n);
+          if (n && !mergedNotes.includes(n)) mergedNotes.push(n);
         }
 
-        const bLead = chat.leadStatus !== undefined && chat.leadStatus !== 'UNASSIGNED' ? chat.leadStatus : (localData?.leadStatus || 'UNASSIGNED');
-        const bCall = chat.callStatus !== undefined && chat.callStatus !== null ? chat.callStatus : (localData?.callStatus || null);
+        const bLead = (chat.leadStatus && chat.leadStatus !== 'UNASSIGNED') ? chat.leadStatus : (localData?.leadStatus || 'UNASSIGNED');
+        const bCall = (chat.callStatus !== undefined && chat.callStatus !== null) ? chat.callStatus : (localData?.callStatus || null);
         const bFollow = (chat.followUpDate && chat.followUpDate.trim() !== '' && chat.followUpDate !== '—') ? chat.followUpDate : (localData?.followUpDate || '');
         const bPrevFollow = chat.previousFollowUpDate || localData?.previousFollowUpDate || '';
 
@@ -557,49 +575,55 @@ function fetchCrmMetadata(searchKey, displayName, domAvatar) {
 
         const backendNameIsPhoneOrBad = !chat.name || badNames.includes(chat.name.toLowerCase().trim()) || chat.name.replace(/\D/g, '').length >= 10;
         const currentNameIsValid = displayName && !badNames.includes(displayName.toLowerCase().trim()) && displayName.replace(/\D/g, '').length < 10;
-        const effectiveDisplayName = (currentNameIsValid ? displayName : (backendNameIsPhoneOrBad ? displayName : chat.name));
+        const effectiveDisplayName = currentNameIsValid ? displayName : (backendNameIsPhoneOrBad ? displayName : chat.name);
 
+        // Cache ONLY under phone/JID keys — never under display name
         const meta = { ...activeFormData, name: effectiveDisplayName, phone: validPhoneClean || queryPhone };
-        if (validSearchKey) chatsMetadataMap[validSearchKey] = meta;
         if (validPhoneClean) chatsMetadataMap[validPhoneClean] = meta;
-        if (queryPhone && queryPhone.length >= 10) chatsMetadataMap[queryPhone] = meta;
-        if (isValidName) chatsMetadataMap[displayName] = meta;
+        if (validTenDigit && validTenDigit !== validPhoneClean) chatsMetadataMap[validTenDigit] = meta;
+        if (queryPhone && queryPhone.length >= 10 && queryPhone !== validPhoneClean) chatsMetadataMap[queryPhone] = meta;
 
-        // ✅ AUTO NAME REFLECTION: Whenever backend name doesn't match current display name
-        // (e.g. name was "Monu" but user renamed to "Monu Kumar"), auto-push to backend.
-        // This fires for phone→name AND name→new-name edits dynamically!
+        // Auto name-sync: if WhatsApp has saved this number under a name that differs
+        // from what is stored in the backend, push the current name to the backend.
         if (currentNameIsValid && chat.name !== displayName) {
-          // Extract phone from the JID returned by backend (most reliable source)
           const chatJidPhone = (chat.jid || '').split('@')[0].replace(/\D/g, '');
           const resolvedPhone = validPhoneClean || queryPhone || chatJidPhone;
           const resolvedJid = chat.jid || (resolvedPhone ? `${resolvedPhone}@s.whatsapp.net` : '');
-
           if (resolvedJid) {
-            const autoPayload = {
-              jid: resolvedJid,
-              name: displayName,
-              phone: resolvedPhone,
-              leadStatus: activeFormData.leadStatus,
-              callStatus: activeFormData.callStatus,
-              followUpDate: activeFormData.followUpDate || undefined,
-              notesList: activeFormData.notesList,
-              notes: activeFormData.notesList.join('\n\n'),
-              manuallySaved: false
-            };
             fetch(`${DEFAULT_API_BASE}/api/crm/contact`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(autoPayload)
+              body: JSON.stringify({
+                jid: resolvedJid,
+                name: displayName,
+                phone: resolvedPhone,
+                leadStatus: activeFormData.leadStatus,
+                callStatus: activeFormData.callStatus,
+                followUpDate: activeFormData.followUpDate || undefined,
+                notesList: activeFormData.notesList,
+                notes: activeFormData.notesList.join('\n\n'),
+                manuallySaved: false
+              })
             }).then(r => r.json()).then(() => {
-              // Update local cache with phone → name mapping
               if (chatJidPhone) {
                 chatsMetadataMap[chatJidPhone] = { ...activeFormData, name: displayName, phone: resolvedPhone };
-                chatsMetadataMap[displayName] = chatsMetadataMap[chatJidPhone];
               }
             }).catch(() => {});
           }
         }
+      } else if (localData) {
+        // No backend record found but we have a valid local cache hit — use it
+        activeFormData = {
+          leadStatus: localData.leadStatus || 'UNASSIGNED',
+          callStatus: localData.callStatus || null,
+          followUpDate: localData.followUpDate || '',
+          previousFollowUpDate: localData.previousFollowUpDate || '',
+          notesList: parseNotesList(localData.notes, localData.notesList),
+          aiDisabled: Boolean(localData.aiDisabled)
+        };
       }
+      // else: no data anywhere — activeFormData stays blank (reset above)
+
       activeAvatarUrl = resolvedAvatar;
       renderCrmPanel(activeDisplayName || displayName, activePhoneClean, resolvedAvatar);
       injectChatListBadges();
@@ -636,28 +660,25 @@ function saveCrmMetadata() {
 
   const metaObj = { ...activeFormData, name: effectiveName, phone: cleanDigits || activeContactKey };
 
-  // Save under ALL possible keys so loading always finds it
+  // Save ONLY under phone-number keys — never under display name to prevent cross-contact collisions
   const saveKeys = {};
   if (cleanDigits.length >= 10) {
     saveKeys[`crm_meta_${cleanDigits}`] = metaObj;
-    saveKeys[`crm_meta_${tenDigit}`] = metaObj;
-    if (activePhoneClean) saveKeys[`crm_meta_${activePhoneClean}`] = metaObj;
-  }
-  if (activeDisplayName && !badNames.includes(activeDisplayName.toLowerCase().trim())) {
-    saveKeys[`crm_meta_${activeDisplayName}`] = metaObj;
-    saveKeys[`crm_meta_${activeDisplayName.toLowerCase().trim()}`] = metaObj;
-  }
-  if (activeContactKey && !saveKeys[`crm_meta_${activeContactKey}`]) {
-    saveKeys[`crm_meta_${activeContactKey}`] = metaObj;
+    if (tenDigit && tenDigit !== cleanDigits) saveKeys[`crm_meta_${tenDigit}`] = metaObj;
+    if (activePhoneClean && activePhoneClean !== cleanDigits) saveKeys[`crm_meta_${activePhoneClean}`] = metaObj;
+  } else if (activeContactKey) {
+    // Fallback: only store if key looks like a phone number
+    const ckDigits = activeContactKey.replace(/\D/g, '');
+    if (ckDigits.length >= 10) saveKeys[`crm_meta_${ckDigits}`] = metaObj;
   }
 
-  console.log('[AI Vastra] Saving metadata:', JSON.stringify(saveKeys));
+  console.log('[AI Vastra] Saving metadata for phone:', cleanDigits || activeContactKey);
   safeStorageSet(saveKeys);
 
-  chatsMetadataMap[cleanDigits] = metaObj;
-  chatsMetadataMap[tenDigit] = metaObj;
-  if (activePhoneClean) chatsMetadataMap[activePhoneClean] = metaObj;
-  if (effectiveName !== cleanDigits) chatsMetadataMap[effectiveName] = metaObj;
+  // In-memory map: phone/JID keys only
+  if (cleanDigits.length >= 10) chatsMetadataMap[cleanDigits] = metaObj;
+  if (tenDigit && tenDigit !== cleanDigits) chatsMetadataMap[tenDigit] = metaObj;
+  if (activePhoneClean && activePhoneClean !== cleanDigits) chatsMetadataMap[activePhoneClean] = metaObj;
 
   const payload = {
     jid: targetJid,

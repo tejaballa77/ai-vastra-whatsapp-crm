@@ -125,22 +125,6 @@ export const CrmDrawer: React.FC<CrmDrawerProps> = ({ isOpen, onClose }) => {
       <div className="h-16 px-4 bg-wa-header flex items-center justify-between border-b border-wa-border flex-shrink-0">
         <h3 className="text-base font-semibold text-wa-textPrimary">Contact Info</h3>
         <div className="flex items-center space-x-2">
-          <button
-            onClick={() => {
-              if (!activeChatJid) return;
-              updateCrmMetadata(activeChatJid, {
-                aiDisabled: !activeChat?.aiDisabled,
-              });
-            }}
-            title="Toggle AI Auto-Reply for this chat"
-            className={`px-2.5 py-1 text-xs font-semibold rounded-md transition-colors flex items-center space-x-1 shadow-sm border ${
-              activeChat?.aiDisabled
-                ? 'text-zinc-600 bg-zinc-100 hover:bg-zinc-200 border-zinc-300'
-                : 'text-amber-700 bg-amber-50 hover:bg-amber-100 border-amber-200'
-            }`}
-          >
-            <span>{activeChat?.aiDisabled ? '🤖 Auto Stopped' : '🛑 Stop Auto'}</span>
-          </button>
           <button onClick={onClose} className="p-1.5 text-wa-textSecondary hover:text-wa-textPrimary hover:bg-wa-hover rounded-full transition-colors">
             <X className="w-5 h-5" />
           </button>

@@ -20,14 +20,6 @@ export class WhatsAppEngine {
   public status: 'DISCONNECTED' | 'CONNECTING' | 'QR_READY' | 'CONNECTED' = 'DISCONNECTED';
   public currentQrCode: string | null = null;
   public meJid: string | null = null;
-  // Global safety lock: auto replies remain disabled across every restart.
-  // Remove this lock only through a reviewed code change when the owner asks
-  // to restore automatic replies.
-  public readonly autoReplyHardDisabled: boolean = true;
-  public aiAutoReplyEnabled: boolean = false;
-  private pendingDebounceMap = new Map<string, { timeout: NodeJS.Timeout; messages: string[]; senderJid: string }>();
-  private botSentMessageIds = new Set<string>();
-  private botSendingChats = new Set<string>();
 
   constructor(io: SocketIOServer) {
     this.io = io;
@@ -280,35 +272,12 @@ export class WhatsAppEngine {
             console.log(`[WhatsApp Engine] Real-time message (${parsed.fromMe ? 'Outbound' : 'Inbound'}):`, parsed.text);
             this.io.emit('new_message', parsed);
 
-            // Permanently stop AI when a human replies from WhatsApp Web or the phone.
             if (parsed.fromMe) {
-              const resolvedJidOut = db.resolveJid(parsed.chatJid);
-              const pending = this.pendingDebounceMap.get(parsed.chatJid);
-              if (pending) {
-                clearTimeout(pending.timeout);
-                this.pendingDebounceMap.delete(parsed.chatJid);
-              }
-              const resolvedBotChat = db.resolveJid(parsed.chatJid);
-              if (!this.botSentMessageIds.has(parsed.id || '') && !this.botSendingChats.has(resolvedBotChat)) {
-                db.upsertChat(resolvedJidOut, { aiDisabled: true, updatedAt: Date.now() });
-                db.upsertContact(resolvedJidOut, { aiDisabled: true, updatedAt: Date.now() });
-                console.log(`[AI Auto-Reply] Manual human reply detected for ${parsed.chatJid}. Auto-reply permanently disabled.`);
-              }
+              // Outbound message sent manually by human agent
             }
 
-            // 2. Inbound Message Handling with Safeguards (No Groups, No Broadcasts, Debounced)
-            const targetJid = msg.key.remoteJid || parsed.chatJid;
-            if (
-              this.aiAutoReplyEnabled &&
-              !parsed.fromMe &&
-              parsed.text &&
-              !targetJid.endsWith('@g.us') &&
-              !targetJid.includes('broadcast') &&
-              targetJid !== 'status@broadcast'
-            ) {
-              console.log(`[WhatsApp Engine] Routing inbound message from ${targetJid} to AI Auto-Reply pipeline...`);
-              this.scheduleAiAutoReply(targetJid, parsed.senderJid || targetJid, parsed.text);
-            }
+            // 2. Inbound messages are stored and broadcast only — no auto-reply
+            // All sales follow-up is handled manually via the CRM dashboard.
           }
         }
         this.io.emit('chats_updated', db.getAllChatsSorted());
@@ -562,259 +531,6 @@ export class WhatsAppEngine {
     this.io.emit('chats_updated', db.getAllChatsSorted());
   }
 
-  private scheduleAiAutoReply(chatJid: string, senderJid: string, newText: string) {
-    console.log(`[AI Auto-Reply] Inbound message received from ${chatJid}: "${newText}". Starting debounce timer...`);
-    const existing = this.pendingDebounceMap.get(chatJid);
-    if (existing) {
-      clearTimeout(existing.timeout);
-      existing.messages.push(newText);
-    } else {
-      this.pendingDebounceMap.set(chatJid, {
-        timeout: null as any,
-        messages: [newText],
-        senderJid,
-      });
-    }
-
-    const entry = this.pendingDebounceMap.get(chatJid)!;
-
-    // Debounce wait time: 3 seconds to let customer finish multi-message thoughts
-    const debounceWaitMs = 3000;
-
-    entry.timeout = setTimeout(async () => {
-      this.pendingDebounceMap.delete(chatJid);
-
-      if (!this.aiAutoReplyEnabled || !this.sock) {
-        console.warn(`[AI Auto-Reply] Skipped reply: aiEnabled=${this.aiAutoReplyEnabled}, socketReady=${Boolean(this.sock)}`);
-        return;
-      }
-
-      const combinedText = entry.messages.join('\n').trim();
-      if (!combinedText) return;
-      console.log(`[AI Auto-Reply] Processing debounced message for ${chatJid}: "${combinedText}"`);
-
-      // Check conversation message count & warm lead qualification
-      const resolvedJid = db.resolveJid(chatJid);
-      const existingChat = db.chats.get(resolvedJid) || db.chats.get(chatJid);
-
-      if (existingChat?.aiDisabled) {
-        console.log(`[AI Auto-Reply] Contact ${chatJid} has aiDisabled=true. Skipping auto-reply.`);
-        return;
-      }
-      const chatHistory = db.messages.get(resolvedJid) || db.messages.get(chatJid) || [];
-
-      // Check if incoming message is an initial greeting (Hi, Hello, Hii, Hey, Namaste, Menu, Start)
-      const cleanIncomingText = combinedText.toLowerCase().trim();
-      const normIncomingText = cleanIncomingText.replace(/h+i+/g, 'hi').replace(/h+e+y+/g, 'hey').replace(/h+e+l+o+w*|h+e+l+o+/g, 'hello');
-      const isGreetingMsg = /^(hi|hello|hey|start|namaste|menu|options|good\s+(morning|afternoon|evening))\b/.test(normIncomingText);
-
-      // Only initialize AI state for a truly new contact. Incoming messages must
-      // never undo an explicit CRM toggle, CRM save, or manual-reply stop.
-      if (isGreetingMsg && !existingChat) {
-        db.upsertChat(resolvedJid, { aiDisabled: false });
-        db.upsertContact(resolvedJid, { aiDisabled: false });
-      } else if (isGreetingMsg && existingChat && !existingChat.aiDisabled) {
-        db.upsertChat(resolvedJid, { aiDisabled: false });
-        db.upsertContact(resolvedJid, { aiDisabled: false });
-      }
-
-      // Calculate session turn count (messages received since latest greeting)
-      let inboundCount = 1;
-      if (!isGreetingMsg) {
-        let count = 0;
-        for (let i = chatHistory.length - 1; i >= 0; i--) {
-          const m = chatHistory[i];
-          if (!m.fromMe) {
-            count++;
-            const txt = (m.text || '').toLowerCase().trim();
-            const norm = txt.replace(/h+i+/g, 'hi').replace(/h+e+y+/g, 'hey').replace(/h+e+l+o+w*|h+e+l+o+/g, 'hello');
-            const isG = /^(hi|hello|hey|start|namaste|menu|options|good\s+(morning|afternoon|evening))\b/.test(norm);
-            if (isG) break;
-          }
-        }
-        inboundCount = Math.max(1, count);
-      }
-
-      // Stop AFTER 3rd reply has been delivered. If customer sends > 3 messages, auto-reply is stopped.
-      if (inboundCount > 3) {
-        db.unBlacklist(resolvedJid);
-        db.upsertChat(resolvedJid, { leadStatus: 'WARM', aiDisabled: true, updatedAt: Date.now() });
-        db.upsertContact(resolvedJid, { leadStatus: 'WARM', aiDisabled: true, updatedAt: Date.now() }, true);
-        this.io.emit('chats_updated', db.getAllChatsSorted());
-        console.log(`[AI Auto-Reply] Customer ${chatJid} has completed 3 turns. Auto-reply stopped for human agent takeover.`);
-        try {
-          await this.sock.sendPresenceUpdate('paused', chatJid);
-        } catch (e) {}
-        return;
-      }
-
-      // Anti-loop check: Check if text is just a simple one-word acknowledgment without questions
-      const lower = combinedText.toLowerCase().replace(/[^a-z0-9\s]/g, '').trim();
-      const simpleAcks = new Set(['ok', 'k', 'okay', 'okk', 'okey', 'thanks', 'thank you', 'thx', 'tq', 'dhanyavadalu', 'shukriya', 'bye', 'good night', 'gn']);
-      if (simpleAcks.has(lower) && !combinedText.includes('?') && !combinedText.toLowerCase().includes('price') && !combinedText.toLowerCase().includes('cost')) {
-        console.log(`[AI Auto-Reply] Acknowledgment '${combinedText}' received from ${chatJid}. Skipped auto-reply to prevent loops.`);
-        return;
-      }
-
-      try {
-        const rawNum = senderJid.split('@')[0].split(':')[0];
-
-        // 1. Send WhatsApp "composing" presence (shows "typing..." to customer)
-        try {
-          console.log(`[AI Auto-Reply] Sending 'composing' presence to ${chatJid}...`);
-          await this.sock.sendPresenceUpdate('composing', chatJid);
-        } catch (e: any) {
-          console.warn('[AI Auto-Reply] Presence error:', e.message);
-        }
-
-        // 2. Call AI Agent service
-        console.log(`[AI Auto-Reply] Calling Python AI service for ${rawNum}: "${combinedText}"...`);
-        let aiResult = await this.callAiAgent(rawNum, combinedText, chatJid);
-
-        if (!aiResult || !aiResult.reply || aiResult.reply.trim() === '[NO_REPLY]' || aiResult.reply.trim() === '') {
-          console.log(`[AI Auto-Reply] AI Agent returned no reply or [NO_REPLY] for ${chatJid}. Using friendly sales fallback reply.`);
-          aiResult = {
-            reply: "Thank you for reaching out! Our team will contact you regarding this. You can also visit our official website at https://aivastra.com or email us at support@aivastra.com.",
-          };
-        }
-
-        // 3. Realistic human typing delay based on reply length (2.5s to 4.5s)
-        const typingDurationMs = Math.min(4500, Math.max(2500, Math.round(aiResult.reply.length * 15)));
-        console.log(`[AI Auto-Reply] Simulating natural typing (${Math.round(typingDurationMs / 1000)}s) for ${chatJid}...`);
-        await new Promise((resolve) => setTimeout(resolve, typingDurationMs));
-
-        // 4. Send "paused" presence
-        try {
-          await this.sock.sendPresenceUpdate('paused', chatJid);
-        } catch (e) {}
-
-        // 5. Send clean text message with formatted options list (strictly no emojis)
-        let finalReply = aiResult.reply
-          .replace(/<think>[\s\S]*?<\/think>/gi, '')
-          .replace(/\[NO_REPLY\]/g, '')
-          .replace(/\[\d+\]/g, '')
-          .replace(/[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F700}-\u{1F77F}\u{1F780}-\u{1F7FF}\u{1F800}-\u{1F8FF}\u{1F900}-\u{1F9FF}\u{1FA00}-\u{1FA6F}\u{1FA70}-\u{1FAFF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{FE0F}]/gu, '')
-          .replace(/[ \t]{2,}/g, ' ')
-          .trim();
-
-        if (aiResult.interactive_buttons && aiResult.interactive_buttons.length > 0) {
-          const buttonList = aiResult.interactive_buttons
-            .map((btn, idx) => `${idx + 1}. ${btn.title}`)
-            .join('\n');
-          finalReply += `\n\n*Please select any one of those:*\n${buttonList}`;
-        } else {
-          // If not the initial main menu options list, ensure standard divider line & Reply 0 to Go Back
-          finalReply = finalReply.replace(/(?:\n\s*)*[-─—_━]{3,}(?:\n\s*)*reply\s*0\s*to\s*go\s*back/gi, '').trim();
-          finalReply = finalReply.replace(/(?:\n\s*)*reply\s*0\s*to\s*go\s*back/gi, '').trim();
-          finalReply += `\n\n───────────────────────\nReply 0 to Go Back`;
-        }
-
-        if (finalReply && this.sock) {
-          console.log(`[AI Auto-Reply] Sending WhatsApp reply to ${chatJid}: "${finalReply.slice(0, 80)}..."`);
-          
-          const botChatKey = db.resolveJid(chatJid);
-          this.botSendingChats.add(botChatKey);
-          const botSendGuard = setTimeout(() => this.botSendingChats.delete(botChatKey), 10000);
-          const sent = await this.sock.sendMessage(chatJid, { text: finalReply });
-
-          if (sent?.key?.id) {
-            this.botSentMessageIds.add(sent.key.id);
-            setTimeout(() => this.botSentMessageIds.delete(sent.key.id!), 60000);
-          }
-          clearTimeout(botSendGuard);
-          setTimeout(() => this.botSendingChats.delete(botChatKey), 3000);
-
-          // Record in CRM database and notify frontend UI
-          const crmMsg: CRMMessage = {
-            id: sent?.key?.id || `${Date.now()}_ai`,
-            chatJid: resolvedJid,
-            senderJid: this.sock.user?.id || 'me',
-            senderName: 'Ai Vastra Sales Agent',
-            fromMe: true,
-            text: finalReply,
-            timestamp: Date.now(),
-            status: 'SENT',
-          };
-          db.addMessage(crmMsg);
-
-          // Rule 1 & Rule 4: If this was reply 3 to the 3rd customer message, automatically categorize as WARM & stop auto-reply
-          if (inboundCount >= 3) {
-            db.upsertChat(resolvedJid, {
-              leadStatus: 'WARM',
-              aiDisabled: true,
-              callStatus: undefined,
-              followUpDate: '',
-              notes: '',
-              notesList: [],
-              isAutoWarm: true,
-            });
-            db.upsertContact(resolvedJid, {
-              leadStatus: 'WARM',
-              aiDisabled: true,
-              callStatus: undefined,
-              followUpDate: '',
-              notes: '',
-              notesList: [],
-              isAutoWarm: true,
-            }, true);
-            console.log(`[AI Auto-Reply] 3rd reply delivered to ${chatJid}. Categorized as WARM and auto-reply stopped for human takeover.`);
-          }
-
-          this.io.emit('new_message', crmMsg);
-          this.io.emit('chats_updated', db.getAllChatsSorted());
-
-          console.log(`[AI Auto-Reply] SUCCESS: Auto-reply successfully delivered to ${chatJid}!`);
-        }
-
-      } catch (err: any) {
-        console.error('[AI Auto-Reply] Error generating/delivering response:', err.message || err);
-        try {
-          if (this.sock) await this.sock.sendPresenceUpdate('paused', chatJid);
-        } catch (e) {}
-      }
-    }, debounceWaitMs);
-  }
-
-  public async callAiAgent(
-    senderPhone: string,
-    messageText: string,
-    conversationId?: string
-  ): Promise<{
-    reply?: string;
-    is_ignored?: boolean;
-    is_escalated?: boolean;
-    interactive_buttons?: Array<{ id: string; title: string; query: string }>;
-  } | null> {
-    const aiPort = process.env.AI_AGENT_PORT || '8005';
-    try {
-      console.log(`[AI Agent API] POST http://127.0.0.1:${aiPort}/api/v1/whatsapp/message (${senderPhone})`);
-      const response = await fetch(`http://127.0.0.1:${aiPort}/api/v1/whatsapp/message`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          message: messageText,
-          sender_phone: senderPhone,
-          conversation_id: conversationId,
-        }),
-      });
-      if (!response.ok) {
-        console.error(`[AI Agent API Error] HTTP ${response.status}: ${await response.text()}`);
-        return null;
-      }
-      const data = (await response.json()) as {
-        reply?: string;
-        is_ignored?: boolean;
-        is_escalated?: boolean;
-        interactive_buttons?: Array<{ id: string; title: string; query: string }>;
-      };
-      console.log(`[AI Agent API] Received reply: "${data.reply?.slice(0, 80)}..." (Buttons: ${data.interactive_buttons?.length || 0})`);
-      return data;
-    } catch (err: any) {
-      console.error(`[AI Agent API Error] Failed to reach port ${aiPort}: ${err.message}`);
-      return null;
-    }
-  }
-
   public clearAuthAndStore() {
     if (fs.existsSync(this.authFolder)) {
       fs.rmSync(this.authFolder, { recursive: true, force: true });
@@ -830,3 +546,4 @@ export class WhatsAppEngine {
     });
   }
 }
+

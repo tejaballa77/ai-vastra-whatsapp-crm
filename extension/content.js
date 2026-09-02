@@ -551,15 +551,6 @@ function fetchCrmMetadata(searchKey, displayName, domAvatar, generation) {
         notesList: parseNotesList(localData.notes, localData.notesList),
         aiDisabled: Boolean(localData.aiDisabled || localData.leadStatus === 'WARM' || localData.leadStatus === 'WARM_INTERESTED')
       };
-      if (isValidName && (validPhoneClean || validTenDigit)) {
-        const meta = { ...localData, name: displayName, phone: validPhoneClean || queryPhone };
-        chatsMetadataMap[displayName] = meta;
-        chatsMetadataMap[displayName.toLowerCase().trim()] = meta;
-        safeStorageSet({
-          [`crm_meta_${displayName}`]: meta,
-          [`crm_meta_${displayName.toLowerCase().trim()}`]: meta
-        });
-      }
     } else {
       activeFormData = {
         leadStatus: 'UNASSIGNED',
@@ -614,35 +605,6 @@ function fetchCrmMetadata(searchKey, displayName, domAvatar, generation) {
         if (validPhoneClean) chatsMetadataMap[validPhoneClean] = meta;
         if (validTenDigit && validTenDigit !== validPhoneClean) chatsMetadataMap[validTenDigit] = meta;
         if (queryPhone && queryPhone.length >= 10 && queryPhone !== validPhoneClean) chatsMetadataMap[queryPhone] = meta;
-
-        // Auto name-sync: if WhatsApp has saved this number under a name that differs
-        // from what is stored in the backend, push the current name to the backend.
-        if (currentNameIsValid && chat.name !== displayName) {
-          const chatJidPhone = (chat.jid || '').split('@')[0].replace(/\D/g, '');
-          const resolvedPhone = validPhoneClean || queryPhone || chatJidPhone;
-          const resolvedJid = chat.jid || (resolvedPhone ? `${resolvedPhone}@s.whatsapp.net` : '');
-          if (resolvedJid) {
-            fetch(`${DEFAULT_API_BASE}/api/crm/contact`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                jid: resolvedJid,
-                name: displayName,
-                phone: resolvedPhone,
-                leadStatus: activeFormData.leadStatus,
-                callStatus: activeFormData.callStatus,
-                followUpDate: activeFormData.followUpDate || undefined,
-                notesList: activeFormData.notesList,
-                notes: activeFormData.notesList.join('\n\n'),
-                manuallySaved: false
-              })
-            }).then(r => r.json()).then(() => {
-              if (chatJidPhone) {
-                chatsMetadataMap[chatJidPhone] = { ...activeFormData, name: displayName, phone: resolvedPhone };
-              }
-            }).catch(() => {});
-          }
-        }
       } else if (localData) {
         // No backend record found but we have a valid local cache hit — use it
         activeFormData = {

@@ -111,7 +111,6 @@ export function WhatsAppCrmModule() {
   const [saveSuccessToast, setSaveSuccessToast] = useState<boolean>(false);
   const [copiedPhone, setCopiedPhone] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState<string>('');
-  const [aiEnabled, setAiEnabled] = useState<boolean>(false);
   const [showQrModal, setShowQrModal] = useState<boolean>(false);
   const [isLoadingData, setIsLoadingData] = useState<boolean>(true);
   const [showClearConfirmModal, setShowClearConfirmModal] = useState<boolean>(false);
@@ -135,31 +134,6 @@ export function WhatsAppCrmModule() {
       }
     }
   }, [rawChats]);
-
-  useEffect(() => {
-    fetch(`${getBackendUrl()}/api/ai/status`)
-      .then(res => res.json())
-      .then(data => {
-        if (typeof data.enabled === 'boolean') setAiEnabled(data.enabled);
-      })
-      .catch(() => {});
-  }, []);
-
-  const toggleAiAutoReplies = async () => {
-    try {
-      const nextState = !aiEnabled;
-      setAiEnabled(nextState);
-      const res = await fetch(`${getBackendUrl()}/api/ai/toggle`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ enabled: nextState }),
-      });
-      const data = await res.json();
-      if (typeof data.enabled === 'boolean') setAiEnabled(data.enabled);
-    } catch (err) {
-      console.error('Failed to toggle AI auto-reply:', err);
-    }
-  };
 
   const BAD_NAMES = new Set(['.', 'contact', 'unsaved contact', 'unknown contact', 'whatsapp contact', 'ai vastra sales agent', 'ai sales agent', 'ai vastra', 'me', '']);
   const canonicalPhone = (raw: string) => {
@@ -629,24 +603,6 @@ export function WhatsAppCrmModule() {
                 {sessionState.status === 'CONNECTED' && (
                   <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse ml-0.5" />
                 )}
-              </button>
-
-              {/* AI Auto-Replies Toggle Switch */}
-              <button
-                type="button"
-                onClick={toggleAiAutoReplies}
-                className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-extrabold transition-all border shadow-xs cursor-pointer ${
-                  aiEnabled
-                    ? 'bg-emerald-600 border-emerald-700 text-white shadow-emerald-100'
-                    : 'bg-zinc-100 border-zinc-300 text-zinc-700 hover:bg-zinc-200'
-                }`}
-                title="Toggle AI Auto-Replies on incoming customer WhatsApp messages"
-              >
-                <Bot className="w-4 h-4" />
-                <span>AI Auto-Replies:</span>
-                <span className={`px-2 py-0.5 rounded-md text-[11px] font-black ${aiEnabled ? 'bg-white text-emerald-800' : 'bg-zinc-300 text-zinc-800'}`}>
-                  {aiEnabled ? 'ON' : 'OFF'}
-                </span>
               </button>
 
               <button

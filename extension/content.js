@@ -299,7 +299,6 @@ function extractPhoneNumberFromDom() {
     while (node && node.id !== 'pane-side') {
       const directPhone = phoneFromDataId(node.getAttribute?.('data-id') || '');
       if (directPhone) return directPhone;
-
       const childWithId = node.querySelector?.('[data-id]');
       const childPhone = phoneFromDataId(childWithId?.getAttribute('data-id') || '');
       if (childPhone) return childPhone;
@@ -308,13 +307,24 @@ function extractPhoneNumberFromDom() {
     return '';
   }
 
-  // 0. Resolve only the active chat. Never use the first arbitrary data-id in the list.
+  // ─────────────────────────────────────────────────────────────────────────
+  // SAFE RULE: We ONLY read phone numbers from:
+  //   • data-id attributes  (e.g. "919876543210@s.whatsapp.net")
+  //   • img src URLs        (e.g. "...u=919876543210...")
+  //   • span[title] ONLY when the title is purely numeric (contact IS a number)
+  //
+  // We NEVER read span.textContent — message bubble text contains other
+  // contacts' phone numbers that would corrupt the active contact detection.
+  // ─────────────────────────────────────────────────────────────────────────
+
+  // Step 0: Active sidebar chat item — data-id and img src only
   try {
     const activeItem =
       document.querySelector('#pane-side [aria-selected="true"]') ||
       document.querySelector('#pane-side [data-selected="true"]') ||
       document.querySelector('#pane-side .active') ||
       document.querySelector('#pane-side li[class*="active"]');
+
     if (activeItem) {
       const cachedPhone = activeItem.getAttribute('data-aivastra-phone');
       if (cachedPhone && cachedPhone.length >= 10) return cachedPhone;
@@ -330,37 +340,37 @@ function extractPhoneNumberFromDom() {
         }
       }
 
-      const itemSpans = activeItem.querySelectorAll('span');
-      for (const s of itemSpans) {
-        const t = (s.getAttribute('title') || s.textContent || '').trim();
-        const digits = t.replace(/\D/g, '');
-        if (digits.length >= 10 && digits.length <= 15 && /^[1-9]/.test(digits)) {
-          return digits;
+      // span[title] ONLY — and only if the title is purely a phone number (no letters)
+      const titleSpans = activeItem.querySelectorAll('span[title]');
+      for (const s of titleSpans) {
+        const t = (s.getAttribute('title') || '').trim();
+        const stripped = t.replace(/[+\s\-()]/g, '');
+        if (stripped.length >= 10 && stripped.length <= 15 && /^\d+$/.test(stripped)) {
+          return stripped;
         }
       }
+      // ↑ NO s.textContent — that reads message preview text in the sidebar
     }
   } catch (e) {}
 
-  // 1. Try all chat list items matching by title/name then grab their data-id
+  // Step 1: Match sidebar item by header title — data-id output only
   try {
     const allItems = document.querySelectorAll('#pane-side [data-id]');
-    const mainTitle = (document.querySelector('#main header span[dir="auto"]')?.textContent || '').trim();
+    const mainTitleEl = document.querySelector('#main header span[title], #main header span[dir="auto"][title]');
+    const mainTitle = (mainTitleEl?.getAttribute('title') || '').trim();
     if (mainTitle) {
       for (const item of allItems) {
-        const spans = item.querySelectorAll('span');
-        for (const sp of spans) {
-          const t = (sp.getAttribute('title') || sp.textContent || '').trim();
-          if (t === mainTitle) {
-            const dataId = item.getAttribute('data-id') || '';
-            const m = dataId.match(/(\d{10,15})@s\.whatsapp\.net/);
-            if (m && m[1]) return m[1];
-          }
+        // Match via span[title] attribute ONLY (never textContent = message preview)
+        const titleSpan = item.querySelector('span[title]');
+        if (titleSpan && titleSpan.getAttribute('title') === mainTitle) {
+          const phone = phoneFromElement(item);
+          if (phone) return phone;
         }
       }
     }
   } catch (e) {}
 
-  // 2. Check main chat header & subtitle & avatar images
+  // Step 2: Header avatar images — no span text reads
   try {
     const mainHeader = document.querySelector('#main header');
     if (mainHeader) {
@@ -371,19 +381,20 @@ function extractPhoneNumberFromDom() {
           if (match && match[1]) return match[1];
         }
       }
-
-      const headerSpans = mainHeader.querySelectorAll('span');
-      for (const s of headerSpans) {
-        const t = (s.getAttribute('title') || s.textContent || '').trim();
-        const digits = t.replace(/\D/g, '');
-        if (digits.length >= 10 && digits.length <= 15 && /^[1-9]/.test(digits)) {
-          return digits;
+      // Header span[title] — only if purely numeric (unsaved contact shown as number)
+      const headerTitleSpans = mainHeader.querySelectorAll('span[title]');
+      for (const s of headerTitleSpans) {
+        const t = (s.getAttribute('title') || '').trim();
+        const stripped = t.replace(/[+\s\-()]/g, '');
+        if (stripped.length >= 10 && stripped.length <= 15 && /^\d+$/.test(stripped)) {
+          return stripped;
         }
       }
+      // ↑ NO span.textContent — header area also contains message text nearby
     }
   } catch (e) {}
 
-  // 3. Check Contact Info drawer if open
+  // Step 3: Contact Info drawer — img src only, no text content
   try {
     const drawer = document.querySelector('[role="region"], [data-testid="contact-info-drawer"]');
     if (drawer) {
@@ -394,15 +405,15 @@ function extractPhoneNumberFromDom() {
           if (match && match[1]) return match[1];
         }
       }
-
-      const spans = drawer.querySelectorAll('span');
-      for (const s of spans) {
-        const t = (s.getAttribute('title') || s.textContent || '').trim();
-        const digits = t.replace(/\D/g, '');
-        if (digits.length >= 10 && digits.length <= 15 && /^[1-9]/.test(digits)) {
-          return digits;
+      const drawerTitleSpans = drawer.querySelectorAll('span[title]');
+      for (const s of drawerTitleSpans) {
+        const t = (s.getAttribute('title') || '').trim();
+        const stripped = t.replace(/[+\s\-()]/g, '');
+        if (stripped.length >= 10 && stripped.length <= 15 && /^\d+$/.test(stripped)) {
+          return stripped;
         }
       }
+      // ↑ NO span.textContent — drawer content could contain any arbitrary text
     }
   } catch (e) {}
 

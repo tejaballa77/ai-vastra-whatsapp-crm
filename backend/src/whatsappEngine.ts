@@ -20,8 +20,14 @@ export class WhatsAppEngine {
   public status: 'DISCONNECTED' | 'CONNECTING' | 'QR_READY' | 'CONNECTED' = 'DISCONNECTED';
   public currentQrCode: string | null = null;
   public meJid: string | null = null;
-  public aiAutoReplyEnabled: boolean = true;
+  // Global safety lock: auto replies remain disabled across every restart.
+  // Remove this lock only through a reviewed code change when the owner asks
+  // to restore automatic replies.
+  public readonly autoReplyHardDisabled: boolean = true;
+  public aiAutoReplyEnabled: boolean = false;
   private pendingDebounceMap = new Map<string, { timeout: NodeJS.Timeout; messages: string[]; senderJid: string }>();
+  private botSentMessageIds = new Set<string>();
+  private botSendingChats = new Set<string>();
 
   constructor(io: SocketIOServer) {
     this.io = io;
@@ -136,6 +142,20 @@ export class WhatsAppEngine {
             phone: phone,
           });
 
+          // Reconcile the address-book name into the exact CRM chat row. This
+          // preserves all CRM fields and replaces only the phone fallback name.
+          if (this.isRealSavedContactName(c.id, resolvedName)) {
+            const resolvedJid = db.resolveJid(c.id);
+            const existingChat = db.chats.get(resolvedJid);
+            db.upsertChat(resolvedJid, {
+              name: resolvedName,
+              phone,
+              updatedAt: existingChat && existingChat.name !== resolvedName
+                ? Date.now()
+                : existingChat?.updatedAt,
+            });
+          }
+
           this.fetchAndCacheProfilePic(c.id);
         }
         this.io.emit('chats_updated', db.getAllChatsSorted());
@@ -149,9 +169,16 @@ export class WhatsAppEngine {
             db.registerLidMapping((update as any).lid, update.id);
           }
           const resolvedName = this.resolveBestContactName(update.id, update.name, update.notify, update.verifiedName);
-          if (resolvedName) {
+          if (this.isRealSavedContactName(update.id, resolvedName)) {
             db.upsertContact(update.id, { name: resolvedName });
-            db.upsertChat(update.id, { name: resolvedName });
+            const resolvedJid = db.resolveJid(update.id);
+            const existingChat = db.chats.get(resolvedJid);
+            db.upsertChat(resolvedJid, {
+              name: resolvedName,
+              updatedAt: existingChat && existingChat.name !== resolvedName
+                ? Date.now()
+                : existingChat?.updatedAt,
+            });
           }
           if (update.imgUrl) {
             db.upsertContact(update.id, { avatarUrl: update.imgUrl });
@@ -194,6 +221,17 @@ export class WhatsAppEngine {
             name: resolvedName,
             phone: phone,
           });
+          if (this.isRealSavedContactName(c.id, resolvedName)) {
+            const resolvedJid = db.resolveJid(c.id);
+            const existingChat = db.chats.get(resolvedJid);
+            db.upsertChat(resolvedJid, {
+              name: resolvedName,
+              phone,
+              updatedAt: existingChat && existingChat.name !== resolvedName
+                ? Date.now()
+                : existingChat?.updatedAt,
+            });
+          }
         }
 
         for (const c of chats) {
@@ -207,8 +245,23 @@ export class WhatsAppEngine {
           });
         }
 
+        const historyDirections = new Map<string, { inbound: number; outbound: number }>();
         for (const msg of messages) {
-          this.processIncomingMessage(msg);
+          const parsed = this.processIncomingMessage(msg);
+          if (!parsed || parsed.chatJid.endsWith('@g.us')) continue;
+          const jid = db.resolveJid(parsed.chatJid);
+          const counts = historyDirections.get(jid) || { inbound: 0, outbound: 0 };
+          if (parsed.fromMe) counts.outbound += 1;
+          else counts.inbound += 1;
+          historyDirections.set(jid, counts);
+        }
+
+        // Treat an existing two-way history as a human-managed conversation.
+        for (const [jid, counts] of historyDirections) {
+          if (counts.inbound > 0 && counts.outbound > 0) {
+            db.upsertChat(jid, { aiDisabled: true });
+            db.upsertContact(jid, { aiDisabled: true });
+          }
         }
 
         this.syncInitialData();
@@ -227,13 +280,19 @@ export class WhatsAppEngine {
             console.log(`[WhatsApp Engine] Real-time message (${parsed.fromMe ? 'Outbound' : 'Inbound'}):`, parsed.text);
             this.io.emit('new_message', parsed);
 
-            // 1. If Outbound manual message sent by user from phone: cancel any pending AI auto-reply for this chat
+            // Permanently stop AI when a human replies from WhatsApp Web or the phone.
             if (parsed.fromMe) {
+              const resolvedJidOut = db.resolveJid(parsed.chatJid);
               const pending = this.pendingDebounceMap.get(parsed.chatJid);
               if (pending) {
                 clearTimeout(pending.timeout);
                 this.pendingDebounceMap.delete(parsed.chatJid);
-                console.log(`[AI Auto-Reply] Manual human reply detected for ${parsed.chatJid}. Cancelled pending AI auto-reply.`);
+              }
+              const resolvedBotChat = db.resolveJid(parsed.chatJid);
+              if (!this.botSentMessageIds.has(parsed.id || '') && !this.botSendingChats.has(resolvedBotChat)) {
+                db.upsertChat(resolvedJidOut, { aiDisabled: true, updatedAt: Date.now() });
+                db.upsertContact(resolvedJidOut, { aiDisabled: true, updatedAt: Date.now() });
+                console.log(`[AI Auto-Reply] Manual human reply detected for ${parsed.chatJid}. Auto-reply permanently disabled.`);
               }
             }
 
@@ -329,6 +388,21 @@ export class WhatsAppEngine {
 
     // Unsaved contact: return clean formatted phone number (+91 77801 71507)
     return db.formatPhoneFallback(cleanDigits || rawNumber);
+  }
+
+  private isRealSavedContactName(rawJid: string, name?: string): boolean {
+    if (!name) return false;
+    const cleanName = name.trim();
+    const lower = cleanName.toLowerCase();
+    const badNames = new Set(['.', 'contact', 'unsaved contact', 'unknown contact', 'whatsapp contact', 'ai vastra sales agent', 'ai sales agent', 'ai vastra', 'me', '']);
+    const jidDigits = db.resolveJid(rawJid).split('@')[0].replace(/\D/g, '');
+    const nameDigits = cleanName.replace(/\D/g, '');
+    return cleanName.length > 1 &&
+      !badNames.has(lower) &&
+      !cleanName.includes('@') &&
+      !cleanName.startsWith('~') &&
+      nameDigits.length < 10 &&
+      cleanName !== jidDigits;
   }
 
   private processIncomingMessage(msg: WAMessage): CRMMessage | null {
@@ -522,6 +596,11 @@ export class WhatsAppEngine {
       // Check conversation message count & warm lead qualification
       const resolvedJid = db.resolveJid(chatJid);
       const existingChat = db.chats.get(resolvedJid) || db.chats.get(chatJid);
+
+      if (existingChat?.aiDisabled) {
+        console.log(`[AI Auto-Reply] Contact ${chatJid} has aiDisabled=true. Skipping auto-reply.`);
+        return;
+      }
       const chatHistory = db.messages.get(resolvedJid) || db.messages.get(chatJid) || [];
 
       // Check if incoming message is an initial greeting (Hi, Hello, Hii, Hey, Namaste, Menu, Start)
@@ -529,19 +608,14 @@ export class WhatsAppEngine {
       const normIncomingText = cleanIncomingText.replace(/h+i+/g, 'hi').replace(/h+e+y+/g, 'hey').replace(/h+e+l+o+w*|h+e+l+o+/g, 'hello');
       const isGreetingMsg = /^(hi|hello|hey|start|namaste|menu|options|good\s+(morning|afternoon|evening))\b/.test(normIncomingText);
 
-      // Rule 1: Fresh inbound message un-blacklists cleared leads so AI auto-replies & Warm section qualify new messages
-      db.unBlacklist(resolvedJid);
-      db.unBlacklist(chatJid);
-
-      if (isGreetingMsg || !existingChat) {
+      // Only initialize AI state for a truly new contact. Incoming messages must
+      // never undo an explicit CRM toggle, CRM save, or manual-reply stop.
+      if (isGreetingMsg && !existingChat) {
         db.upsertChat(resolvedJid, { aiDisabled: false });
         db.upsertContact(resolvedJid, { aiDisabled: false });
-        if (existingChat) existingChat.aiDisabled = false;
-      } else if (existingChat?.aiDisabled && !isGreetingMsg) {
-        console.log(`[AI Auto-Reply] Re-enabling auto-reply for ${chatJid} on fresh inbound message...`);
+      } else if (isGreetingMsg && existingChat && !existingChat.aiDisabled) {
         db.upsertChat(resolvedJid, { aiDisabled: false });
         db.upsertContact(resolvedJid, { aiDisabled: false });
-        if (existingChat) existingChat.aiDisabled = false;
       }
 
       // Calculate session turn count (messages received since latest greeting)
@@ -638,7 +712,17 @@ export class WhatsAppEngine {
         if (finalReply && this.sock) {
           console.log(`[AI Auto-Reply] Sending WhatsApp reply to ${chatJid}: "${finalReply.slice(0, 80)}..."`);
           
+          const botChatKey = db.resolveJid(chatJid);
+          this.botSendingChats.add(botChatKey);
+          const botSendGuard = setTimeout(() => this.botSendingChats.delete(botChatKey), 10000);
           const sent = await this.sock.sendMessage(chatJid, { text: finalReply });
+
+          if (sent?.key?.id) {
+            this.botSentMessageIds.add(sent.key.id);
+            setTimeout(() => this.botSentMessageIds.delete(sent.key.id!), 60000);
+          }
+          clearTimeout(botSendGuard);
+          setTimeout(() => this.botSendingChats.delete(botChatKey), 3000);
 
           // Record in CRM database and notify frontend UI
           const crmMsg: CRMMessage = {

@@ -20,6 +20,8 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         .then((chats) => {
           const allChats = Array.isArray(chats) ? chats : [];
           const badNames = ['.', 'contact', 'unsaved contact', 'unknown contact', 'whatsapp contact', ''];
+          const search = (request.phoneClean || '').toLowerCase().trim();
+          const cleanSearchDigits = search.replace(/\D/g, '');
 
           // ------------------------------------------------------------------
           // STEP 1: Phone / JID lookup — most reliable, always tried first.

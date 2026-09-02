@@ -48,6 +48,7 @@ let activeContactKey = '';
 let activeDisplayName = '';
 let activePhoneClean = '';
 let activeAvatarUrl = '';
+let metadataRequestId = 0;
 
 // Per-Contact Form Data Store (Strict Chat Isolation)
 let activeFormData = {
@@ -287,19 +288,39 @@ function extractProfileNameFromDom() {
 }
 
 function extractPhoneNumberFromDom() {
-  // 0. Try extracting from WhatsApp data-id attribute on active chat list item (most reliable!)
+  function phoneFromDataId(dataId) {
+    if (!dataId) return '';
+    const match = dataId.match(/(\d{10,15})@s\.whatsapp\.net/);
+    return match?.[1] || '';
+  }
+
+  function phoneFromElement(element) {
+    let node = element;
+    while (node && node.id !== 'pane-side') {
+      const directPhone = phoneFromDataId(node.getAttribute?.('data-id') || '');
+      if (directPhone) return directPhone;
+
+      const childWithId = node.querySelector?.('[data-id]');
+      const childPhone = phoneFromDataId(childWithId?.getAttribute('data-id') || '');
+      if (childPhone) return childPhone;
+      node = node.parentElement;
+    }
+    return '';
+  }
+
+  // 0. Resolve only the active chat. Never use the first arbitrary data-id in the list.
   try {
-    const activeItem = document.querySelector(
-      '#pane-side [data-id], #pane-side [aria-selected="true"], #pane-side [data-selected="true"]'
-    );
+    const activeItem =
+      document.querySelector('#pane-side [aria-selected="true"]') ||
+      document.querySelector('#pane-side [data-selected="true"]') ||
+      document.querySelector('#pane-side .active') ||
+      document.querySelector('#pane-side li[class*="active"]');
     if (activeItem) {
       const cachedPhone = activeItem.getAttribute('data-aivastra-phone');
       if (cachedPhone && cachedPhone.length >= 10) return cachedPhone;
 
-      // data-id often contains phone@s.whatsapp.net or false_phone@s.whatsapp.net
-      const dataId = activeItem.getAttribute('data-id') || '';
-      const dataIdMatch = dataId.match(/(\d{10,15})@s\.whatsapp\.net/);
-      if (dataIdMatch && dataIdMatch[1]) return dataIdMatch[1];
+      const activePhone = phoneFromElement(activeItem);
+      if (activePhone) return activePhone;
 
       const imgs = activeItem.querySelectorAll('img');
       for (const img of imgs) {
@@ -631,9 +652,9 @@ function fetchCrmMetadata(searchKey, displayName, domAvatar, generation) {
   });
 }
 
-function saveCrmMetadata() {
-  // Automatically stop AI auto-replies permanently whenever manual CRM data is saved by user
-  activeFormData.aiDisabled = true;
+function saveCrmMetadata(forcedAiDisabled) {
+  // Normal CRM saves stop AI; the toggle passes an explicit state in either direction.
+  activeFormData.aiDisabled = forcedAiDisabled !== undefined ? forcedAiDisabled : true;
 
   let domPhone = extractPhoneNumberFromDom();
   let titleDigits = activeDisplayName.replace(/\D/g, '');
@@ -756,9 +777,9 @@ function renderCrmPanel(displayName, cleanPhone, avatarUrl, showSaveToast = fals
 
   const avatarInitial = (displayTitle || '?').replace(/^[^a-zA-Z0-9]/, '').charAt(0).toUpperCase() || '?';
 
-  const avatarHtml = avatarUrl
-    ? `<img src="${avatarUrl}" alt="${displayTitle}" class="aivastra-avatar-img" />`
-    : `<div class="aivastra-avatar-circle">${avatarInitial}</div>`;
+  // Use a stable contact initial only. WhatsApp avatar URLs can be stale and
+  // previously caused one chat's profile image to appear on another contact.
+  const avatarHtml = `<div class="aivastra-avatar-circle">${avatarInitial}</div>`;
 
   panel.innerHTML = `
     <div class="aivastra-header">
@@ -856,8 +877,9 @@ function renderCrmPanel(displayName, cleanPhone, avatarUrl, showSaveToast = fals
   };
 
   document.getElementById('aivastra-stop-auto-btn').onclick = () => {
-    activeFormData.aiDisabled = !activeFormData.aiDisabled;
-    saveCrmMetadata();
+    const newAiDisabled = !activeFormData.aiDisabled;
+    activeFormData.aiDisabled = newAiDisabled;
+    saveCrmMetadata(newAiDisabled);
     renderCrmPanel(displayName, cleanPhone, avatarUrl);
   };
 

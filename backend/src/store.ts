@@ -696,11 +696,22 @@ class StorageEngine {
       name = partial.name;
     }
 
+    const hasMeaningfulChange =
+      (partial.name !== undefined && partial.name !== existing.name) ||
+      partial.leadStatus !== undefined ||
+      partial.callStatus !== undefined ||
+      partial.followUpDate !== undefined ||
+      partial.notes !== undefined ||
+      partial.notesList !== undefined ||
+      partial.manuallySaved === true;
+
     const updated: CRMContact = {
       ...existing,
       ...partial,
       name,
-      updatedAt: Date.now(),
+      updatedAt: partial.updatedAt !== undefined
+        ? partial.updatedAt
+        : (hasMeaningfulChange ? Date.now() : (existing.updatedAt || 0)),
     };
 
     this.contacts.set(jid, updated);
@@ -713,11 +724,18 @@ class StorageEngine {
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(jid) DO UPDATE SET
         name = EXCLUDED.name,
+        phone = EXCLUDED.phone,
+        avatar_url = EXCLUDED.avatar_url,
         lead_status = EXCLUDED.lead_status,
         call_status = EXCLUDED.call_status,
         follow_up_date = EXCLUDED.follow_up_date,
+        previous_follow_up_date = EXCLUDED.previous_follow_up_date,
         notes = EXCLUDED.notes,
         notes_list = EXCLUDED.notes_list,
+        tags = EXCLUDED.tags,
+        ai_disabled = EXCLUDED.ai_disabled,
+        is_auto_warm = EXCLUDED.is_auto_warm,
+        manually_saved = EXCLUDED.manually_saved,
         updated_at = EXCLUDED.updated_at`,
       [
         updated.jid,
@@ -838,7 +856,7 @@ class StorageEngine {
       ...partial,
       name,
       avatarUrl: partial.avatarUrl || existing.avatarUrl || contact?.avatarUrl,
-      updatedAt: existing.updatedAt || 0,
+      updatedAt: partial.updatedAt !== undefined ? partial.updatedAt : (existing.updatedAt || 0),
     };
 
     if (contact) {
@@ -861,13 +879,23 @@ class StorageEngine {
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(jid) DO UPDATE SET
         name = EXCLUDED.name,
+        phone = EXCLUDED.phone,
+        unread_count = EXCLUDED.unread_count,
         lead_status = EXCLUDED.lead_status,
         call_status = EXCLUDED.call_status,
         follow_up_date = EXCLUDED.follow_up_date,
+        previous_follow_up_date = EXCLUDED.previous_follow_up_date,
         notes = EXCLUDED.notes,
         notes_list = EXCLUDED.notes_list,
+        tags = EXCLUDED.tags,
+        ai_disabled = EXCLUDED.ai_disabled,
+        is_auto_warm = EXCLUDED.is_auto_warm,
+        manually_saved = EXCLUDED.manually_saved,
         last_message_preview = EXCLUDED.last_message_preview,
         last_message_at = EXCLUDED.last_message_at,
+        last_message_from_me = EXCLUDED.last_message_from_me,
+        last_message_status = EXCLUDED.last_message_status,
+        avatar_url = EXCLUDED.avatar_url,
         updated_at = EXCLUDED.updated_at`,
       [
         updated.jid,
@@ -1251,6 +1279,10 @@ class StorageEngine {
           notesList: contact.notesList,
           tags: contact.tags || [],
           avatarUrl: contact.avatarUrl,
+          aiDisabled: contact.aiDisabled,
+          isAutoWarm: contact.isAutoWarm,
+          manuallySaved: contact.manuallySaved,
+          updatedAt: contact.updatedAt || 0,
         };
         uniqueMap.set(dedupeKey, contactChat);
       } else {
@@ -1280,6 +1312,10 @@ class StorageEngine {
           notes: existing.notes || contact.notes || (combinedList[0] ? (typeof combinedList[0] === 'string' ? combinedList[0] : (combinedList[0]?.text || '')) : ''),
           notesList: combinedList,
           avatarUrl: existing.avatarUrl || contact.avatarUrl,
+          aiDisabled: Boolean(existing.aiDisabled || contact.aiDisabled),
+          isAutoWarm: existing.isAutoWarm !== undefined ? existing.isAutoWarm : contact.isAutoWarm,
+          manuallySaved: Boolean(existing.manuallySaved || contact.manuallySaved),
+          updatedAt: Math.max(existing.updatedAt || 0, contact.updatedAt || 0),
         });
       }
     }
@@ -1376,7 +1412,7 @@ class StorageEngine {
       const cAlpha = (cObj.name && !cIsPhone) ? cNameClean.replace(/\+?\d+/g, '').replace(/[^a-z0-9]/g, '').trim() : '';
 
       const matchPhone = Boolean(tenDigit && tenDigit.length === 10 && cTen === tenDigit);
-      const matchName = Boolean(searchAlphaName && searchAlphaName.length >= 3 && cAlpha === searchAlphaName);
+      const matchName = Boolean(tenDigit.length !== 10 && searchAlphaName && searchAlphaName.length >= 3 && cAlpha === searchAlphaName);
 
       if (ck === canonicalJid || ck === jid || matchPhone || matchName) {
         matchingContactKeys.push(ck);
@@ -1398,7 +1434,7 @@ class StorageEngine {
       const chAlpha = (chObj.name && !chIsPhone) ? chNameClean.replace(/\+?\d+/g, '').replace(/[^a-z0-9]/g, '').trim() : '';
 
       const matchPhone = Boolean(tenDigit && tenDigit.length === 10 && chTen === tenDigit);
-      const matchName = Boolean(searchAlphaName && searchAlphaName.length >= 3 && chAlpha === searchAlphaName);
+      const matchName = Boolean(tenDigit.length !== 10 && searchAlphaName && searchAlphaName.length >= 3 && chAlpha === searchAlphaName);
 
       if (chk === canonicalJid || chk === jid || matchPhone || matchName) {
         matchingChatKeys.push(chk);
@@ -1412,25 +1448,9 @@ class StorageEngine {
       }
     }
 
-    // Intelligent Fallback: If no exact match found, but incoming name is a valid contact name (e.g. "Teja Balla"):
-    // Match the existing un-named phone lead (e.g. "+91 91217 22674") so notes and fields are 100% preserved!
-    if (matchingChatKeys.length === 0 && incomingNameIsValid && !isPurePhoneInput) {
-      for (const [chk, chObj] of this.chats.entries()) {
-        const cName = (chObj.name || '').trim();
-        const cDigits = (chObj.phone || chk.split('@')[0]).replace(/\D/g, '');
-        if (cDigits.length >= 7 && (cName === cDigits || cName.replace(/\D/g, '').length >= 7 || BAD_NAMES.has(cName.toLowerCase()))) {
-          matchingChatKeys.push(chk);
-          const list: any[] = chObj.notesList || (chObj.notes ? [chObj.notes] : []);
-          for (const n of list) {
-            const textStr = typeof n === 'string' ? n : (n && typeof n === 'object' ? n.text : '');
-            if (textStr && !oldNotesList.some((on: any) => (typeof on === 'string' ? on : (on && typeof on === 'object' ? on.text : '')) === textStr)) {
-              oldNotesList.push(n);
-            }
-          }
-          break;
-        }
-      }
-    }
+    // Never guess that an unrelated unnamed lead belongs to a newly named contact.
+    // Identity migration is allowed only through an exact JID/phone (or exact name)
+    // match established above.
 
     // Handle user notes & allow dynamic note deletions
     let finalNotesList: any[] = [];
@@ -1482,7 +1502,7 @@ class StorageEngine {
       if (metadata.tags !== undefined) contact.tags = metadata.tags;
       if (metadata.aiDisabled !== undefined) contact.aiDisabled = metadata.aiDisabled;
       if (metadata.isAutoWarm !== undefined) contact.isAutoWarm = metadata.isAutoWarm;
-      if (metadata.manuallySaved !== undefined) contact.manuallySaved = metadata.manuallySaved;
+      if (metadata.manuallySaved === true) contact.manuallySaved = true;
       if (tenDigit) contact.phone = `91${tenDigit}`;
       contact.updatedAt = nowTimestamp;
     }
@@ -1514,6 +1534,7 @@ class StorageEngine {
         tags: metadata.tags || [],
         aiDisabled: metadata.aiDisabled,
         isAutoWarm: metadata.isAutoWarm !== undefined ? metadata.isAutoWarm : false,
+        manuallySaved: metadata.manuallySaved !== undefined ? metadata.manuallySaved : false,
         updatedAt: nowTimestamp,
       };
     } else {
@@ -1527,7 +1548,7 @@ class StorageEngine {
       if (metadata.tags !== undefined) chat.tags = metadata.tags;
       if (metadata.aiDisabled !== undefined) chat.aiDisabled = metadata.aiDisabled;
       if (metadata.isAutoWarm !== undefined) chat.isAutoWarm = metadata.isAutoWarm;
-      if (metadata.manuallySaved !== undefined) chat.manuallySaved = metadata.manuallySaved;
+      if (metadata.manuallySaved === true) chat.manuallySaved = true;
       chat.jid = canonicalJid;
       if (tenDigit) chat.phone = `91${tenDigit}`;
       chat.updatedAt = nowTimestamp;
@@ -1550,11 +1571,18 @@ class StorageEngine {
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(jid) DO UPDATE SET
         name = EXCLUDED.name,
+        phone = EXCLUDED.phone,
+        avatar_url = EXCLUDED.avatar_url,
         lead_status = EXCLUDED.lead_status,
         call_status = EXCLUDED.call_status,
         follow_up_date = EXCLUDED.follow_up_date,
+        previous_follow_up_date = EXCLUDED.previous_follow_up_date,
         notes = EXCLUDED.notes,
         notes_list = EXCLUDED.notes_list,
+        tags = EXCLUDED.tags,
+        ai_disabled = EXCLUDED.ai_disabled,
+        is_auto_warm = EXCLUDED.is_auto_warm,
+        manually_saved = EXCLUDED.manually_saved,
         updated_at = EXCLUDED.updated_at`,
       [
         contact.jid,
@@ -1584,11 +1612,23 @@ class StorageEngine {
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(jid) DO UPDATE SET
         name = EXCLUDED.name,
+        phone = EXCLUDED.phone,
+        unread_count = EXCLUDED.unread_count,
+        last_message_preview = EXCLUDED.last_message_preview,
+        last_message_at = EXCLUDED.last_message_at,
+        last_message_from_me = EXCLUDED.last_message_from_me,
+        last_message_status = EXCLUDED.last_message_status,
+        avatar_url = EXCLUDED.avatar_url,
         lead_status = EXCLUDED.lead_status,
         call_status = EXCLUDED.call_status,
         follow_up_date = EXCLUDED.follow_up_date,
+        previous_follow_up_date = EXCLUDED.previous_follow_up_date,
         notes = EXCLUDED.notes,
         notes_list = EXCLUDED.notes_list,
+        tags = EXCLUDED.tags,
+        ai_disabled = EXCLUDED.ai_disabled,
+        is_auto_warm = EXCLUDED.is_auto_warm,
+        manually_saved = EXCLUDED.manually_saved,
         updated_at = EXCLUDED.updated_at`,
       [
         chat.jid,
@@ -1616,11 +1656,10 @@ class StorageEngine {
       ]
     ).catch((err) => console.error('[StorageEngine] SQL updateCrmMetadata chat error:', err.message));
 
-    // Lead Clear Handling: Immutable Archive in SQL Database Table!
-    const isClearAction = metadata.leadStatus === 'UNASSIGNED' &&
-      (!metadata.callStatus || metadata.callStatus === undefined) &&
-      (!metadata.followUpDate || metadata.followUpDate.trim() === '') &&
-      (!metadata.notesList || metadata.notesList.length === 0);
+    // Clearing is intentionally handled only by the explicit, confirmed clear
+    // endpoints. An empty metadata update may be a name sync or AI toggle and
+    // must never be interpreted as permission to delete the contact.
+    const isClearAction = false;
 
     const now = Date.now();
     const d = new Date(now);
@@ -1776,9 +1815,15 @@ class StorageEngine {
       }
     }
 
-    dbManager.query(`DELETE FROM crm_chats WHERE jid = ? OR jid = ? OR name = ? OR (phone IS NOT NULL AND phone != '' AND phone LIKE ?)`, [jid, rawJid, rawName, `%${cleanDigits}%`]).catch(() => {});
-    dbManager.query(`DELETE FROM crm_contacts WHERE jid = ? OR jid = ? OR name = ? OR (phone IS NOT NULL AND phone != '' AND phone LIKE ?)`, [jid, rawJid, rawName, `%${cleanDigits}%`]).catch(() => {});
-    dbManager.query(`DELETE FROM crm_messages WHERE chat_jid = ? OR chat_jid = ? OR chat_jid LIKE ?`, [jid, rawJid, `%${cleanDigits}%`]).catch(() => {});
+    if (cleanDigits.length >= 7) {
+      dbManager.query(`DELETE FROM crm_chats WHERE jid = ? OR jid = ? OR name = ? OR (phone IS NOT NULL AND phone != '' AND phone LIKE ?)`, [jid, rawJid, rawName, `%${cleanDigits}%`]).catch(() => {});
+      dbManager.query(`DELETE FROM crm_contacts WHERE jid = ? OR jid = ? OR name = ? OR (phone IS NOT NULL AND phone != '' AND phone LIKE ?)`, [jid, rawJid, rawName, `%${cleanDigits}%`]).catch(() => {});
+      dbManager.query(`DELETE FROM crm_messages WHERE chat_jid = ? OR chat_jid = ? OR chat_jid LIKE ?`, [jid, rawJid, `%${cleanDigits}%`]).catch(() => {});
+    } else {
+      dbManager.query(`DELETE FROM crm_chats WHERE jid = ? OR jid = ? OR name = ?`, [jid, rawJid, rawName]).catch(() => {});
+      dbManager.query(`DELETE FROM crm_contacts WHERE jid = ? OR jid = ? OR name = ?`, [jid, rawJid, rawName]).catch(() => {});
+      dbManager.query(`DELETE FROM crm_messages WHERE chat_jid = ? OR chat_jid = ?`, [jid, rawJid]).catch(() => {});
+    }
 
     this.saveData();
   }

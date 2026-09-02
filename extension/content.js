@@ -761,13 +761,6 @@ function renderCrmPanel(displayName, cleanPhone, avatarUrl, showSaveToast = fals
         <span>Contact Info</span>
       </div>
       <div style="display:flex;align-items:center;gap:6px;">
-        <button id="aivastra-stop-auto-btn" class="aivastra-stop-auto-btn" title="Toggle AI Auto-Reply for this chat" style="
-          background:${activeFormData.aiDisabled ? '#fef2f2' : '#fff7ed'};
-          color:${activeFormData.aiDisabled ? '#dc2626' : '#c2410c'};
-          border:1px solid ${activeFormData.aiDisabled ? '#fecaca' : '#ffedd5'};
-          border-radius:6px;padding:3px 8px;font-size:11px;font-weight:700;
-          cursor:pointer;display:flex;align-items:center;gap:3px;
-        ">${activeFormData.aiDisabled ? '🛑 Auto Stopped !!' : '⚡ Stop Auto'}</button>
         <button id="aivastra-clear-btn" class="aivastra-clear-btn" title="Clear all CRM data for this contact" style="
           background:#fee2e2;color:#dc2626;border:1px solid #fecaca;
           border-radius:6px;padding:3px 8px;font-size:11px;font-weight:700;
@@ -849,12 +842,6 @@ function renderCrmPanel(displayName, cleanPhone, avatarUrl, showSaveToast = fals
     panel.style.display = 'none';
   };
 
-  document.getElementById('aivastra-stop-auto-btn').onclick = () => {
-    const newAiDisabled = !activeFormData.aiDisabled;
-    activeFormData.aiDisabled = newAiDisabled;
-    saveCrmMetadata(newAiDisabled);
-    renderCrmPanel(displayName, cleanPhone, avatarUrl);
-  };
 
 function showExtensionConfirmModal(title, message, onConfirm) {
   const existingModal = document.getElementById('aivastra-custom-confirm-modal');

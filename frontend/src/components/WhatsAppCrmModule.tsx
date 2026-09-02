@@ -587,24 +587,6 @@ export function WhatsAppCrmModule() {
           {/* Launch WhatsApp Web button, WhatsApp QR button, & AI Auto-Replies Toggle (ONLY for WhatsApp module) */}
           {activeNav === 'whatsapp' && (
             <div className="flex items-center gap-3">
-              {/* WhatsApp QR Modal Trigger Button */}
-              <button
-                type="button"
-                onClick={() => setShowQrModal(true)}
-                className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-black transition-all border shadow-xs cursor-pointer ${
-                  sessionState.status === 'CONNECTED'
-                    ? 'bg-emerald-50 border-emerald-300 text-emerald-800 hover:bg-emerald-100 shadow-2xs'
-                    : 'bg-zinc-100 border-zinc-300 text-zinc-800 hover:bg-zinc-200 shadow-2xs'
-                }`}
-                title="Click to view WhatsApp QR Code or change connected number"
-              >
-                <QrCode className="w-4 h-4 text-[#00a884]" />
-                <span>WhatsApp QR</span>
-                {sessionState.status === 'CONNECTED' && (
-                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse ml-0.5" />
-                )}
-              </button>
-
               <button
                 onClick={() => handleOpenSpecificChat()}
                 className="px-4 py-2 bg-black hover:bg-zinc-800 text-white font-bold text-sm rounded-xl transition-all flex items-center gap-2 shadow-sm cursor-pointer"
@@ -843,14 +825,6 @@ export function WhatsAppCrmModule() {
                                   title="Edit lead details or forward follow-up date"
                                 >
                                   <span>Edit / Forward ⏩</span>
-                                </button>
-                                <button
-                                  onClick={() => handleOpenSpecificChat(chat.phone || chat.jid)}
-                                  className="px-3.5 py-2 bg-black hover:bg-zinc-800 text-white font-bold text-xs rounded-xl transition-all inline-flex items-center gap-1.5 shadow-sm active:scale-95 whitespace-nowrap"
-                                  title={`Open Chat for ${chat.name || chat.phone} directly in WhatsApp Web`}
-                                >
-                                  <span>Open Chat</span>
-                                  <ExternalLink className="w-3.5 h-3.5" />
                                 </button>
                               </div>
                             </td>

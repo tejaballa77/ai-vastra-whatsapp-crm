@@ -112,26 +112,28 @@ export function WhatsAppCrmModule() {
   const [copiedPhone, setCopiedPhone] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [showQrModal, setShowQrModal] = useState<boolean>(false);
-  const [isLoadingData, setIsLoadingData] = useState<boolean>(true);
+  const [hasLoadedOnce, setHasLoadedOnce] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const cached = localStorage.getItem('crm_cached_chats');
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          if (Array.isArray(parsed) && parsed.length > 0) return true;
+        }
+      } catch (e) {}
+    }
+    return false;
+  });
+  const [isLoadingData, setIsLoadingData] = useState<boolean>(!hasLoadedOnce);
   const [showClearConfirmModal, setShowClearConfirmModal] = useState<boolean>(false);
   const [contactToClear, setContactToClear] = useState<Chat | null>(null);
 
   const { sessionState, chats: rawChats, updateCrmMetadata, removeChatFromState } = useSocket();
 
-  const [hasLoadedOnce, setHasLoadedOnce] = useState<boolean>(false);
-
   useEffect(() => {
     if (rawChats && Array.isArray(rawChats)) {
-      if (rawChats.length > 0) {
-        setIsLoadingData(false);
-        setHasLoadedOnce(true);
-      } else {
-        const timer = setTimeout(() => {
-          setIsLoadingData(false);
-          setHasLoadedOnce(true);
-        }, 3000);
-        return () => clearTimeout(timer);
-      }
+      setIsLoadingData(false);
+      setHasLoadedOnce(true);
     }
   }, [rawChats]);
 

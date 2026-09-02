@@ -1118,15 +1118,14 @@ class StorageEngine {
       const cleanName = (name && !BAD_NAMES.has(name.toLowerCase().trim()) && name.replace(/\D/g, '').length < 10) ? name.toLowerCase().trim().replace(/[^a-z0-9]/g, '') : '';
       const alphaName = (name && !BAD_NAMES.has(name.toLowerCase().trim())) ? name.toLowerCase().trim().replace(/\+?\d+/g, '').replace(/[^a-z0-9]/g, '') : '';
 
-      // Skip cleared/blacklisted leads completely
-      if (
-        this.clearedLeadsSet.has(resolvedKey.toLowerCase()) ||
-        this.clearedLeadsSet.has(c.jid.toLowerCase()) ||
-        (rawDigits && this.clearedLeadsSet.has(rawDigits)) ||
-        (validTen && this.clearedLeadsSet.has(validTen)) ||
-        (cleanName && this.clearedLeadsSet.has(cleanName)) ||
-        (alphaName && this.clearedLeadsSet.has(alphaName))
-      ) {
+      // Skip cleared/blacklisted leads completely (strict 10+ digit or full JID match only)
+      const isBlacklisted =
+        (resolvedKey && resolvedKey.length >= 10 && this.clearedLeadsSet.has(resolvedKey.toLowerCase())) ||
+        (c.jid && c.jid.length >= 10 && this.clearedLeadsSet.has(c.jid.toLowerCase())) ||
+        (validTen && validTen.length === 10 && this.clearedLeadsSet.has(validTen)) ||
+        (rawDigits && rawDigits.length >= 10 && this.clearedLeadsSet.has(rawDigits));
+
+      if (isBlacklisted) {
         continue;
       }
 
@@ -1786,13 +1785,16 @@ class StorageEngine {
       ).catch(() => {});
     }
 
+    const targetTen = cleanDigits ? this.canonicalPhone(cleanDigits) : '';
+    const full12 = targetTen.length === 10 ? `91${targetTen}` : cleanDigits;
+
+    // Strict blacklisting — only blacklist exact full JIDs or exact 10+ digit phone numbers
     const keysToBlacklist = [
       rawJid.toLowerCase(),
       jid.toLowerCase(),
-      cleanDigits,
-      nameLower,
-      nameAlpha
-    ].filter(k => k && k.length >= 2);
+      (full12 && full12.length >= 10) ? full12 : '',
+      (targetTen && targetTen.length === 10) ? targetTen : ''
+    ].filter(k => k && k.length >= 10);
 
     for (const k of keysToBlacklist) {
       this.clearedLeadsSet.add(k);
@@ -1802,7 +1804,8 @@ class StorageEngine {
     for (const k of Array.from(this.chats.keys())) {
       const c = this.chats.get(k);
       const cDigits = (c?.phone || k).replace(/\D/g, '');
-      if (k === jid || k === rawJid || (cleanDigits && cleanDigits.length >= 7 && cDigits.includes(cleanDigits))) {
+      const cTen = this.canonicalPhone(cDigits);
+      if (k === jid || k === rawJid || (targetTen && targetTen.length === 10 && cTen === targetTen)) {
         this.chats.delete(k);
       }
     }
@@ -1810,18 +1813,19 @@ class StorageEngine {
     for (const k of Array.from(this.contacts.keys())) {
       const c = this.contacts.get(k);
       const cDigits = (c?.phone || k).replace(/\D/g, '');
-      if (k === jid || k === rawJid || (cleanDigits && cleanDigits.length >= 7 && cDigits.includes(cleanDigits))) {
+      const cTen = this.canonicalPhone(cDigits);
+      if (k === jid || k === rawJid || (targetTen && targetTen.length === 10 && cTen === targetTen)) {
         this.contacts.delete(k);
       }
     }
 
-    if (cleanDigits.length >= 7) {
-      dbManager.query(`DELETE FROM crm_chats WHERE jid = ? OR jid = ? OR name = ? OR (phone IS NOT NULL AND phone != '' AND phone LIKE ?)`, [jid, rawJid, rawName, `%${cleanDigits}%`]).catch(() => {});
-      dbManager.query(`DELETE FROM crm_contacts WHERE jid = ? OR jid = ? OR name = ? OR (phone IS NOT NULL AND phone != '' AND phone LIKE ?)`, [jid, rawJid, rawName, `%${cleanDigits}%`]).catch(() => {});
-      dbManager.query(`DELETE FROM crm_messages WHERE chat_jid = ? OR chat_jid = ? OR chat_jid LIKE ?`, [jid, rawJid, `%${cleanDigits}%`]).catch(() => {});
+    if (targetTen && targetTen.length === 10) {
+      dbManager.query(`DELETE FROM crm_chats WHERE jid = ? OR jid = ? OR phone = ? OR phone = ?`, [jid, rawJid, full12, targetTen]).catch(() => {});
+      dbManager.query(`DELETE FROM crm_contacts WHERE jid = ? OR jid = ? OR phone = ? OR phone = ?`, [jid, rawJid, full12, targetTen]).catch(() => {});
+      dbManager.query(`DELETE FROM crm_messages WHERE chat_jid = ? OR chat_jid = ?`, [jid, rawJid]).catch(() => {});
     } else {
-      dbManager.query(`DELETE FROM crm_chats WHERE jid = ? OR jid = ? OR name = ?`, [jid, rawJid, rawName]).catch(() => {});
-      dbManager.query(`DELETE FROM crm_contacts WHERE jid = ? OR jid = ? OR name = ?`, [jid, rawJid, rawName]).catch(() => {});
+      dbManager.query(`DELETE FROM crm_chats WHERE jid = ? OR jid = ?`, [jid, rawJid]).catch(() => {});
+      dbManager.query(`DELETE FROM crm_contacts WHERE jid = ? OR jid = ?`, [jid, rawJid]).catch(() => {});
       dbManager.query(`DELETE FROM crm_messages WHERE chat_jid = ? OR chat_jid = ?`, [jid, rawJid]).catch(() => {});
     }
 

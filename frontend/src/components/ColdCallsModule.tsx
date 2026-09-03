@@ -482,11 +482,6 @@ export function ColdCallsModule({
       lead.calledBy !== 'Staff'
     );
 
-    // If already claimed by another user, other users cannot claim or edit it
-    if (isCurrentlyClaimed && lead.calledBy !== currentUserName) {
-      showAlert(`This contact is currently claimed by ${lead.calledBy}. Only ${lead.calledBy} has permission to edit or remove it.`, 'Contact Claimed & Locked', 'warning');
-      return;
-    }
 
     const now = Date.now();
     const isClaimedByMe = isCurrentlyClaimed && lead.calledBy === currentUserName;
@@ -558,10 +553,7 @@ export function ColdCallsModule({
       lead.calledBy !== 'Staff'
     );
 
-    if (isCurrentlyClaimed && lead.calledBy !== currentUserName) {
-      showAlert(`This contact is currently claimed by ${lead.calledBy}. Only ${lead.calledBy} can change the action.`, 'Contact Claimed & Locked', 'warning');
-      return;
-    }
+
 
     const fRounds = getLeadFollowUps(lead);
     const updatedRounds = [...fRounds];
@@ -1831,7 +1823,7 @@ export function ColdCallsModule({
           infoPopupLead.calledBy !== 'Staff'
         );
         const isClaimedByMe = isClaimed && infoPopupLead.calledBy === currentUserName;
-        const isClaimedByOther = isClaimed && infoPopupLead.calledBy !== currentUserName;
+        const isClaimedByOther = false; // Allow all logged-in users to edit any lead
 
         const round = infoPopupFollowUps[0] || { roundNumber: 1, callChoice: 'PENDING', callStatus: 'PENDING', notesList: [] };
         const currentCallChoice = round.callChoice || 'PENDING';

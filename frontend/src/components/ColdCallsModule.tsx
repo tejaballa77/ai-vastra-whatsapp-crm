@@ -1293,11 +1293,16 @@ export function ColdCallsModule({
       }
     }, [value, isFocused]);
 
+    const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+      const newVal = e.target.value;
+      setLocalVal(newVal);
+      if (!disabled) {
+        handleCellEdit(leadId, field, newVal);
+      }
+    };
+
     const handleBlur = () => {
       setIsFocused(false);
-      if (localVal !== value && !disabled) {
-        handleCellEdit(leadId, field, localVal);
-      }
     };
 
     const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -1315,7 +1320,7 @@ export function ColdCallsModule({
         value={localVal}
         disabled={disabled}
         onFocus={() => setIsFocused(true)}
-        onChange={e => setLocalVal(e.target.value)}
+        onChange={handleChange}
         onBlur={handleBlur}
         onKeyDown={handleKeyDown}
         className={`w-full px-2 py-1.5 text-sm border border-transparent ${disabled ? 'cursor-not-allowed text-zinc-500' : 'hover:border-zinc-400 focus:border-black focus:bg-white'} bg-transparent outline-none transition-all font-semibold ${className || 'text-black'}`}
@@ -1884,57 +1889,8 @@ export function ColdCallsModule({
               {/* Body */}
               <div className="overflow-y-auto flex-1 p-7 space-y-6 font-sans">
 
-                {/* ── Editable Lead Details Grid (Business Name, Person Name, Phone Number) ── */}
-                <div className="p-4 bg-zinc-50 border border-zinc-200 rounded-xl space-y-3">
-                  <div className="flex items-center justify-between">
-                    <h4 className="text-xs font-black text-black uppercase tracking-wider flex items-center gap-1.5">
-                      <User className="w-3.5 h-3.5 text-[#00a884]" />
-                      Lead Details (Click to edit)
-                    </h4>
-                    <span className="text-[11px] font-semibold text-zinc-400">Edits save without changing BDM</span>
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    <div>
-                      <label className="text-[11px] font-black text-zinc-600 uppercase tracking-wider block mb-1">
-                        Business Name
-                      </label>
-                      <input
-                        type="text"
-                        value={infoPopupLead.businessName || ''}
-                        onChange={(e) => handlePopupLeadFieldEdit('businessName', e.target.value)}
-                        placeholder="Enter Business Name"
-                        className="w-full px-3 py-2 text-xs font-bold text-black bg-white border border-zinc-300 rounded-xl focus:outline-none focus:border-black shadow-2xs"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-[11px] font-black text-zinc-600 uppercase tracking-wider block mb-1">
-                        Person Name
-                      </label>
-                      <input
-                        type="text"
-                        value={infoPopupLead.personName || infoPopupLead.name || ''}
-                        onChange={(e) => handlePopupLeadFieldEdit('personName', e.target.value)}
-                        placeholder="Enter Person Name"
-                        className="w-full px-3 py-2 text-xs font-bold text-black bg-white border border-zinc-300 rounded-xl focus:outline-none focus:border-black shadow-2xs"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-[11px] font-black text-zinc-600 uppercase tracking-wider block mb-1">
-                        Phone Number <span className="text-zinc-400 font-semibold normal-case">(optional)</span>
-                      </label>
-                      <input
-                        type="tel"
-                        value={infoPopupLead.phone || ''}
-                        onChange={(e) => handlePopupLeadFieldEdit('phone', e.target.value)}
-                        placeholder="Enter Phone Number"
-                        className="w-full px-3 py-2 text-xs font-black text-[#00a884] bg-white border border-zinc-300 rounded-xl focus:outline-none focus:border-[#00a884] shadow-2xs"
-                      />
-                    </div>
-                  </div>
-                </div>
-
                 {/* Follow up Sub-header */}
-                <div className="flex items-center gap-2 pt-2 border-t border-zinc-200">
+                <div className="flex items-center gap-2">
                   <h4 className="text-sm font-black text-black uppercase tracking-wider">
                     Follow up
                   </h4>

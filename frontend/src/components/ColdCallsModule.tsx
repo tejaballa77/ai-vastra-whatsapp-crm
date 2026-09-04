@@ -561,9 +561,7 @@ export function ColdCallsModule({
 
 
 
-    const assignedBdm = isAdminUser(currentUserName)
-      ? (lead.calledBy && lead.calledBy !== 'Staff' && lead.calledBy !== 'Executive User' && !isAdminUser(lead.calledBy) ? lead.calledBy : undefined)
-      : (lead.calledBy && lead.calledBy !== 'Staff' && lead.calledBy !== 'Executive User' && !isAdminUser(lead.calledBy) ? lead.calledBy : currentUserName);
+    const assignedBdm = isAdminUser(currentUserName) ? (lead.calledBy || undefined) : currentUserName;
 
     const fRounds = getLeadFollowUps(lead);
     const updatedRounds = [...fRounds];
@@ -663,7 +661,10 @@ export function ColdCallsModule({
         return r.calledBy.trim();
       }
     }
-    return isAdminUser(currentUserName) ? '' : currentUserName;
+    if (lead.calledBy && lead.calledBy.trim().length > 0 && !isAdminUser(lead.calledBy)) {
+      return lead.calledBy.trim();
+    }
+    return isAdminUser(currentUserName) ? 'BDM' : currentUserName;
   };
 
   // ── Helper: Get Lead Follow Up Date ────────────────────────────────────────

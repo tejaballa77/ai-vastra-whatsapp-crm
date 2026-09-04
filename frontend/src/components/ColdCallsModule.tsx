@@ -342,6 +342,12 @@ export function ColdCallsModule({
     ? (localStorage.getItem('crm_user_name') || localStorage.getItem('crm_user_display') || localStorage.getItem('crm_admin_display_name') || localStorage.getItem('crm_admin_username') || 'Teja')
     : 'Teja';
 
+  const isAdminUser = (username?: string | null) => {
+    if (!username) return false;
+    const u = username.trim().toLowerCase();
+    return u === 'admin' || u === 'administrator';
+  };
+
   // Inline edit tracking: Map<leadId, partial changes>
   const [editedRows, setEditedRows] = useState<Map<string, Partial<ColdCallLead>>>(new Map());
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
@@ -500,7 +506,7 @@ export function ColdCallsModule({
     }
     
     // Toggle: if claimed by me, clicking again unchecks/removes claim!
-    const newCalledBy = isClaimedByMe ? '' : currentUserName;
+    const newCalledBy = isAdminUser(currentUserName) ? (lead.calledBy || '') : (isClaimedByMe ? '' : currentUserName);
 
     if (isClaimedByMe) {
       if (activeSelectedLeadId === lead.id) {
@@ -555,18 +561,20 @@ export function ColdCallsModule({
 
 
 
+    const assignedBdm = isAdminUser(currentUserName)
+      ? (lead.calledBy && lead.calledBy !== 'Staff' && lead.calledBy !== 'Executive User' && !isAdminUser(lead.calledBy) ? lead.calledBy : undefined)
+      : (lead.calledBy && lead.calledBy !== 'Staff' && lead.calledBy !== 'Executive User' && !isAdminUser(lead.calledBy) ? lead.calledBy : currentUserName);
+
     const fRounds = getLeadFollowUps(lead);
     const updatedRounds = [...fRounds];
     if (updatedRounds[0]) {
       updatedRounds[0] = {
         ...updatedRounds[0],
         callChoice: newChoice,
-        calledBy: lead.calledBy && lead.calledBy !== 'Staff' && lead.calledBy !== 'Executive User' ? lead.calledBy : currentUserName,
+        calledBy: assignedBdm,
         updatedAt: now,
       };
     }
-
-    const assignedBdm = lead.calledBy && lead.calledBy !== 'Staff' && lead.calledBy !== 'Executive User' ? lead.calledBy : currentUserName;
 
     const partial: Partial<ColdCallLead> = {
       callChoice: newChoice,
@@ -639,23 +647,23 @@ export function ColdCallsModule({
     
     // If NO status is entered, only show if currently active in call; otherwise leave empty (—)
     if (!statusDisp || statusDisp.trim().length === 0) {
-      if (activeSelectedLeadId === lead.id && lead.calledBy && lead.calledBy.trim().length > 0 && lead.calledBy !== 'Executive User' && lead.calledBy !== 'Staff') {
+      if (activeSelectedLeadId === lead.id && lead.calledBy && lead.calledBy.trim().length > 0 && lead.calledBy !== 'Executive User' && lead.calledBy !== 'Staff' && !isAdminUser(lead.calledBy)) {
         return lead.calledBy.trim();
       }
       return '';
     }
 
     // STATUS is entered: return caller username
-    if (lead.calledBy && lead.calledBy.trim().length > 0 && lead.calledBy !== 'Executive User' && lead.calledBy !== 'Staff') {
+    if (lead.calledBy && lead.calledBy.trim().length > 0 && lead.calledBy !== 'Executive User' && lead.calledBy !== 'Staff' && !isAdminUser(lead.calledBy)) {
       return lead.calledBy.trim();
     }
     const fRounds = getLeadFollowUps(lead);
     for (const r of fRounds) {
-      if (r.calledBy && r.calledBy.trim().length > 0 && r.calledBy !== 'Executive User' && r.calledBy !== 'Staff') {
+      if (r.calledBy && r.calledBy.trim().length > 0 && r.calledBy !== 'Executive User' && r.calledBy !== 'Staff' && !isAdminUser(r.calledBy)) {
         return r.calledBy.trim();
       }
     }
-    return currentUserName;
+    return isAdminUser(currentUserName) ? '' : currentUserName;
   };
 
   // ── Helper: Get Lead Follow Up Date ────────────────────────────────────────
@@ -798,15 +806,10 @@ export function ColdCallsModule({
 
   // ── Inline Edit (Always-On Excel Editing with Instant Auto-Save) ────────────
   const handleCellEdit = (leadId: string, field: keyof ColdCallLead, value: string) => {
-    const activeUser = typeof window !== 'undefined'
-      ? (localStorage.getItem('crm_user_name') || localStorage.getItem('crm_admin_display_name') || 'Executive User')
-      : 'Executive User';
     const now = Date.now();
 
     const partialUpdates: Partial<ColdCallLead> = {
       [field]: value,
-      calledBy: activeUser,
-      callTimestamp: now,
       updatedAt: now,
     };
 
@@ -841,7 +844,7 @@ export function ColdCallsModule({
             fetch(`${getBackendUrl()}/api/cold-calls/${id}`, {
               method: 'PUT',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ ...partial, calledBy: currentUserName, callTimestamp: Date.now() }),
+              body: JSON.stringify({ ...partial, updatedAt: Date.now() }),
             })
           )
         );
@@ -1009,30 +1012,26 @@ export function ColdCallsModule({
       const finalizedFollowUps = [round0];
       const latestRound = round0;
 
+      let initialRound0: any = {};
+      try {
+        initialRound0 = JSON.parse(initialModalSnapshot || '{}');
+      } catch (e) {}
+
       const currentNotes = getRoundNotesList(latestRound, infoPopupLead.createdAt);
-      const currentSnapshot = JSON.stringify({
-        businessName: (infoPopupLead.businessName || '').trim(),
-        personName: (infoPopupLead.personName || infoPopupLead.name || '').trim(),
-        phone: (infoPopupLead.phone || '').trim(),
-        businessWebsite: (infoPopupLead.businessWebsite || '').trim(),
-        role: (infoPopupLead.role || '').trim(),
-        email: (infoPopupLead.email || '').trim(),
-        linkedinProfile: (infoPopupLead.linkedinProfile || '').trim(),
-        facebookProfile: (infoPopupLead.facebookProfile || '').trim(),
-        instaProfile: (infoPopupLead.instaProfile || '').trim(),
-        clientLanguage: (infoPopupLead.clientLanguage || '').trim(),
-        callChoice: latestRound?.callChoice || 'PENDING',
-        callStatus: latestRound?.callStatus || 'PENDING',
-        followUpDate: latestRound?.followUpDate || '',
-        notesList: currentNotes.map(n => (n.text || '').trim()),
-      });
+      const isOperationalChanged = (
+        (latestRound?.callChoice || 'PENDING') !== (initialRound0.callChoice || 'PENDING') ||
+        (latestRound?.callStatus || 'PENDING') !== (initialRound0.callStatus || 'PENDING') ||
+        (latestRound?.followUpDate || '') !== (initialRound0.followUpDate || '') ||
+        pendingText.length > 0 ||
+        JSON.stringify(currentNotes.map(n => (n.text || '').trim())) !== JSON.stringify(initialRound0.notesList || [])
+      );
 
-      const isDataChanged = currentSnapshot !== initialModalSnapshot;
-
-      // Update BDM (calledBy) to current user ONLY IF data was edited/changed!
-      // If user just opened the popup, did not edit anything, and clicked Save -> keep existing calledBy intact!
       let newCalledBy = infoPopupLead.calledBy;
-      if (isDataChanged) {
+      if (isAdminUser(currentUserName)) {
+        if (isAdminUser(newCalledBy)) {
+          newCalledBy = undefined;
+        }
+      } else if (isOperationalChanged) {
         newCalledBy = currentUserName;
       } else if (!newCalledBy || newCalledBy === 'Executive User' || newCalledBy === 'Staff') {
         const isStatusEntered = (latestRound?.callChoice && latestRound.callChoice !== 'PENDING') || 
@@ -1061,8 +1060,8 @@ export function ColdCallsModule({
         notesList: latestRound?.notesList || [],
         calledBy: newCalledBy || undefined,
         clientLanguage: infoPopupLead.clientLanguage || '',
-        callTimestamp: isDataChanged ? now : (infoPopupLead.callTimestamp || now),
-        updatedAt: isDataChanged ? now : (infoPopupLead.updatedAt || now),
+        callTimestamp: isOperationalChanged ? now : (infoPopupLead.callTimestamp || now),
+        updatedAt: now,
       };
 
       setLeads(prev => prev.map(l => l.id === infoPopupLead.id ? { ...l, ...partial } : l));
@@ -1126,15 +1125,7 @@ export function ColdCallsModule({
   // ── Add Data Handler ──────────────────────────────────────────────────────────
   const handleAddData = async () => {
     const rawPhone = (addForm.phone || '').trim();
-    if (!rawPhone) {
-      setAddForm(f => ({ ...f, phoneError: 'Phone number is required.' }));
-      return;
-    }
-    const cleanPhone = rawPhone.replace(/\D/g, '');
-    if (cleanPhone.length < 7) {
-      setAddForm(f => ({ ...f, phoneError: 'Please enter a valid phone number.' }));
-      return;
-    }
+    const cleanPhone = rawPhone ? rawPhone.replace(/\D/g, '') : '';
 
     const now = Date.now();
     const callChoice = addForm.callChoice || 'PENDING';
@@ -1146,9 +1137,12 @@ export function ColdCallsModule({
     
     // Assign BDM if provided, or if an action/status has been entered
     const isStatusEntered = callChoice !== 'PENDING' || (callStatus && callStatus !== 'PENDING') || Boolean(followUpDate);
-    const assignedBdm = (addForm.calledBy || '').trim();
+    let assignedBdm = (addForm.calledBy || '').trim();
+    if (isAdminUser(assignedBdm) || (isAdminUser(currentUserName) && !assignedBdm)) {
+      assignedBdm = '';
+    }
 
-    if (isStatusEntered && !assignedBdm) {
+    if (isStatusEntered && !assignedBdm && !isAdminUser(currentUserName)) {
       setAddForm(f => ({ ...f, bdmError: 'Please enter BDM name. BDM is mandatory when an Action or Status is entered.' }));
       return;
     }
@@ -1890,8 +1884,57 @@ export function ColdCallsModule({
               {/* Body */}
               <div className="overflow-y-auto flex-1 p-7 space-y-6 font-sans">
 
+                {/* ── Editable Lead Details Grid (Business Name, Person Name, Phone Number) ── */}
+                <div className="p-4 bg-zinc-50 border border-zinc-200 rounded-xl space-y-3">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-xs font-black text-black uppercase tracking-wider flex items-center gap-1.5">
+                      <User className="w-3.5 h-3.5 text-[#00a884]" />
+                      Lead Details (Click to edit)
+                    </h4>
+                    <span className="text-[11px] font-semibold text-zinc-400">Edits save without changing BDM</span>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div>
+                      <label className="text-[11px] font-black text-zinc-600 uppercase tracking-wider block mb-1">
+                        Business Name
+                      </label>
+                      <input
+                        type="text"
+                        value={infoPopupLead.businessName || ''}
+                        onChange={(e) => handlePopupLeadFieldEdit('businessName', e.target.value)}
+                        placeholder="Enter Business Name"
+                        className="w-full px-3 py-2 text-xs font-bold text-black bg-white border border-zinc-300 rounded-xl focus:outline-none focus:border-black shadow-2xs"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[11px] font-black text-zinc-600 uppercase tracking-wider block mb-1">
+                        Person Name
+                      </label>
+                      <input
+                        type="text"
+                        value={infoPopupLead.personName || infoPopupLead.name || ''}
+                        onChange={(e) => handlePopupLeadFieldEdit('personName', e.target.value)}
+                        placeholder="Enter Person Name"
+                        className="w-full px-3 py-2 text-xs font-bold text-black bg-white border border-zinc-300 rounded-xl focus:outline-none focus:border-black shadow-2xs"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[11px] font-black text-zinc-600 uppercase tracking-wider block mb-1">
+                        Phone Number <span className="text-zinc-400 font-semibold normal-case">(optional)</span>
+                      </label>
+                      <input
+                        type="tel"
+                        value={infoPopupLead.phone || ''}
+                        onChange={(e) => handlePopupLeadFieldEdit('phone', e.target.value)}
+                        placeholder="Enter Phone Number"
+                        className="w-full px-3 py-2 text-xs font-black text-[#00a884] bg-white border border-zinc-300 rounded-xl focus:outline-none focus:border-[#00a884] shadow-2xs"
+                      />
+                    </div>
+                  </div>
+                </div>
+
                 {/* Follow up Sub-header */}
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 pt-2 border-t border-zinc-200">
                   <h4 className="text-sm font-black text-black uppercase tracking-wider">
                     Follow up
                   </h4>
@@ -2257,19 +2300,18 @@ export function ColdCallsModule({
             <div className="overflow-y-auto flex-1 p-7 space-y-5">
               {/* 1. Core Contact Information Grid */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {/* Phone Number (Mandatory) */}
+                {/* Phone Number (Optional) */}
                 <div>
                   <label className="text-xs font-black text-black uppercase tracking-wider block mb-1.5">
-                    Phone Number <span className="text-[#00a884] font-black">* (Mandatory)</span>
+                    Phone Number <span className="text-gray-400 font-semibold normal-case">(optional)</span>
                   </label>
                   <input
                     type="tel"
                     value={addForm.phone || ''}
                     onChange={e => setAddForm(f => ({ ...f, phone: e.target.value, phoneError: '' }))}
                     placeholder=""
-                    className={`w-full px-3.5 py-2.5 text-xs font-extrabold text-[#00a884] rounded-xl border ${addForm.phoneError ? 'border-rose-400 bg-rose-50' : 'border-gray-300 bg-gray-50'} focus:bg-white focus:border-[#00a884] focus:outline-none transition-all shadow-xs`}
+                    className="w-full px-3.5 py-2.5 text-xs font-extrabold text-[#00a884] rounded-xl border border-gray-300 bg-gray-50 focus:bg-white focus:border-[#00a884] focus:outline-none transition-all shadow-xs"
                   />
-                  {addForm.phoneError && <p className="text-rose-600 text-[11px] font-bold mt-1">{addForm.phoneError}</p>}
                 </div>
 
                 {/* Business Name */}

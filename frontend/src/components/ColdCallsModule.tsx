@@ -664,7 +664,7 @@ export function ColdCallsModule({
     if (lead.calledBy && lead.calledBy.trim().length > 0 && !isAdminUser(lead.calledBy)) {
       return lead.calledBy.trim();
     }
-    return isAdminUser(currentUserName) ? 'BDM' : currentUserName;
+    return '';
   };
 
   // ── Helper: Get Lead Follow Up Date ────────────────────────────────────────
@@ -705,9 +705,9 @@ export function ColdCallsModule({
     return hasFollowUpDate(l) || l.callStatus === 'FOLLOW_UP' || getLeadStatusDisplay(l) === 'Follow up';
   };
 
-  // Prospects are fresh/pending leads that are not Interested, not Not Interested, and not Follow-ups
+  // Prospects are leads that are not Interested and not Not Interested (includes Call-No, Message, Not answered, Pending, and Follow-ups)
   const isProspectLead = (l: ColdCallLead): boolean => {
-    return !isInterestedLead(l) && !isNotInterestedLead(l) && !isFollowUpLead(l);
+    return !isInterestedLead(l) && !isNotInterestedLead(l);
   };
 
   // ── Helper: Get Lead Notes Count ───────────────────────────────────────────

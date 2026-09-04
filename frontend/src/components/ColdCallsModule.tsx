@@ -705,9 +705,9 @@ export function ColdCallsModule({
     return hasFollowUpDate(l) || l.callStatus === 'FOLLOW_UP' || getLeadStatusDisplay(l) === 'Follow up';
   };
 
-  // Prospects are leads that are not Interested and not Not Interested (includes Call-No, Message, Not answered, Pending, and Prospects with scheduled Follow-up dates!)
+  // Prospects are fresh/pending leads that are not Interested, not Not Interested, and not Follow-ups
   const isProspectLead = (l: ColdCallLead): boolean => {
-    return !isInterestedLead(l) && !isNotInterestedLead(l);
+    return !isInterestedLead(l) && !isNotInterestedLead(l) && !isFollowUpLead(l);
   };
 
   // ── Helper: Get Lead Notes Count ───────────────────────────────────────────

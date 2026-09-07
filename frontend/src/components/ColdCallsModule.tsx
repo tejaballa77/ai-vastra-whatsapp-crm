@@ -488,25 +488,25 @@ export function ColdCallsModule({
       lead.calledBy !== 'Staff'
     );
 
-
     const now = Date.now();
     const isClaimedByMe = isCurrentlyClaimed && lead.calledBy === currentUserName;
+    const isClaimedByOther = isCurrentlyClaimed && !isClaimedByMe;
 
-    // Enforce: User cannot move to another lead without entering Action/Status for the currently active lead
-    if (!isClaimedByMe && activeSelectedLeadId && activeSelectedLeadId !== lead.id) {
-      const activeLead = leads.find(l => l.id === activeSelectedLeadId);
-      if (activeLead && activeLead.calledBy === currentUserName) {
-        const activeStatusDisplay = getLeadStatusDisplay(activeLead);
-        if (!activeStatusDisplay) {
-          setShakingPromptLeadId(activeLead.id);
-          setTimeout(() => setShakingPromptLeadId(null), 3500);
-          return;
-        }
-      }
+    // RULE: The check box toggle access is ONLY for the user who entered/claimed the lead (or admin).
+    // If another user clicks the check box on an already-entered lead, preserve the original BDM!
+    if (isClaimedByOther && !isAdminUser(currentUserName)) {
+      showAlert(
+        `This lead was entered by ${lead.calledBy}. Only ${lead.calledBy} can toggle this check box. To update details or enter new status, open the None/Action button.`,
+        'Lead Claimed',
+        'info'
+      );
+      return;
     }
-    
-    // Toggle: if claimed by me, clicking again unchecks/removes claim!
-    const newCalledBy = isAdminUser(currentUserName) ? (lead.calledBy || '') : (isClaimedByMe ? '' : currentUserName);
+
+    // Toggle: if claimed by me, clicking again unchecks/removes claim! If unclaimed, claim for current user!
+    const newCalledBy = isAdminUser(currentUserName)
+      ? (lead.calledBy || '')
+      : (isClaimedByMe ? '' : currentUserName);
 
     if (isClaimedByMe) {
       if (activeSelectedLeadId === lead.id) {

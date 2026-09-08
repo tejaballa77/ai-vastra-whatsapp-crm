@@ -93,7 +93,7 @@ export function WhatsAppCrmModule() {
     return () => clearInterval(interval);
   }, []);
 
-  const [activeNav, setActiveNav] = useState<'whatsapp' | 'calls' | 'emails' | 'settings'>('whatsapp');
+  const [activeNav, setActiveNav] = useState<'whatsapp' | 'calls' | 'instagram' | 'linkedin' | 'facebook' | 'settings'>('whatsapp');
   const [coldCallsSubPage, setColdCallsSubPage] = useState<'analytics' | 'sheet' | 'database'>('sheet');
   const [tableFilter, setTableFilter] = useState<'ALL' | 'INTERESTED' | 'WARM' | 'NOT_INTERESTED' | 'CALLS' | 'FOLLOWUPS'>('ALL');
   const [modalCategory, setModalCategory] = useState<'INTERESTED' | 'WARM' | 'NOT_INTERESTED' | 'CALLS' | 'FOLLOWUPS' | null>(null);
@@ -105,6 +105,8 @@ export function WhatsAppCrmModule() {
   const [forwardDateInput, setForwardDateInput] = useState<string>('');
   const [editStatus, setEditStatus] = useState<string>('UNASSIGNED');
   const [editCallStatus, setEditCallStatus] = useState<string>('NO');
+  const [editBdmUser, setEditBdmUser] = useState<string>('');
+  const [editLanguage, setEditLanguage] = useState<string>('');
   const [editNotesList, setEditNotesList] = useState<string[]>([]);
   const [editNoteInputText, setEditNoteInputText] = useState<string>('');
   const [isSavingEdit, setIsSavingEdit] = useState<boolean>(false);
@@ -147,6 +149,12 @@ export function WhatsAppCrmModule() {
   };
 
   const getCleanDisplayContact = (chat: any) => {
+    const jid = (chat.jid || '').toLowerCase();
+    const isInstagram = jid.includes('@instagram') || jid.includes('instagram');
+    const isLinkedIn = jid.includes('@linkedin') || jid.includes('linkedin');
+    const isFacebook = jid.includes('@facebook') || jid.includes('facebook');
+    const isSocial = isInstagram || isLinkedIn || isFacebook;
+
     const rawNum = (chat.phone || chat.jid || '').split('@')[0].replace(/\D/g, '');
     let tenDigit = rawNum;
     if (rawNum.length === 12 && rawNum.startsWith('91')) tenDigit = rawNum.slice(2);
@@ -157,8 +165,10 @@ export function WhatsAppCrmModule() {
       formattedPhone = `+91 ${tenDigit.slice(0, 5)} ${tenDigit.slice(5)}`;
     } else if (rawNum.length > 0 && rawNum.length <= 12) {
       formattedPhone = `+${rawNum}`;
+    } else if (chat.phone && isNaN(Number(chat.phone))) {
+      formattedPhone = `@${chat.phone.replace(/^@/, '')}`;
     } else {
-      formattedPhone = tenDigit.length === 10 ? `+91 ${tenDigit}` : (rawNum ? `+${rawNum}` : 'WhatsApp Contact');
+      formattedPhone = isSocial ? `@${(chat.phone || chat.jid || '').split('@')[0]}` : (tenDigit.length === 10 ? `+91 ${tenDigit}` : (rawNum ? `+${rawNum}` : 'Social Contact'));
     }
 
     let nameRaw = (chat.name || '').trim();
@@ -166,11 +176,15 @@ export function WhatsAppCrmModule() {
       nameRaw = nameRaw.replace(/\s*\+?\d{8,15}$/, '').trim();
     }
 
+    const isJidEmail = nameRaw.endsWith('@s.whatsapp.net') || nameRaw.endsWith('@c.us') || nameRaw.endsWith('@lid') || nameRaw.includes('@g.us');
     const isLidDigits = /^\d{13,}$/.test(nameRaw.replace(/\D/g, ''));
-    const isBadName = !nameRaw || BAD_NAMES.has(nameRaw.toLowerCase()) || nameRaw.includes('@') || isLidDigits;
+    const isBadName = !nameRaw || BAD_NAMES.has(nameRaw.toLowerCase()) || isJidEmail || isLidDigits;
 
     const displayName = isBadName ? formattedPhone : nameRaw;
-    return { displayName, formattedPhone, cleanPhone: tenDigit || rawNum };
+    const platform = isInstagram ? 'Instagram' : (isLinkedIn ? 'LinkedIn' : (isFacebook ? 'Facebook' : 'WhatsApp'));
+    const platformIcon = isInstagram ? '📸' : (isLinkedIn ? '💼' : (isFacebook ? '📘' : '💬'));
+
+    return { displayName, formattedPhone, cleanPhone: tenDigit || rawNum || chat.phone || '', platform, platformIcon };
   };
 
   const chatsMap = new Map<string, (typeof rawChats)[0]>();
@@ -245,7 +259,20 @@ export function WhatsAppCrmModule() {
     }
   }
 
-  const chats = Array.from(chatsMap.values());
+  const allRawChats = Array.from(chatsMap.values());
+  // Filter to display ONLY Social Media CRM Leads (Instagram, LinkedIn, Facebook) on localhost CRM table:
+  const chats = allRawChats.filter((c) => {
+    if (!c.jid) return false;
+    const jid = c.jid.toLowerCase();
+    const isSocialLead = Boolean(
+      jid.includes('@instagram') || 
+      jid.includes('@linkedin') || 
+      jid.includes('@facebook') || 
+      jid.includes('@social') ||
+      (c.phone && isNaN(Number(c.phone)))
+    );
+    return isSocialLead;
+  });
 
   const getLocalYYYYMMDD = (ts?: number | string) => {
     const d = ts ? new Date(ts) : new Date();
@@ -348,10 +375,21 @@ export function WhatsAppCrmModule() {
   allTabLeads.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
   warmTabLeads.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
 
-  // Filter table leads based on selected sub-filter and search
+  // Filter table leads based on selected sub-filter, platform tab, and search
   const baseLeads = tableFilter === 'WARM' ? warmTabLeads : (tableFilter === 'ALL' ? allTabLeads : savedLeads);
   const filteredTableLeads = baseLeads
     .filter((c) => {
+      // Filter by Platform Tab (activeNav)
+      const jid = (c.jid || '').toLowerCase();
+      const phone = (c.phone || '').toLowerCase();
+      const isFb = jid.includes('@facebook') || jid.includes('facebook') || phone.includes('facebook');
+      const isLi = jid.includes('@linkedin') || jid.includes('linkedin') || phone.includes('linkedin');
+      const isIg = jid.includes('@instagram') || jid.includes('instagram') || (!isFb && !isLi);
+
+      if (activeNav === 'instagram' && !isIg) return false;
+      if (activeNav === 'facebook' && !isFb) return false;
+      if (activeNav === 'linkedin' && !isLi) return false;
+
       const matchesSearch =
         (c.name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
         (c.phone || c.jid || '').toLowerCase().includes(searchQuery.toLowerCase());
@@ -503,10 +541,10 @@ export function WhatsAppCrmModule() {
             <img src="/ai_vastra_logo.png" alt="Ai Vastra" className="w-full h-auto max-h-11 object-contain" />
           </div>
 
-          <nav className="space-y-2">
+          <nav className="space-y-1.5">
             <button
               onClick={() => setActiveNav('whatsapp')}
-              className={`w-full flex items-center gap-3.5 px-4 py-3 rounded-2xl text-base transition-all cursor-pointer ${
+              className={`w-full flex items-center gap-3.5 px-4 py-3 rounded-2xl text-sm transition-all cursor-pointer ${
                 activeNav === 'whatsapp' ? 'bg-black text-white shadow-md font-extrabold' : 'text-zinc-700 hover:bg-zinc-100 hover:text-black font-semibold'
               }`}
             >
@@ -519,7 +557,7 @@ export function WhatsAppCrmModule() {
                 setActiveNav('calls');
                 setColdCallsSubPage('sheet');
               }}
-              className={`w-full flex items-center gap-3.5 px-4 py-3 rounded-2xl text-base transition-all cursor-pointer ${
+              className={`w-full flex items-center gap-3.5 px-4 py-3 rounded-2xl text-sm transition-all cursor-pointer ${
                 activeNav === 'calls' ? 'bg-black text-white shadow-md font-extrabold' : 'text-zinc-700 hover:bg-zinc-100 hover:text-black font-semibold'
               }`}
             >
@@ -528,23 +566,43 @@ export function WhatsAppCrmModule() {
             </button>
 
             <button
-              onClick={() => setActiveNav('emails')}
-              className={`w-full flex items-center gap-3.5 px-4 py-3 rounded-2xl text-base transition-all cursor-pointer ${
-                activeNav === 'emails' ? 'bg-black text-white shadow-md font-extrabold' : 'text-zinc-700 hover:bg-zinc-100 hover:text-black font-semibold'
+              onClick={() => setActiveNav('instagram')}
+              className={`w-full flex items-center gap-3.5 px-4 py-3 rounded-2xl text-sm transition-all cursor-pointer ${
+                activeNav === 'instagram' ? 'bg-black text-white shadow-md font-extrabold' : 'text-zinc-700 hover:bg-zinc-100 hover:text-black font-semibold'
               }`}
             >
-              <Mail className="w-5 h-5" />
-              <span>Emails</span>
-              <span className="ml-auto text-xs bg-[#f4f4f5] text-zinc-500 border border-zinc-200 px-2.5 py-0.5 rounded-full font-semibold">Soon</span>
+              <span className="text-base">📸</span>
+              <span className="flex-1 text-left">Instagram</span>
+            </button>
+
+            <button
+              onClick={() => setActiveNav('linkedin')}
+              className={`w-full flex items-center gap-3.5 px-4 py-3 rounded-2xl text-sm transition-all cursor-pointer ${
+                activeNav === 'linkedin' ? 'bg-black text-white shadow-md font-extrabold' : 'text-zinc-700 hover:bg-zinc-100 hover:text-black font-semibold'
+              }`}
+            >
+              <span className="text-base">💼</span>
+              <span className="flex-1 text-left">LinkedIn</span>
+            </button>
+
+            <button
+              onClick={() => setActiveNav('facebook')}
+              className={`w-full flex items-center gap-3.5 px-4 py-3 rounded-2xl text-sm transition-all cursor-pointer ${
+                activeNav === 'facebook' ? 'bg-black text-white shadow-md font-extrabold' : 'text-zinc-700 hover:bg-zinc-100 hover:text-black font-semibold'
+              }`}
+            >
+              <span className="text-base">📘</span>
+              <span className="flex-1 text-left">Facebook</span>
+              <span className="ml-auto text-[10px] bg-zinc-100 text-zinc-500 border border-zinc-200 px-2 py-0.5 rounded-full font-bold">Soon</span>
             </button>
 
             <button
               onClick={() => setActiveNav('settings')}
-              className={`w-full flex items-center gap-3.5 px-4 py-3 rounded-2xl text-base transition-all cursor-pointer ${
+              className={`w-full flex items-center gap-3.5 px-4 py-3 rounded-2xl text-sm transition-all cursor-pointer ${
                 activeNav === 'settings' ? 'bg-black text-white shadow-md font-extrabold' : 'text-zinc-700 hover:bg-zinc-100 hover:text-black font-semibold'
               }`}
             >
-              <Settings className="w-5 h-5" />
+              <Settings className="w-5 h-5 text-zinc-500" />
               <span className="flex-1 text-left">Settings</span>
             </button>
           </nav>
@@ -582,13 +640,17 @@ export function WhatsAppCrmModule() {
 
       <main className="flex-1 flex flex-col overflow-hidden bg-white text-black">
         <header className="h-16 bg-white border-b border-zinc-200 px-6 flex items-center justify-between flex-shrink-0">
-          <h2 className="text-2xl font-extrabold text-black tracking-tight">
-            {activeNav === 'whatsapp' ? 'WhatsApp CRM Dashboard' : activeNav === 'calls' ? 'Cold Calls Lead List' : activeNav === 'settings' ? 'CRM Settings & Backup Center' : 'Emails'}
+          <h2 className="text-xl font-extrabold text-black tracking-tight">
+            {activeNav === 'whatsapp' ? '💬 WhatsApp CRM Dashboard'
+              : activeNav === 'calls' ? '📞 Cold Calls Lead List'
+              : activeNav === 'instagram' ? '📸 Instagram DMs Lead Dashboard'
+              : activeNav === 'linkedin' ? '💼 LinkedIn Messages Lead Dashboard'
+              : activeNav === 'facebook' ? '📘 Facebook Messenger Lead Dashboard'
+              : '⚙️ CRM Settings & Backup Center'}
           </h2>
 
-          {/* Launch WhatsApp Web button, WhatsApp QR button, & AI Auto-Replies Toggle (ONLY for WhatsApp module) */}
-          {activeNav === 'whatsapp' && (
-            <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3">
+            {activeNav === 'whatsapp' && (
               <button
                 onClick={() => handleOpenSpecificChat()}
                 className="px-4 py-2 bg-black hover:bg-zinc-800 text-white font-bold text-sm rounded-xl transition-all flex items-center gap-2 shadow-sm cursor-pointer"
@@ -596,18 +658,31 @@ export function WhatsAppCrmModule() {
                 <span>Launch WhatsApp Web</span>
                 <ExternalLink className="w-4 h-4" />
               </button>
-            </div>
-          )}
+            )}
+            {activeNav !== 'calls' && activeNav !== 'settings' && activeNav !== 'facebook' && (
+              <button
+                onClick={() => handleExportCsv()}
+                className="px-3.5 py-1.5 bg-zinc-100 hover:bg-zinc-200 text-black font-extrabold text-xs rounded-xl border border-zinc-300 transition-all flex items-center gap-1.5 shadow-sm cursor-pointer"
+              >
+                <span>📥 Export CSV</span>
+              </button>
+            )}
+          </div>
         </header>
 
-        {activeNav === 'whatsapp' && (
+        {(activeNav === 'whatsapp' || activeNav === 'instagram' || activeNav === 'linkedin') && (
           <div className="flex-1 overflow-y-auto p-6 bg-zinc-50/50">
             <div className="bg-white p-6 rounded-2xl border border-zinc-200 shadow-sm space-y-5">
               <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
-                  <h3 className="text-xl font-extrabold text-black flex items-center gap-2">
-                    <FileText className="w-6 h-6 text-black" />
-                    <span>Whatsapp Data</span>
+                  <h3 className="text-lg font-extrabold text-black flex items-center gap-2">
+                    <FileText className="w-5 h-5 text-black" />
+                    <span>
+                      {activeNav === 'whatsapp' ? 'WhatsApp Contact Leads'
+                        : activeNav === 'instagram' ? 'Instagram Contact Leads'
+                        : activeNav === 'linkedin' ? 'LinkedIn Contact Leads'
+                        : 'Social Media Contacts'}
+                    </span>
                   </h3>
                 </div>
 
@@ -664,14 +739,6 @@ export function WhatsAppCrmModule() {
                     >
                       Follow ups ({followUpsCount})
                     </button>
-                    <button
-                      onClick={() => setTableFilter('CALLS')}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                        tableFilter === 'CALLS' ? 'bg-black text-white shadow-sm' : 'text-zinc-700 hover:text-black'
-                      }`}
-                    >
-                      Calls ({callsYesCount})
-                    </button>
                   </div>
                 </div>
               </div>
@@ -680,9 +747,9 @@ export function WhatsAppCrmModule() {
                 <table className="w-full text-left border-collapse text-sm">
                   <thead>
                     <tr className="bg-zinc-100 text-black font-extrabold border-b border-zinc-200 text-xs uppercase tracking-wider">
-                      <th className="p-4">Contact Name / Phone</th>
+                      <th className="p-4">Name / Username</th>
                       <th className="p-4">Lead Status</th>
-                      <th className="p-4">Call Status</th>
+                      <th className="p-4">BDM / Language</th>
                       <th className="p-4">Follow-up Date</th>
                       <th className="p-4">Latest CRM Notes</th>
                       <th className="p-4 text-right">Actions</th>
@@ -694,7 +761,7 @@ export function WhatsAppCrmModule() {
                         <td colSpan={6} className="p-14 text-center bg-zinc-50/50">
                           <div className="flex flex-col items-center justify-center gap-3">
                             <div className="w-8 h-8 border-4 border-black border-t-transparent rounded-full animate-spin"></div>
-                            <span className="font-extrabold text-sm text-black">⚡ Connecting to CRM Server & Syncing WhatsApp Contacts...</span>
+                            <span className="font-extrabold text-sm text-black">⚡ Connecting to CRM Server & Syncing Social Contacts...</span>
                             <span className="text-xs font-semibold text-zinc-400">Please wait while your contacts are being loaded.</span>
                           </div>
                         </td>
@@ -702,17 +769,60 @@ export function WhatsAppCrmModule() {
                     ) : filteredTableLeads.length === 0 ? (
                       <tr>
                         <td colSpan={6} className="p-10 text-center text-zinc-500 italic text-sm">
-                          No saved contact settings found matching filter. Enter contact info on WhatsApp Web via Extension!
+                          No saved social contact settings found matching filter. Enter contact info on Instagram via Extension!
                         </td>
                       </tr>
                     ) : (
                       filteredTableLeads.map((chat) => {
                         const { displayName, formattedPhone, cleanPhone } = getCleanDisplayContact(chat);
+                        const rawUsername = chat.phone || (chat.jid || '').split('@')[0] || '';
+                        const cleanUsername = rawUsername.replace(/^@/, '');
+                        const displayUserStr = cleanUsername ? `@${cleanUsername}` : '';
 
                         return (
                           <tr key={chat.jid} className="hover:bg-zinc-50 transition-colors border-b border-zinc-100">
                             <td className="p-4 align-middle">
-                              <div className="font-extrabold text-black text-base">{displayName}</div>
+                              <div className="font-extrabold text-black text-sm leading-tight">{displayName}</div>
+                              {displayUserStr && (
+                                <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                                  <span className="text-xs font-bold text-zinc-700 font-mono bg-zinc-100 px-1.5 py-0.5 rounded border border-zinc-200">
+                                    {displayUserStr}
+                                  </span>
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      if (typeof navigator !== 'undefined' && navigator.clipboard) {
+                                        navigator.clipboard.writeText(cleanUsername);
+                                      }
+                                      setCopiedPhone(cleanUsername);
+                                      setTimeout(() => setCopiedPhone(null), 2000);
+                                    }}
+                                    title="Copy username to clipboard"
+                                    className="p-1 hover:bg-zinc-200 text-zinc-600 hover:text-black rounded transition-colors inline-flex items-center gap-0.5"
+                                  >
+                                    {copiedPhone === cleanUsername ? (
+                                      <span className="text-[10px] font-black text-emerald-600 animate-pulse">Copied!</span>
+                                    ) : (
+                                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 022-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                                      </svg>
+                                    )}
+                                  </button>
+
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setSearchQuery(cleanUsername);
+                                    }}
+                                    title="Search username in CRM"
+                                    className="p-1 hover:bg-zinc-200 text-zinc-600 hover:text-black rounded transition-colors"
+                                  >
+                                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                                    </svg>
+                                  </button>
+                                </div>
+                              )}
                             </td>
 
                             <td className="p-4 align-middle">
@@ -737,17 +847,15 @@ export function WhatsAppCrmModule() {
                             </td>
 
                             <td className="p-4 align-middle">
-                              {chat.callStatus === 'YES' || (chat.callStatus as any) === true ? (
-                                <span className="px-3 py-1 text-xs font-extrabold bg-black text-white rounded-md inline-block">
-                                  Yes
-                                </span>
-                              ) : chat.callStatus === 'NO' || (chat.callStatus as any) === false ? (
-                                <span className="px-3 py-1 text-xs font-extrabold bg-black text-white rounded-md inline-block">
-                                  No
-                                </span>
-                              ) : (
-                                <span className="text-zinc-400 text-xs font-semibold">None</span>
-                              )}
+                              <div className="text-xs font-bold text-black">
+                                {((chat as any).assignedUser || (chat as any).calledBy || (chat as any).clientLanguage || (chat as any).language) ? (
+                                  <span className="font-extrabold text-black">
+                                    {(chat as any).assignedUser || (chat as any).calledBy || '—'} / {(chat as any).clientLanguage || (chat as any).language || '—'}
+                                  </span>
+                                ) : (
+                                  <span className="text-zinc-400 font-semibold italic">—</span>
+                                )}
+                              </div>
                             </td>
 
                             <td className="p-4 align-middle">
@@ -756,7 +864,7 @@ export function WhatsAppCrmModule() {
                                   📅 {formatDateDDMMYYYY(chat.followUpDate)}
                                 </span>
                               ) : (
-                <span className="text-zinc-400 text-xs">None</span>
+                                <span className="text-zinc-400 text-xs">None</span>
                               )}
                             </td>
 
@@ -819,6 +927,8 @@ export function WhatsAppCrmModule() {
                                     setForwardDateInput(chat.followUpDate || '');
                                     setEditStatus(chat.leadStatus || 'UNASSIGNED');
                                     setEditCallStatus(chat.callStatus || '');
+                                    setEditBdmUser((chat as any).assignedUser || (chat as any).calledBy || '');
+                                    setEditLanguage((chat as any).clientLanguage || (chat as any).language || '');
                                     setEditNotesList(parsedNotes);
                                     setEditNoteInputText('');
                                     setSaveSuccessToast(false);
@@ -843,6 +953,16 @@ export function WhatsAppCrmModule() {
 
         {activeNav === 'calls' && (
           <ColdCallsModule subPage={coldCallsSubPage} onSubPageChange={setColdCallsSubPage} />
+        )}
+
+        {activeNav === 'facebook' && (
+          <div className="flex-1 overflow-y-auto p-10 bg-zinc-50/50 flex items-center justify-center">
+            <div className="p-12 text-center bg-white rounded-2xl border border-zinc-200 shadow-sm max-w-md w-full">
+              <span className="text-4xl mb-3 block">📘</span>
+              <h3 className="text-xl font-black text-black">Facebook Messenger CRM</h3>
+              <p className="text-xs text-zinc-500 font-semibold mt-1">Facebook Messenger CRM integration is set up and will be enabled soon.</p>
+            </div>
+          </div>
         )}
 
         {activeNav === 'settings' && (
@@ -1214,130 +1334,80 @@ export function WhatsAppCrmModule() {
         </div>
       )}
 
-      {/* ── EDIT / FORWARD LEAD MODAL (EXACT MATCH WITH WHATSAPP EXTENSION UI) ── */}
+      {/* ── EDIT / FORWARD LEAD MODAL — Instagram CRM Extension Style ── */}
       {editingContact && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[9999] flex items-center justify-center p-4 text-black font-sans">
-          <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl border border-[#e9edef] flex flex-col max-h-[90vh] overflow-hidden animate-in fade-in zoom-in duration-150">
-            {/* Header matching Extension */}
-            <div className="h-[56px] bg-[#f0f2f5] border-b border-[#e9edef] flex items-center justify-between px-4 flex-shrink-0">
+          <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl border border-[#e9edef] flex flex-col max-h-[92vh] overflow-hidden animate-in fade-in zoom-in duration-150">
+
+            {/* Header — matches Instagram extension */}
+            <div className="h-[54px] bg-[#f0f2f5] border-b border-[#e9edef] flex items-center justify-between px-4 flex-shrink-0">
               <div className="flex items-center gap-2">
-                <span className="text-amber-500 font-extrabold text-base">⚡</span>
-                <span className="font-extrabold text-sm text-[#111b21]">AI CRM</span>
+                <span style={{color:'#00a884',fontSize:'16px'}}>⚡</span>
+                <span className="font-extrabold text-sm text-[#111b21]">Instagram CRM</span>
               </div>
               <div className="flex items-center gap-2">
                 <button
                   type="button"
-                  onClick={() => {
-                    if (editingContact) {
-                      setClearTargetChat(editingContact);
-                    }
-                  }}
-                  className="px-3 py-1 bg-rose-50 hover:bg-rose-100 text-rose-700 font-extrabold text-xs rounded-xl border border-rose-200 transition-all flex items-center gap-1 shadow-2xs active:scale-95 cursor-pointer"
-                  title="Clear lead completely from CRM & reset AI auto-replies"
+                  onClick={() => { if (editingContact) setClearTargetChat(editingContact); }}
+                  className="px-3 py-1 bg-rose-50 hover:bg-rose-100 text-rose-700 font-extrabold text-xs rounded-xl border border-rose-200 transition-all flex items-center gap-1 active:scale-95 cursor-pointer"
+                  title="Clear lead completely"
                 >
-                  <span>🗑️ Clear Lead</span>
+                  🧹 Clear
                 </button>
                 <button
                   onClick={() => setEditingContact(null)}
-                  className="w-7 h-7 rounded-full hover:bg-[#e9edef] flex items-center justify-center text-[#667781] transition-colors text-base font-bold cursor-pointer"
-                >
-                  ✕
-                </button>
+                  className="w-7 h-7 rounded-full hover:bg-[#e9edef] flex items-center justify-center text-[#667781] transition-colors text-sm font-bold cursor-pointer"
+                >✕</button>
               </div>
             </div>
 
-            {/* Save Success Toast Banner */}
+            {/* Toast */}
             {saveSuccessToast && (
-              <div className="bg-[#00a884] text-white py-2 px-4 text-xs font-extrabold text-center transition-all animate-in fade-in">
+              <div className="bg-[#00a884] text-white py-2 px-4 text-xs font-extrabold text-center animate-in fade-in">
                 ✓ Contact info saved successfully!
               </div>
             )}
 
-            {/* Body matching Extension Sidebar */}
+            {/* Body */}
             <div className="overflow-y-auto flex-1 p-4 space-y-4">
-              {/* Contact Card */}
-              <div className="bg-[#f0f2f5] border border-[#e9edef] rounded-xl p-3.5 text-center flex flex-col items-center shadow-sm">
-                <div className="w-14 h-14 rounded-full bg-white border-2 border-white shadow-sm flex items-center justify-center font-black text-xl text-gray-700 uppercase mb-1.5">
-                  {getCleanDisplayContact(editingContact).displayName.slice(0, 2)}
+
+              {/* Contact Card — avatar + name + @handle */}
+              <div className="bg-[#f0f2f5] border border-[#e9edef] rounded-xl p-3.5 text-center flex flex-col items-center">
+                <div className="w-12 h-12 rounded-full bg-[#00a884] text-white flex items-center justify-center font-black text-lg uppercase mb-1.5">
+                  {(getCleanDisplayContact(editingContact).displayName || '?').charAt(0)}
                 </div>
                 <div className="text-sm font-extrabold text-[#111b21]">
                   {getCleanDisplayContact(editingContact).displayName}
                 </div>
-                <div className="text-xs font-bold text-[#00a884] mt-0.5">
-                  📞 {getCleanDisplayContact(editingContact).formattedPhone}
+                <div className="text-xs font-semibold text-[#667781] mt-0.5">
+                  @{(editingContact.phone || '').replace(/^@/, '')}
                 </div>
               </div>
 
-              {/* CALL Section */}
-              <div>
-                <div className="text-[11px] font-bold text-[#667781] uppercase tracking-wider mb-1.5">CALL</div>
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setEditCallStatus('YES')}
-                    className={`py-2 rounded-lg text-xs font-bold border transition-all text-center ${
-                      editCallStatus === 'YES'
-                        ? 'bg-[#111b21] text-white border-[#111b21] shadow-sm'
-                        : 'bg-[#f0f2f5] hover:bg-[#e9edef] text-[#111b21] border-[#e9edef]'
-                    }`}
-                  >
-                    Yes
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setEditCallStatus('NO')}
-                    className={`py-2 rounded-lg text-xs font-bold border transition-all text-center ${
-                      editCallStatus === 'NO'
-                        ? 'bg-[#111b21] text-white border-[#111b21] shadow-sm'
-                        : 'bg-[#f0f2f5] hover:bg-[#e9edef] text-[#111b21] border-[#e9edef]'
-                    }`}
-                  >
-                    No
-                  </button>
-                </div>
-              </div>
-
-              {/* LEAD STATUS Section */}
+              {/* LEAD STATUS */}
               <div>
                 <div className="text-[11px] font-bold text-[#667781] uppercase tracking-wider mb-1.5">LEAD STATUS</div>
-                <div className="grid grid-cols-3 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setEditStatus('INTERESTED')}
-                    className={`py-2 px-1 rounded-lg text-xs font-bold border transition-all text-center ${
-                      editStatus === 'INTERESTED'
-                        ? 'bg-[#e7fce8] text-[#0f5132] border-[#25d366] shadow-sm'
-                        : 'bg-[#f0f2f5] hover:bg-[#e9edef] text-[#111b21] border-[#e9edef]'
-                    }`}
-                  >
-                    👍 Interested
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setEditStatus('WARM_INTERESTED')}
-                    className={`py-2 px-1 rounded-lg text-xs font-bold border transition-all text-center ${
-                      editStatus === 'WARM_INTERESTED' || editStatus === 'WARM'
-                        ? 'bg-[#fff8e1] text-[#b78103] border-[#ffb300] shadow-sm'
-                        : 'bg-[#f0f2f5] hover:bg-[#e9edef] text-[#111b21] border-[#e9edef]'
-                    }`}
-                  >
-                    🔥 Warm
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setEditStatus('NOT_INTERESTED')}
-                    className={`py-2 px-1 rounded-lg text-xs font-bold border transition-all text-center ${
-                      editStatus === 'NOT_INTERESTED'
-                        ? 'bg-[#ffebee] text-[#c62828] border-[#e53935] shadow-sm'
-                        : 'bg-[#f0f2f5] hover:bg-[#e9edef] text-[#111b21] border-[#e9edef]'
-                    }`}
-                  >
-                    👎 Not Interested
-                  </button>
+                <div className="flex gap-2">
+                  {(['INTERESTED','WARM','NOT_INTERESTED'] as const).map(s => (
+                    <button
+                      key={s}
+                      type="button"
+                      onClick={() => setEditStatus(s)}
+                      className={`flex-1 py-2 px-1 rounded-lg text-[11px] font-bold border transition-all text-center ${
+                        editStatus === s || (s === 'WARM' && (editStatus === 'WARM' || editStatus === 'WARM_INTERESTED'))
+                          ? s === 'INTERESTED' ? 'bg-black text-white border-black shadow-sm'
+                            : s === 'WARM' ? 'bg-amber-500 text-white border-amber-500 shadow-sm'
+                            : 'bg-zinc-200 text-zinc-800 border-zinc-400 shadow-sm'
+                          : 'bg-[#f0f2f5] hover:bg-[#e9edef] text-[#111b21] border-[#e9edef]'
+                      }`}
+                    >
+                      {s === 'INTERESTED' ? '👍 Interested' : s === 'WARM' ? '🔥 Warm' : '👎 Not Int.'}
+                    </button>
+                  ))}
                 </div>
               </div>
 
-              {/* FOLLOW-UP SCHEDULE Section */}
+              {/* FOLLOW-UP SCHEDULE */}
               <div>
                 <div className="text-[11px] font-bold text-[#667781] uppercase tracking-wider mb-1.5">FOLLOW-UP SCHEDULE</div>
                 <input
@@ -1347,9 +1417,48 @@ export function WhatsAppCrmModule() {
                   onChange={(e) => setForwardDateInput(e.target.value)}
                   className="w-full p-2.5 bg-[#f0f2f5] border border-[#e9edef] rounded-lg text-xs font-bold text-[#111b21] outline-none focus:border-[#00a884] transition-all"
                 />
+                {/* Quick date chips */}
+                <div className="flex gap-2 mt-2">
+                  {[['Today',0],['Tmrw',1],['+3d',3],['+1wk',7]].map(([label, days]) => (
+                    <button
+                      key={label}
+                      type="button"
+                      onClick={() => {
+                        const d = new Date();
+                        d.setDate(d.getDate() + Number(days));
+                        setForwardDateInput(d.toISOString().slice(0,10));
+                      }}
+                      className="flex-1 py-1 text-[10px] font-bold bg-[#f0f2f5] hover:bg-[#e9edef] text-[#111b21] border border-[#e9edef] rounded-md transition-all"
+                    >{label}</button>
+                  ))}
+                </div>
               </div>
 
-              {/* CRM NOTES Section */}
+              {/* BDM & LANGUAGE */}
+              <div>
+                <div className="text-[11px] font-bold text-[#667781] uppercase tracking-wider mb-1.5">BDM &amp; LANGUAGE</div>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={editBdmUser}
+                    onChange={(e) => setEditBdmUser(e.target.value)}
+                    placeholder="BDM Name"
+                    className="flex-1 p-2.5 bg-[#f0f2f5] border border-[#e9edef] rounded-lg text-xs font-bold text-[#111b21] outline-none focus:border-[#00a884] transition-all"
+                  />
+                  <select
+                    value={editLanguage}
+                    onChange={(e) => setEditLanguage(e.target.value)}
+                    className="flex-1 p-2.5 bg-[#f0f2f5] border border-[#e9edef] rounded-lg text-xs font-bold text-[#111b21] outline-none focus:border-[#00a884] transition-all"
+                  >
+                    <option value="">-- Language --</option>
+                    <option value="Telugu">Telugu</option>
+                    <option value="Hindi">Hindi</option>
+                    <option value="English">English</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* CRM NOTES */}
               <div>
                 <div className="text-[11px] font-bold text-[#667781] uppercase tracking-wider mb-1.5">CRM NOTES</div>
                 <textarea
@@ -1364,40 +1473,36 @@ export function WhatsAppCrmModule() {
                   onClick={() => {
                     const text = editNoteInputText.trim();
                     if (!text) return;
-                    setEditNotesList([...editNotesList, text]);
+                    const now = new Date();
+                    const dd = String(now.getDate()).padStart(2,'0');
+                    const mm = String(now.getMonth()+1).padStart(2,'0');
+                    const yyyy = now.getFullYear();
+                    const dateStr = `(${dd}-${mm}-${yyyy})`;
+                    const noteWithDate = /\(\d{2}-\d{2}-\d{4}\)$/.test(text) ? text : `${text} ${dateStr}`;
+                    setEditNotesList([...editNotesList, noteWithDate]);
                     setEditNoteInputText('');
                   }}
-                  className="w-full py-2 bg-[#f0f2f5] hover:bg-[#e9edef] text-[#111b21] font-bold text-xs rounded-lg border border-[#e9edef] mt-1.5 transition-all shadow-sm active:scale-95"
-                >
-                  + Add Note
-                </button>
+                  className="w-full py-2 bg-[#f0f2f5] hover:bg-[#e9edef] text-[#111b21] font-bold text-xs rounded-lg border border-[#e9edef] mt-1.5 transition-all active:scale-95"
+                >+ Add Note</button>
 
-                {/* Notes List */}
                 {editNotesList.length > 0 && (
                   <div className="mt-2.5 max-h-[140px] overflow-y-auto space-y-1.5">
                     {editNotesList.map((n, i) => (
-                      <div
-                        key={i}
-                        className="flex items-start gap-2 p-2 bg-[#f7f7f7] border border-[#e5e5e5] rounded-lg"
-                      >
+                      <div key={i} className="flex items-start gap-2 p-2 bg-[#f7f7f7] border border-[#e5e5e5] rounded-lg">
                         <span className="flex-1 text-xs text-[#111b21] leading-relaxed break-words font-medium">
-                          <span className="font-bold mr-1">{i + 1}.</span> {n}
+                          <span className="font-bold mr-1">{i + 1}.</span>{n}
                         </span>
                         <button
                           type="button"
                           onClick={() => setEditNotesList(editNotesList.filter((_, idx) => idx !== i))}
-                          title="Delete this note"
-                          className="text-[#cc0000] hover:bg-[#ffeef0] p-1 rounded text-xs transition-colors flex-shrink-0"
-                        >
-                          🗑️
-                        </button>
+                          className="text-[#cc0000] hover:bg-[#ffeef0] p-1 rounded text-xs flex-shrink-0"
+                        >🗑️</button>
                       </div>
                     ))}
                   </div>
                 )}
               </div>
 
-              {/* Save & Clear Buttons */}
               {/* Save Button */}
               <div className="pt-2">
                 <button
@@ -1409,13 +1514,23 @@ export function WhatsAppCrmModule() {
                     try {
                       let finalNotesList = [...editNotesList];
                       if (editNoteInputText.trim()) {
-                        finalNotesList.push(editNoteInputText.trim());
+                        const now = new Date();
+                        const dd = String(now.getDate()).padStart(2,'0');
+                        const mm = String(now.getMonth()+1).padStart(2,'0');
+                        const yyyy = now.getFullYear();
+                        const dateStr = `(${dd}-${mm}-${yyyy})`;
+                        const t = editNoteInputText.trim();
+                        finalNotesList.push(/\(\d{2}-\d{2}-\d{4}\)$/.test(t) ? t : `${t} ${dateStr}`);
                       }
 
                       await updateCrmMetadata(editingContact.jid, {
                         followUpDate: forwardDateInput || undefined,
                         leadStatus: editStatus as any,
                         callStatus: editCallStatus as any,
+                        assignedUser: editBdmUser,
+                        calledBy: editBdmUser,
+                        clientLanguage: editLanguage,
+                        language: editLanguage,
                         notes: finalNotesList.join('\n\n'),
                         notesList: finalNotesList,
                         isAutoWarm: false,
@@ -1426,12 +1541,12 @@ export function WhatsAppCrmModule() {
                       setTimeout(() => {
                         setEditingContact(null);
                         setSaveSuccessToast(false);
-                      }, 500);
+                      }, 600);
                     } finally {
                       setIsSavingEdit(false);
                     }
                   }}
-                  className="w-full py-3 bg-[#00a884] hover:bg-[#008f6f] text-white font-extrabold text-xs rounded-xl shadow-md transition-all active:scale-95 disabled:opacity-50 flex items-center justify-center gap-1.5 cursor-pointer"
+                  className="w-full py-3 bg-[#00a884] hover:bg-[#008f6f] text-white font-extrabold text-sm rounded-xl shadow-md transition-all active:scale-95 disabled:opacity-50 flex items-center justify-center gap-1.5 cursor-pointer"
                 >
                   {isSavingEdit ? 'Saving...' : '💾 Save Contact Info'}
                 </button>

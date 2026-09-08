@@ -652,6 +652,11 @@ function saveCrmMetadata(forcedAiDisabled) {
     ? (cleanDigits || activeContactKey)
     : activeDisplayName;
 
+  const bdmEl = document.getElementById('aivastra-bdm-user');
+  const langEl = document.getElementById('aivastra-language');
+  if (bdmEl) activeFormData.assignedUser = bdmEl.value;
+  if (langEl) activeFormData.clientLanguage = langEl.value;
+
   const metaObj = { ...activeFormData, name: effectiveName, phone: cleanDigits || activeContactKey };
 
   // Save ONLY under phone-number keys — never under display name to prevent cross-contact collisions
@@ -681,6 +686,10 @@ function saveCrmMetadata(forcedAiDisabled) {
     leadStatus: activeFormData.leadStatus,
     callStatus: activeFormData.callStatus,
     followUpDate: activeFormData.followUpDate || undefined,
+    assignedUser: activeFormData.assignedUser,
+    calledBy: activeFormData.assignedUser,
+    clientLanguage: activeFormData.clientLanguage,
+    language: activeFormData.clientLanguage,
     notes: activeFormData.notesList.join('\n\n'),
     notesList: activeFormData.notesList,
     aiDisabled: activeFormData.aiDisabled,
@@ -804,6 +813,19 @@ function renderCrmPanel(displayName, cleanPhone, avatarUrl, showSaveToast = fals
             Forwarded from: <span style="color: #18181b;">📅 ${activeFormData.previousFollowUpDate}</span>
           </div>
         ` : ''}
+      <div>
+        <div class="aivastra-section-title">BDM &amp; LANGUAGE</div>
+        <div style="display:flex;gap:8px;">
+          <input type="text" id="aivastra-bdm-user" class="aivastra-text-input"
+            style="flex:1;color:#6b7280;font-weight:600;" placeholder="BDM Name"
+            value="${activeFormData.assignedUser || ''}" />
+          <select id="aivastra-language" class="aivastra-select-input" style="flex:1;color:#6b7280;font-weight:600;">
+            <option value="">-- Language --</option>
+            <option value="Telugu" ${activeFormData.clientLanguage === 'Telugu' ? 'selected' : ''}>Telugu</option>
+            <option value="Hindi" ${activeFormData.clientLanguage === 'Hindi' ? 'selected' : ''}>Hindi</option>
+            <option value="English" ${activeFormData.clientLanguage === 'English' ? 'selected' : ''}>English</option>
+          </select>
+        </div>
       </div>
 
       <div style="display:flex;flex-direction:column;flex:1;">
@@ -981,14 +1003,39 @@ function showExtensionConfirmModal(title, message, onConfirm) {
   document.getElementById('btn-not-interested').onclick = () => { activeFormData.leadStatus = 'NOT_INTERESTED'; renderCrmPanel(displayName, cleanPhone, avatarUrl); };
   document.getElementById('aivastra-followup-date').onchange = (e) => { activeFormData.followUpDate = e.target.value; };
   document.getElementById('aivastra-add-note-btn').onclick = () => {
+    const bdmEl = document.getElementById('aivastra-bdm-user');
+    const langEl = document.getElementById('aivastra-language');
+    if (bdmEl) activeFormData.assignedUser = bdmEl.value;
+    if (langEl) activeFormData.clientLanguage = langEl.value;
+
     const txt = document.getElementById('aivastra-note-text').value.trim();
     if (txt) {
       const hasDateInText = /\b\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{2,4}\b/.test(txt) || (txt.includes('(') && txt.includes(')'));
       const formatted = hasDateInText ? txt : `${txt} (${getTodayFormattedDate()})`;
       activeFormData.notesList.unshift(formatted);
       document.getElementById('aivastra-note-text').value = '';
-      saveCrmMetadata();
-      renderCrmPanel(displayName, cleanPhone, avatarUrl);
+
+      // Append directly to DOM notes container without re-rendering panel HTML
+      const listEl = document.getElementById('aivastra-notes-list');
+      if (listEl) {
+        const item = document.createElement('div');
+        item.className = 'aivastra-note-item';
+        item.style.cssText = 'display:flex;align-items:flex-start;gap:6px;padding:7px 10px;background:#f7f7f7;border-radius:8px;margin-bottom:6px;border:1px solid #e5e5e5;';
+        item.innerHTML = `
+          <span style="flex:1;word-break:break-word;font-size:12px;line-height:1.5;color:#111;">1. ${formatted}</span>
+          <button class="aivastra-delete-note-btn" title="Delete this note" style="background:none;border:none;cursor:pointer;padding:2px 4px;color:#cc0000;font-size:15px;flex-shrink:0;line-height:1;border-radius:4px;">🗑️</button>
+        `;
+        const delBtn = item.querySelector('.aivastra-delete-note-btn');
+        if (delBtn) {
+          delBtn.onclick = (e) => {
+            e.stopPropagation();
+            const idx = activeFormData.notesList.indexOf(formatted);
+            if (idx !== -1) activeFormData.notesList.splice(idx, 1);
+            item.remove();
+          };
+        }
+        listEl.prepend(item);
+      }
     }
   };
   document.getElementById('aivastra-save-main-btn').onclick = () => {

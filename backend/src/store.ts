@@ -632,9 +632,11 @@ class StorageEngine {
       `${rawNum}@c.us`
     ];
 
+    const isJidEmail = (s: string) => s.endsWith('@s.whatsapp.net') || s.endsWith('@c.us') || s.endsWith('@lid') || s.includes('@g.us');
+
     for (const key of keyCandidates) {
       const contact = this.contacts.get(key);
-      if (contact && contact.name && contact.name !== 'Unsaved Contact' && contact.name !== cleanNum && contact.name !== rawNum && !contact.name.includes('@') && !/^\d{13,}$/.test(contact.name.replace(/\D/g, ''))) {
+      if (contact && contact.name && contact.name !== 'Unsaved Contact' && contact.name !== cleanNum && contact.name !== rawNum && !isJidEmail(contact.name) && !/^\d{13,}$/.test(contact.name.replace(/\D/g, ''))) {
         return contact.name;
       }
     }
@@ -643,7 +645,7 @@ class StorageEngine {
       if (c.phone) {
         const cp = c.phone.replace(/\D/g, '');
         if (cp && (cp === cleanNum || cp === rawNum || cp.endsWith(cleanNum) || cleanNum.endsWith(cp))) {
-          if (c.name && c.name !== 'Unsaved Contact' && !c.name.includes('@') && !/^\d{13,}$/.test(c.name.replace(/\D/g, ''))) {
+          if (c.name && c.name !== 'Unsaved Contact' && !isJidEmail(c.name) && !/^\d{13,}$/.test(c.name.replace(/\D/g, ''))) {
             return c.name;
           }
         }
@@ -1104,7 +1106,8 @@ class StorageEngine {
       const resolvedKey = this.resolveJid(c.jid);
       const rawDigits = (c.phone || resolvedKey.split('@')[0]).replace(/\D/g, '');
       const validTen = this.canonicalPhone(rawDigits);
-      let name = (c.name && c.name !== 'Unsaved Contact' && !c.name.includes('@') && !BAD_NAMES.has(c.name.toLowerCase().trim()))
+      const isJidEmail = (s: string) => s.endsWith('@s.whatsapp.net') || s.endsWith('@c.us') || s.endsWith('@lid') || s.includes('@g.us');
+      let name = (c.name && c.name !== 'Unsaved Contact' && !isJidEmail(c.name) && !BAD_NAMES.has(c.name.toLowerCase().trim()))
         ? c.name
         : this.getContactName(c.jid);
 
@@ -1365,6 +1368,10 @@ class StorageEngine {
     aiDisabled?: boolean;
     isAutoWarm?: boolean;
     manuallySaved?: boolean;
+    assignedUser?: string;
+    calledBy?: string;
+    clientLanguage?: string;
+    language?: string;
   }) {
     const jid = this.resolveJid(rawJid);
     const hasExplicitPhone = Boolean(metadata.phone && metadata.phone.replace(/\D/g, '').length >= 10);
@@ -1548,6 +1555,8 @@ class StorageEngine {
       if (metadata.aiDisabled !== undefined) chat.aiDisabled = metadata.aiDisabled;
       if (metadata.isAutoWarm !== undefined) chat.isAutoWarm = metadata.isAutoWarm;
       if (metadata.manuallySaved === true) chat.manuallySaved = true;
+      if (metadata.assignedUser || metadata.calledBy) (chat as any).assignedUser = metadata.assignedUser || metadata.calledBy;
+      if (metadata.clientLanguage || metadata.language) (chat as any).clientLanguage = metadata.clientLanguage || metadata.language;
       chat.jid = canonicalJid;
       if (tenDigit) chat.phone = `91${tenDigit}`;
       chat.updatedAt = nowTimestamp;

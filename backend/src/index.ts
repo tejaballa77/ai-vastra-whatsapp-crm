@@ -133,11 +133,16 @@ app.post('/api/messages/send', async (req, res) => {
   }
 });
 
-// 7. Update CRM metadata (Lead Status, Call Status, Follow-up date, Notes, Tags)
+// 7. Update CRM metadata (Lead Status, Call Status, Follow-up date, Notes, Tags, BDM, Language)
 const handleCrmUpdate = (req: express.Request, res: express.Response) => {
   const bodyJid = req.body.jid;
   const paramJid = req.params.jid;
-  const { name, phone, leadStatus, callStatus, followUpDate, previousFollowUpDate, notes, notesList, tags, aiDisabled, isAutoWarm, manuallySaved } = req.body;
+  const {
+    name, phone, leadStatus, callStatus, followUpDate, previousFollowUpDate,
+    notes, notesList, tags, aiDisabled, isAutoWarm, manuallySaved,
+    assignedUser, calledBy, clientLanguage, language,
+    threadId,
+  } = req.body;
   const targetJid = paramJid || bodyJid || (phone ? `${phone}@s.whatsapp.net` : '');
 
   if (!targetJid) {
@@ -157,7 +162,11 @@ const handleCrmUpdate = (req: express.Request, res: express.Response) => {
     aiDisabled,
     isAutoWarm,
     manuallySaved,
-  });
+    assignedUser: assignedUser || calledBy,
+    calledBy: calledBy || assignedUser,
+    clientLanguage: clientLanguage || language,
+    language: language || clientLanguage,
+  } as any);
 
   // Broadcast update to all connected clients
   io.emit('chats_updated', db.getAllChatsSorted());

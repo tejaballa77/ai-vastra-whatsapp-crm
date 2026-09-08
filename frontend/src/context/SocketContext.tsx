@@ -4,11 +4,7 @@ import React, { createContext, useContext, useEffect, useState, ReactNode } from
 import { io, Socket } from 'socket.io-client';
 import { Chat, Message, SessionState } from '../types/chat';
 
-const getBackendUrl = () => {
-  if (process.env.NEXT_PUBLIC_BACKEND_URL) return process.env.NEXT_PUBLIC_BACKEND_URL;
-  if (typeof window !== 'undefined') return window.location.origin;
-  return 'http://localhost:5000';
-};
+import { getBackendUrl } from '../config';
 
 interface SocketContextType {
   socket: Socket | null;

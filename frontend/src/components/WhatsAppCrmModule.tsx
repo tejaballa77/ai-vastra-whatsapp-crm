@@ -376,7 +376,19 @@ export function WhatsAppCrmModule() {
   warmTabLeads.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
 
   // Filter table leads based on selected sub-filter, platform tab, and search
-  const baseLeads = tableFilter === 'WARM' ? warmTabLeads : (tableFilter === 'ALL' ? allTabLeads : savedLeads);
+  const waChats = chats.filter((c) => {
+    const jid = (c.jid || '').toLowerCase();
+    const phone = (c.phone || '').toLowerCase();
+    const isIg = jid.includes('@instagram') || jid.includes('instagram') || phone.includes('instagram');
+    const isFb = jid.includes('@facebook') || jid.includes('facebook') || phone.includes('facebook');
+    const isLi = jid.includes('@linkedin') || jid.includes('linkedin') || phone.includes('linkedin');
+    return !isIg && !isFb && !isLi;
+  });
+
+  const baseLeads = activeNav === 'whatsapp'
+    ? waChats
+    : (tableFilter === 'WARM' ? warmTabLeads : (tableFilter === 'ALL' ? allTabLeads : savedLeads));
+
   const filteredTableLeads = baseLeads
     .filter((c) => {
       // Filter by Platform Tab (activeNav)
@@ -746,12 +758,12 @@ export function WhatsAppCrmModule() {
               </div>
 
               <div className="overflow-x-auto border border-zinc-200 rounded-xl">
-                <table className="w-full text-left border-collapse text-sm">
+                <table className="w-full text-left font-sans text-sm">
                   <thead>
                     <tr className="bg-zinc-100 text-black font-extrabold border-b border-zinc-200 text-xs uppercase tracking-wider">
-                      <th className="p-4">Name / Username</th>
+                      <th className="p-4">{activeNav === 'whatsapp' ? 'Name / Phone' : 'Name / Username'}</th>
                       <th className="p-4">Lead Status</th>
-                      <th className="p-4">BDM / Language</th>
+                      <th className="p-4">{activeNav === 'whatsapp' ? 'Call Request' : 'BDM / Language'}</th>
                       <th className="p-4">Follow-up Date</th>
                       <th className="p-4">Latest CRM Notes</th>
                       <th className="p-4 text-right">Actions</th>
@@ -763,7 +775,7 @@ export function WhatsAppCrmModule() {
                         <td colSpan={6} className="p-14 text-center bg-zinc-50/50">
                           <div className="flex flex-col items-center justify-center gap-3">
                             <div className="w-8 h-8 border-4 border-black border-t-transparent rounded-full animate-spin"></div>
-                            <span className="font-extrabold text-sm text-black">⚡ Connecting to CRM Server & Syncing Social Contacts...</span>
+                            <span className="font-extrabold text-sm text-black">⚡ Connecting to CRM Server &amp; Syncing Contacts...</span>
                             <span className="text-xs font-semibold text-zinc-400">Please wait while your contacts are being loaded.</span>
                           </div>
                         </td>
@@ -771,7 +783,7 @@ export function WhatsAppCrmModule() {
                     ) : filteredTableLeads.length === 0 ? (
                       <tr>
                         <td colSpan={6} className="p-10 text-center text-zinc-500 italic text-sm">
-                          No saved social contact settings found matching filter. Enter contact info on Instagram via Extension!
+                          {activeNav === 'whatsapp' ? 'No WhatsApp contact leads found matching filter.' : 'No saved social contact settings found matching filter. Enter contact info via Extension!'}
                         </td>
                       </tr>
                     ) : (
@@ -785,45 +797,51 @@ export function WhatsAppCrmModule() {
                           <tr key={chat.jid} className="hover:bg-zinc-50 transition-colors border-b border-zinc-100">
                             <td className="p-4 align-middle">
                               <div className="font-extrabold text-black text-sm leading-tight">{displayName}</div>
-                              {displayUserStr && (
-                                <div className="flex items-center gap-1.5 mt-1 flex-wrap">
-                                  <span className="text-xs font-bold text-zinc-700 font-mono bg-zinc-100 px-1.5 py-0.5 rounded border border-zinc-200">
-                                    {displayUserStr}
-                                  </span>
-                                  <button
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      if (typeof navigator !== 'undefined' && navigator.clipboard) {
-                                        navigator.clipboard.writeText(cleanUsername);
-                                      }
-                                      setCopiedPhone(cleanUsername);
-                                      setTimeout(() => setCopiedPhone(null), 2000);
-                                    }}
-                                    title="Copy username to clipboard"
-                                    className="p-1 hover:bg-zinc-200 text-zinc-600 hover:text-black rounded transition-colors inline-flex items-center gap-0.5"
-                                  >
-                                    {copiedPhone === cleanUsername ? (
-                                      <span className="text-[10px] font-black text-emerald-600 animate-pulse">Copied!</span>
-                                    ) : (
-                                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 022-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                                      </svg>
-                                    )}
-                                  </button>
+                              {activeNav === 'whatsapp' ? (
+                                formattedPhone && (
+                                  <div className="text-xs font-semibold text-zinc-600 font-mono mt-0.5">📞 {formattedPhone}</div>
+                                )
+                              ) : (
+                                displayUserStr && (
+                                  <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                                    <span className="text-xs font-bold text-zinc-700 font-mono bg-zinc-100 px-1.5 py-0.5 rounded border border-zinc-200">
+                                      {displayUserStr}
+                                    </span>
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        if (typeof navigator !== 'undefined' && navigator.clipboard) {
+                                          navigator.clipboard.writeText(cleanUsername);
+                                        }
+                                        setCopiedPhone(cleanUsername);
+                                        setTimeout(() => setCopiedPhone(null), 2000);
+                                      }}
+                                      title="Copy username to clipboard"
+                                      className="p-1 hover:bg-zinc-200 text-zinc-600 hover:text-black rounded transition-colors inline-flex items-center gap-0.5"
+                                    >
+                                      {copiedPhone === cleanUsername ? (
+                                        <span className="text-[10px] font-black text-emerald-600 animate-pulse">Copied!</span>
+                                      ) : (
+                                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 022-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                                        </svg>
+                                      )}
+                                    </button>
 
-                                  <button
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      setSearchQuery(cleanUsername);
-                                    }}
-                                    title="Search username in CRM"
-                                    className="p-1 hover:bg-zinc-200 text-zinc-600 hover:text-black rounded transition-colors"
-                                  >
-                                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                                    </svg>
-                                  </button>
-                                </div>
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setSearchQuery(cleanUsername);
+                                      }}
+                                      title="Search username in CRM"
+                                      className="p-1 hover:bg-zinc-200 text-zinc-600 hover:text-black rounded transition-colors"
+                                    >
+                                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                                      </svg>
+                                    </button>
+                                  </div>
+                                )
                               )}
                             </td>
 
@@ -849,15 +867,27 @@ export function WhatsAppCrmModule() {
                             </td>
 
                             <td className="p-4 align-middle">
-                              <div className="text-xs font-bold text-black">
-                                {((chat as any).assignedUser || (chat as any).calledBy || (chat as any).clientLanguage || (chat as any).language) ? (
-                                  <span className="font-extrabold text-black">
-                                    {(chat as any).assignedUser || (chat as any).calledBy || '—'} / {(chat as any).clientLanguage || (chat as any).language || '—'}
-                                  </span>
-                                ) : (
-                                  <span className="text-zinc-400 font-semibold italic">—</span>
-                                )}
-                              </div>
+                              {activeNav === 'whatsapp' ? (
+                                <div className="text-xs font-bold text-black">
+                                  {chat.callStatus === 'YES' ? (
+                                    <span className="px-2.5 py-1 text-xs font-extrabold bg-emerald-100 text-emerald-800 rounded-md inline-block">📞 Yes</span>
+                                  ) : chat.callStatus === 'NO' ? (
+                                    <span className="px-2 py-0.5 text-xs font-semibold text-zinc-500 bg-zinc-100 rounded-md inline-block">No</span>
+                                  ) : (
+                                    <span className="text-zinc-400 font-semibold italic">—</span>
+                                  )}
+                                </div>
+                              ) : (
+                                <div className="text-xs font-bold text-black">
+                                  {((chat as any).assignedUser || (chat as any).calledBy || (chat as any).clientLanguage || (chat as any).language) ? (
+                                    <span className="font-extrabold text-black">
+                                      {(chat as any).assignedUser || (chat as any).calledBy || '—'} / {(chat as any).clientLanguage || (chat as any).language || '—'}
+                                    </span>
+                                  ) : (
+                                    <span className="text-zinc-400 font-semibold italic">—</span>
+                                  )}
+                                </div>
+                              )}
                             </td>
 
                             <td className="p-4 align-middle">

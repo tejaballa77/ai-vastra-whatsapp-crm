@@ -260,19 +260,7 @@ export function WhatsAppCrmModule() {
   }
 
   const allRawChats = Array.from(chatsMap.values());
-  // Filter to display ONLY Social Media CRM Leads (Instagram, LinkedIn, Facebook) on localhost CRM table:
-  const chats = allRawChats.filter((c) => {
-    if (!c.jid) return false;
-    const jid = c.jid.toLowerCase();
-    const isSocialLead = Boolean(
-      jid.includes('@instagram') || 
-      jid.includes('@linkedin') || 
-      jid.includes('@facebook') || 
-      jid.includes('@social') ||
-      (c.phone && isNaN(Number(c.phone)))
-    );
-    return isSocialLead;
-  });
+  const chats = allRawChats;
 
   const getLocalYYYYMMDD = (ts?: number | string) => {
     const d = ts ? new Date(ts) : new Date();
@@ -318,28 +306,18 @@ export function WhatsAppCrmModule() {
 
   const todayLocalStr = getLocalYYYYMMDD();
 
-  // Compute 100% DYNAMIC real stats from database chats (Default 0)
-  const interestedChats = chats.filter((c) => c.leadStatus === 'INTERESTED');
-  const warmChats = chats.filter((c) => isPureAutoWarmLead(c));
-  const notInterestedChats = chats.filter((c) => c.leadStatus === 'NOT_INTERESTED');
-  const unassignedChats = chats.filter((c) => !c.leadStatus || c.leadStatus === 'UNASSIGNED');
-
-  const interestedCount = interestedChats.length;
-  const warmCount = warmChats.length;
-  const notInterestedCount = notInterestedChats.length;
-  const unassignedCount = unassignedChats.length;
-
-  const callsYesChats = chats.filter((c) => c.callStatus === 'YES');
-  const scheduledFollowupChatsList = chats.filter(c => {
-    return Boolean(c.followUpDate && c.followUpDate.trim().length > 0 && c.followUpDate !== '—');
+  // Filter chats by active navigation tab (WhatsApp, Instagram, Facebook, LinkedIn)
+  const navChats = chats.filter((c) => {
+    const jid = (c.jid || '').toLowerCase();
+    const phone = (c.phone || '').toLowerCase();
+    const isIg = jid.includes('@instagram') || jid.includes('instagram') || phone.includes('instagram');
+    const isFb = jid.includes('@facebook') || jid.includes('facebook') || phone.includes('facebook');
+    const isLi = jid.includes('@linkedin') || jid.includes('linkedin') || phone.includes('linkedin');
+    if (activeNav === 'instagram') return isIg;
+    if (activeNav === 'facebook') return isFb;
+    if (activeNav === 'linkedin') return isLi;
+    return !isIg && !isFb && !isLi;
   });
-  const followupTodayChatsList = chats.filter(c => {
-    const normF = normalizeDateStr(c.followUpDate);
-    return normF === todayLocalStr;
-  });
-
-  const callsYesCount = callsYesChats.length;
-  const followUpsCount = scheduledFollowupChatsList.length;
 
   // Helper to check if a chat is a pure unedited auto-reply warm lead
   function isPureAutoWarmLead(c: Chat) {
@@ -355,55 +333,26 @@ export function WhatsAppCrmModule() {
     return true;
   }
 
-  const savedLeads = chats.filter((c) => {
-    const hasStatus = Boolean(c.leadStatus && c.leadStatus !== 'UNASSIGNED');
-    const hasCall = Boolean(c.callStatus && c.callStatus !== undefined && c.callStatus !== null && (c.callStatus as any) !== 'None');
-    const hasFollow = Boolean(c.followUpDate && c.followUpDate.trim().length > 0 && c.followUpDate !== '—');
-    const hasNotes = Boolean((c.notesList && c.notesList.length > 0) || (c.notes && c.notes.trim().length > 0));
-    const isManuallySaved = (c as any).manuallySaved === true;
-    
-    return hasStatus || hasCall || hasFollow || hasNotes || isManuallySaved;
+  // Calculate dynamic stats for current active tab
+  const interestedChats = navChats.filter((c) => c.leadStatus === 'INTERESTED');
+  const warmTabLeads = navChats.filter((c) => c.leadStatus === 'WARM' || c.leadStatus === 'WARM_INTERESTED' || isPureAutoWarmLead(c));
+  const notInterestedChats = navChats.filter((c) => c.leadStatus === 'NOT_INTERESTED');
+  const scheduledFollowupChatsList = navChats.filter((c) => Boolean(c.followUpDate && c.followUpDate.trim().length > 0 && c.followUpDate !== '—'));
+  const followupTodayChatsList = navChats.filter((c) => {
+    const normF = normalizeDateStr(c.followUpDate);
+    return normF === todayLocalStr;
   });
 
-  // All Tab Leads: All saved/edited CRM leads EXCLUDING pure unedited auto-warm leads
-  const allTabLeads = savedLeads.filter(c => !isPureAutoWarmLead(c));
+  const interestedCount = interestedChats.length;
+  const warmCount = warmTabLeads.length;
+  const notInterestedCount = notInterestedChats.length;
+  const followUpsCount = scheduledFollowupChatsList.length;
+  const callsYesCount = navChats.filter((c) => c.callStatus === 'YES').length;
+  const allTabLeads = navChats;
 
-  // Warm Tab Leads: All warm leads (both pure auto-warm and edited warm leads)
-  const warmTabLeads = chats.filter(c => c.leadStatus === 'WARM' || c.leadStatus === 'WARM_INTERESTED' || isPureAutoWarmLead(c));
-
-  // Sort lists so latest updated comes on top
-  allTabLeads.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
-  warmTabLeads.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
-
-  // Filter table leads based on selected sub-filter, platform tab, and search
-  const waChats = chats.filter((c) => {
-    const jid = (c.jid || '').toLowerCase();
-    const phone = (c.phone || '').toLowerCase();
-    const isIg = jid.includes('@instagram') || jid.includes('instagram') || phone.includes('instagram');
-    const isFb = jid.includes('@facebook') || jid.includes('facebook') || phone.includes('facebook');
-    const isLi = jid.includes('@linkedin') || jid.includes('linkedin') || phone.includes('linkedin');
-    return !isIg && !isFb && !isLi;
-  });
-
-  const baseLeads = activeNav === 'whatsapp'
-    ? waChats
-    : (tableFilter === 'WARM' ? warmTabLeads : (tableFilter === 'ALL' ? allTabLeads : savedLeads));
-
-  const filteredTableLeads = baseLeads
+  // Filter table leads based on selected sub-filter and search
+  const filteredTableLeads = navChats
     .filter((c) => {
-      // Filter by Platform Tab (activeNav)
-      const jid = (c.jid || '').toLowerCase();
-      const phone = (c.phone || '').toLowerCase();
-      const isIg = jid.includes('@instagram') || jid.includes('instagram') || phone.includes('instagram');
-      const isFb = jid.includes('@facebook') || jid.includes('facebook') || phone.includes('facebook');
-      const isLi = jid.includes('@linkedin') || jid.includes('linkedin') || phone.includes('linkedin');
-      const isWa = !isIg && !isFb && !isLi;
-
-      if (activeNav === 'whatsapp' && !isWa) return false;
-      if (activeNav === 'instagram' && !isIg) return false;
-      if (activeNav === 'facebook' && !isFb) return false;
-      if (activeNav === 'linkedin' && !isLi) return false;
-
       const matchesSearch =
         (c.name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
         (c.phone || c.jid || '').toLowerCase().includes(searchQuery.toLowerCase());
@@ -452,7 +401,7 @@ export function WhatsAppCrmModule() {
 
   // Export Leads to CSV for telecallers
   const handleExportCsv = () => {
-    const exportData = savedLeads.map((c) => ({
+    const exportData = navChats.map((c) => ({
       Name: c.name || 'Unsaved Contact',
       Phone: c.phone || c.jid.split('@')[0],
       LeadStatus: c.leadStatus === 'INTERESTED' ? 'Interested' : c.leadStatus === 'WARM_INTERESTED' ? 'Warm' : c.leadStatus === 'NOT_INTERESTED' ? 'Not Interested' : 'Unassigned',
@@ -489,11 +438,11 @@ export function WhatsAppCrmModule() {
       case 'INTERESTED':
         return interestedChats;
       case 'WARM':
-        return warmChats;
+        return warmTabLeads;
       case 'NOT_INTERESTED':
         return notInterestedChats;
       case 'CALLS':
-        return callsYesChats;
+        return navChats.filter((c) => c.callStatus === 'YES');
       case 'FOLLOWUPS':
         return scheduledFollowupChatsList;
       default:

@@ -382,10 +382,12 @@ export function WhatsAppCrmModule() {
       // Filter by Platform Tab (activeNav)
       const jid = (c.jid || '').toLowerCase();
       const phone = (c.phone || '').toLowerCase();
+      const isIg = jid.includes('@instagram') || jid.includes('instagram') || phone.includes('instagram');
       const isFb = jid.includes('@facebook') || jid.includes('facebook') || phone.includes('facebook');
       const isLi = jid.includes('@linkedin') || jid.includes('linkedin') || phone.includes('linkedin');
-      const isIg = jid.includes('@instagram') || jid.includes('instagram') || (!isFb && !isLi);
+      const isWa = !isIg && !isFb && !isLi;
 
+      if (activeNav === 'whatsapp' && !isWa) return false;
       if (activeNav === 'instagram' && !isIg) return false;
       if (activeNav === 'facebook' && !isFb) return false;
       if (activeNav === 'linkedin' && !isLi) return false;

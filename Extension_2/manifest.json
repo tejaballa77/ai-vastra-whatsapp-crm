@@ -1,0 +1,38 @@
+{
+  "manifest_version": 3,
+  "name": "AI Vastra Social CRM (Instagram, LinkedIn, Facebook)",
+  "version": "1.0.0",
+  "description": "Unified CRM Assistant for Instagram DMs, LinkedIn Messaging, and Facebook Messenger.",
+  "permissions": [
+    "activeTab",
+    "storage"
+  ],
+  "host_permissions": [
+    "*://*.instagram.com/*",
+    "*://*.linkedin.com/*",
+    "*://*.facebook.com/*",
+    "*://*.messenger.com/*",
+    "http://localhost:5000/*",
+    "http://localhost:3000/*",
+    "https://crm.nicedigitalsgroup.com/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "*://*.instagram.com/*",
+        "*://*.linkedin.com/*",
+        "*://*.facebook.com/*",
+        "*://*.messenger.com/*"
+      ],
+      "js": ["content.js"],
+      "css": ["content.css"],
+      "run_at": "document_idle"
+    }
+  ],
+  "action": {
+    "default_popup": "popup.html"
+  }
+}

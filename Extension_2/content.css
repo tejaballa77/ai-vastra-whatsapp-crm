@@ -12,9 +12,13 @@
   z-index: 9999999 !important;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;
   box-shadow: -4px 0 16px rgba(0, 0, 0, 0.15) !important;
-  display: flex !important;
+  display: none !important;
   flex-direction: column !important;
   color: #111b21 !important;
+}
+
+#aivastra-social-panel.aivastra-panel-open {
+  display: flex !important;
 }
 
 #aivastra-ig-header-btn, #aivastra-header-toggle-btn {

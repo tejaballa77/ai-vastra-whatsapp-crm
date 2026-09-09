@@ -300,8 +300,7 @@ console.log('[AI Vastra Social CRM Extension] Active on social media!');
         const b = document.getElementById('aivastra-header-toggle-btn');
         if (b) b.style.display = 'none';
 
-        const p = document.getElementById('aivastra-social-panel');
-        if (p) p.style.display = 'none';
+        setPanelVisible(false);
 
         removeBtnContextMenu();
       };
@@ -407,15 +406,10 @@ console.log('[AI Vastra Social CRM Extension] Active on social media!');
           e.stopPropagation();
         }
 
-        const panel = document.getElementById('aivastra-social-panel');
-        const isCurrentlyOpen = panel && panel.style.display === 'flex';
-
-        if (isCurrentlyOpen) {
-          isPanelVisible = false;
-          if (panel) panel.style.display = 'none';
+        if (isPanelVisible) {
+          setPanelVisible(false);
         } else {
-          isPanelVisible = true;
-          if (panel) panel.style.display = 'flex';
+          setPanelVisible(true);
           detectActiveContact(true);
         }
       };
@@ -429,6 +423,20 @@ console.log('[AI Vastra Social CRM Extension] Active on social media!');
     }
   }
 
+  // ─── Panel Visibility Helper ──────────────────────────────────────────────────
+
+  function setPanelVisible(visible) {
+    isPanelVisible = Boolean(visible);
+    const panel = ensurePanel();
+    if (isPanelVisible) {
+      panel.classList.add('aivastra-panel-open');
+      panel.style.setProperty('display', 'flex', 'important');
+    } else {
+      panel.classList.remove('aivastra-panel-open');
+      panel.style.setProperty('display', 'none', 'important');
+    }
+  }
+
   // ─── Panel Container ──────────────────────────────────────────────────────────
 
   function ensurePanel() {
@@ -438,7 +446,13 @@ console.log('[AI Vastra Social CRM Extension] Active on social media!');
       panel.id = 'aivastra-social-panel';
       document.body.appendChild(panel);
     }
-    panel.style.display = isPanelVisible ? 'flex' : 'none';
+    if (isPanelVisible) {
+      panel.classList.add('aivastra-panel-open');
+      panel.style.setProperty('display', 'flex', 'important');
+    } else {
+      panel.classList.remove('aivastra-panel-open');
+      panel.style.setProperty('display', 'none', 'important');
+    }
     return panel;
   }
 
@@ -788,9 +802,7 @@ console.log('[AI Vastra Social CRM Extension] Active on social media!');
           e.preventDefault();
           e.stopPropagation();
         }
-        isPanelVisible = false;
-        const p = document.getElementById('aivastra-social-panel');
-        if (p) p.style.display = 'none';
+        setPanelVisible(false);
       };
     }
 
@@ -1008,7 +1020,7 @@ console.log('[AI Vastra Social CRM Extension] Active on social media!');
   // ─── Initialize ───────────────────────────────────────────────────────────────
 
   ensureHeaderButton();
-  ensurePanel();
+  setPanelVisible(false);
   detectActiveContact();
 
   // URL & Chat Change Observer (for Instagram, LinkedIn, and Facebook SPA navigation)

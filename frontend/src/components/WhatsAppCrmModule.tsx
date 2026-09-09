@@ -545,7 +545,11 @@ export function WhatsAppCrmModule() {
                 activeNav === 'instagram' ? 'bg-black text-white shadow-md font-extrabold' : 'text-zinc-700 hover:bg-zinc-100 hover:text-black font-semibold'
               }`}
             >
-              <span className="text-base">📸</span>
+              <img
+                src="/instagram_icon.png"
+                alt="Instagram"
+                className={`w-5 h-5 object-contain transition-all ${activeNav === 'instagram' ? 'invert' : ''}`}
+              />
               <span className="flex-1 text-left">Instagram</span>
             </button>
 

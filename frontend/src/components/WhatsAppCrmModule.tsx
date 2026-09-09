@@ -798,23 +798,8 @@ export function WhatsAppCrmModule() {
                                       {copiedPhone === cleanUsername ? (
                                         <span className="text-[10px] font-black text-emerald-600 animate-pulse">Copied!</span>
                                       ) : (
-                                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 022-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                                        </svg>
+                                        <Copy className="w-3.5 h-3.5 text-zinc-500 hover:text-zinc-900" />
                                       )}
-                                    </button>
-
-                                    <button
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        setSearchQuery(cleanUsername);
-                                      }}
-                                      title="Search username in CRM"
-                                      className="p-1 hover:bg-zinc-200 text-zinc-600 hover:text-black rounded transition-colors"
-                                    >
-                                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                                      </svg>
                                     </button>
                                   </div>
                                 )
@@ -1527,7 +1512,7 @@ export function WhatsAppCrmModule() {
                     const yyyy = now.getFullYear();
                     const dateStr = `(${dd}-${mm}-${yyyy})`;
                     const noteWithDate = /\(\d{2}-\d{2}-\d{4}\)$/.test(text) ? text : `${text} ${dateStr}`;
-                    setEditNotesList([...editNotesList, noteWithDate]);
+                    setEditNotesList([noteWithDate, ...editNotesList]);
                     setEditNoteInputText('');
                   }}
                   className="w-full py-2 bg-[#f0f2f5] hover:bg-[#e9edef] text-[#111b21] font-bold text-xs rounded-lg border border-[#e9edef] mt-1.5 transition-all active:scale-95"
@@ -1568,7 +1553,7 @@ export function WhatsAppCrmModule() {
                         const yyyy = now.getFullYear();
                         const dateStr = `(${dd}-${mm}-${yyyy})`;
                         const t = editNoteInputText.trim();
-                        finalNotesList.push(/\(\d{2}-\d{2}-\d{4}\)$/.test(t) ? t : `${t} ${dateStr}`);
+                        finalNotesList.unshift(/\(\d{2}-\d{2}-\d{4}\)$/.test(t) ? t : `${t} ${dateStr}`);
                       }
 
                       await updateCrmMetadata(editingContact.jid, {

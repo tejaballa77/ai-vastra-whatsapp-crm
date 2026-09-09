@@ -886,30 +886,10 @@ console.log('[AI Vastra Social CRM Extension] Active on social media!');
           const noteWithDate = /\(\d{2}-\d{2}-\d{4}\)$/.test(val) ? val : `${val} ${dateStr}`;
 
           if (!activeFormData.notesList) activeFormData.notesList = [];
-          activeFormData.notesList.push(noteWithDate);
+          activeFormData.notesList.unshift(noteWithDate);
           area.value = '';
 
-          // Directly append new note to notes list DOM element so BDM and Language inputs are NEVER replaced or wiped
-          const listEl = panel.querySelector('#aivastra-notes-list');
-          if (listEl) {
-            const idx = activeFormData.notesList.length - 1;
-            const item = document.createElement('div');
-            item.className = 'aivastra-note-item';
-            item.style.cssText = 'display:flex;align-items:flex-start;gap:6px;padding:6px 8px;background:#f7f7f7;border-radius:6px;margin-bottom:4px;border:1px solid #e5e5e5;';
-            item.innerHTML = `
-              <span style="flex:1;word-break:break-word;font-size:12px;line-height:1.4;color:#111;">${idx + 1}. ${noteWithDate}</span>
-              <button data-note-index="${idx}" class="aivastra-note-delete" title="Delete note" style="background:none;border:none;cursor:pointer;color:#cc0000;font-size:13px;">🗑️</button>
-            `;
-            const delBtn = item.querySelector('.aivastra-note-delete');
-            if (delBtn) {
-              delBtn.onclick = () => {
-                syncCurrentInputsToState();
-                activeFormData.notesList.splice(idx, 1);
-                item.remove();
-              };
-            }
-            listEl.appendChild(item);
-          }
+          renderPanel(activeDisplayName);
         }
       };
     }

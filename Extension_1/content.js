@@ -652,11 +652,6 @@ function saveCrmMetadata(forcedAiDisabled) {
     ? (cleanDigits || activeContactKey)
     : activeDisplayName;
 
-  const bdmEl = document.getElementById('aivastra-bdm-user');
-  const langEl = document.getElementById('aivastra-language');
-  if (bdmEl) activeFormData.assignedUser = bdmEl.value;
-  if (langEl) activeFormData.clientLanguage = langEl.value;
-
   const metaObj = { ...activeFormData, name: effectiveName, phone: cleanDigits || activeContactKey };
 
   // Save ONLY under phone-number keys — never under display name to prevent cross-contact collisions
@@ -813,19 +808,6 @@ function renderCrmPanel(displayName, cleanPhone, avatarUrl, showSaveToast = fals
             Forwarded from: <span style="color: #18181b;">📅 ${activeFormData.previousFollowUpDate}</span>
           </div>
         ` : ''}
-      <div>
-        <div class="aivastra-section-title">BDM &amp; LANGUAGE</div>
-        <div style="display:flex;gap:8px;">
-          <input type="text" id="aivastra-bdm-user" class="aivastra-text-input"
-            style="flex:1;color:#6b7280;font-weight:600;" placeholder="BDM Name"
-            value="${activeFormData.assignedUser || ''}" />
-          <select id="aivastra-language" class="aivastra-select-input" style="flex:1;color:#6b7280;font-weight:600;">
-            <option value="">-- Language --</option>
-            <option value="Telugu" ${activeFormData.clientLanguage === 'Telugu' ? 'selected' : ''}>Telugu</option>
-            <option value="Hindi" ${activeFormData.clientLanguage === 'Hindi' ? 'selected' : ''}>Hindi</option>
-            <option value="English" ${activeFormData.clientLanguage === 'English' ? 'selected' : ''}>English</option>
-          </select>
-        </div>
       </div>
 
       <div style="display:flex;flex-direction:column;flex:1;">

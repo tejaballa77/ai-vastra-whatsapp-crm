@@ -358,12 +358,13 @@ console.log('[AI Vastra Social CRM Extension] Active on social media!');
       });
 
       let isDragging = false;
-      let startX = 0, startY = 0, initialLeft = 0, initialTop = 0, hasDraggedMoved = false;
+      let startX = 0, startY = 0, initialLeft = 0, initialTop = 0;
+      let totalDragDist = 0;
 
       btn.addEventListener('mousedown', (e) => {
         if (e.button !== 0) return;
         isDragging = true;
-        hasDraggedMoved = false;
+        totalDragDist = 0;
         startX = e.clientX;
         startY = e.clientY;
         const rect = btn.getBoundingClientRect();
@@ -376,17 +377,19 @@ console.log('[AI Vastra Social CRM Extension] Active on social media!');
         if (!isDragging) return;
         const dx = e.clientX - startX;
         const dy = e.clientY - startY;
-        if (Math.abs(dx) > 3 || Math.abs(dy) > 3) hasDraggedMoved = true;
-        btn.style.left = `${initialLeft + dx}px`;
-        btn.style.top = `${initialTop + dy}px`;
-        btn.style.right = 'auto';
+        totalDragDist = Math.hypot(dx, dy);
+        if (totalDragDist > 8) {
+          btn.style.left = `${initialLeft + dx}px`;
+          btn.style.top = `${initialTop + dy}px`;
+          btn.style.right = 'auto';
+        }
       });
 
       window.addEventListener('mouseup', () => {
         if (isDragging) {
           isDragging = false;
           btn.style.cursor = 'grab';
-          if (hasDraggedMoved) {
+          if (totalDragDist > 8) {
             const rect = btn.getBoundingClientRect();
             savedBtnPos = { top: Math.round(rect.top), left: Math.round(rect.left) };
             safeStorageSet({ crm_btn_position: savedBtnPos });
@@ -394,23 +397,28 @@ console.log('[AI Vastra Social CRM Extension] Active on social media!');
         }
       });
 
-      btn.addEventListener('click', (e) => {
-        if (hasDraggedMoved) { e.preventDefault(); e.stopPropagation(); return; }
+      btn.onclick = (e) => {
+        if (totalDragDist > 8) {
+          totalDragDist = 0;
+          return;
+        }
         if (e) {
           e.preventDefault();
           e.stopPropagation();
         }
 
         const panel = document.getElementById('aivastra-social-panel');
-        if (panel && panel.style.display === 'flex') {
+        const isCurrentlyOpen = panel && panel.style.display === 'flex';
+
+        if (isCurrentlyOpen) {
           isPanelVisible = false;
-          panel.style.display = 'none';
+          if (panel) panel.style.display = 'none';
         } else {
           isPanelVisible = true;
           if (panel) panel.style.display = 'flex';
           detectActiveContact(true);
         }
-      });
+      };
 
       btn.addEventListener('contextmenu', (e) => {
         e.preventDefault();

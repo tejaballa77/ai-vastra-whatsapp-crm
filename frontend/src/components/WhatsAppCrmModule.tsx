@@ -522,7 +522,11 @@ export function WhatsAppCrmModule() {
                 activeNav === 'whatsapp' ? 'bg-black text-white shadow-md font-extrabold' : 'text-zinc-700 hover:bg-zinc-100 hover:text-black font-semibold'
               }`}
             >
-              <MessageSquare className="w-5 h-5" />
+              <img
+                src="/whatsapp_icon.png"
+                alt="WhatsApp"
+                className={`w-5 h-5 object-contain transition-all ${activeNav === 'whatsapp' ? 'invert' : ''}`}
+              />
               <span className="flex-1 text-left">WhatsApp</span>
             </button>
 
@@ -559,7 +563,11 @@ export function WhatsAppCrmModule() {
                 activeNav === 'linkedin' ? 'bg-black text-white shadow-md font-extrabold' : 'text-zinc-700 hover:bg-zinc-100 hover:text-black font-semibold'
               }`}
             >
-              <span className="text-base">💼</span>
+              <img
+                src="/linkedin_icon.png"
+                alt="LinkedIn"
+                className={`w-5 h-5 object-contain transition-all ${activeNav === 'linkedin' ? 'invert' : ''}`}
+              />
               <span className="flex-1 text-left">LinkedIn</span>
             </button>
 
@@ -569,7 +577,11 @@ export function WhatsAppCrmModule() {
                 activeNav === 'facebook' ? 'bg-black text-white shadow-md font-extrabold' : 'text-zinc-700 hover:bg-zinc-100 hover:text-black font-semibold'
               }`}
             >
-              <span className="text-base">📘</span>
+              <img
+                src="/facebook_icon.png"
+                alt="Facebook"
+                className={`w-5 h-5 object-contain transition-all ${activeNav === 'facebook' ? 'invert' : ''}`}
+              />
               <span className="flex-1 text-left">Facebook</span>
               <span className="ml-auto text-[10px] bg-zinc-100 text-zinc-500 border border-zinc-200 px-2 py-0.5 rounded-full font-bold">Soon</span>
             </button>

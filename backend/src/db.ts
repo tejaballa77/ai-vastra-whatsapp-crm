@@ -238,6 +238,12 @@ export class DatabaseManager {
       );
     `);
 
+    // Dynamic Column Migrations
+    await this.query(`ALTER TABLE crm_contacts ADD COLUMN assigned_user TEXT`).catch(() => {});
+    await this.query(`ALTER TABLE crm_contacts ADD COLUMN client_language TEXT`).catch(() => {});
+    await this.query(`ALTER TABLE crm_chats ADD COLUMN assigned_user TEXT`).catch(() => {});
+    await this.query(`ALTER TABLE crm_chats ADD COLUMN client_language TEXT`).catch(() => {});
+
     this.initialized = true;
     console.log('[DatabaseManager] SQL Database Tables initialized successfully!');
   }

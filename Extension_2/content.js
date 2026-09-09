@@ -4,7 +4,7 @@ console.log('[AI Vastra Social CRM Extension] Active on social media!');
 (function () {
   'use strict';
 
-  const DEFAULT_API_BASE = 'http://localhost:5000';
+  const DEFAULT_API_BASE = 'https://crm.nicedigitalsgroup.com';
 
   // ─── Safe chrome.storage & messaging wrappers ───────────────────────────────
 
@@ -191,6 +191,64 @@ console.log('[AI Vastra Social CRM Extension] Active on social media!');
     return { handle: extractedHandle.replace(/^@/, ''), name: extractedName };
   }
 
+  // ─── Automatic Social Header Scraper ──────────────────────────────────────────
+
+  function scrapePlatformHeader(platform) {
+    let handle = '';
+    let name = '';
+
+    if (platform === 'instagram') {
+      const links = document.querySelectorAll('header a[href*="/"], div[role="main"] header a[href*="/"], section header a[href*="/"]');
+      for (const link of links) {
+        const href = link.getAttribute('href') || '';
+        const match = href.match(/^\/([a-zA-Z0-9._]{2,30})\/?$/);
+        if (match && match[1]) {
+          const cand = match[1].toLowerCase();
+          if (!['direct', 'inbox', 'explore', 'reels', 'stories', 'p'].includes(cand)) {
+            handle = match[1];
+            if (link.textContent && link.textContent.trim()) {
+              name = link.textContent.trim();
+            }
+            break;
+          }
+        }
+      }
+      if (!name) {
+        const headerTitle = document.querySelector('header span[dir="auto"], div[role="main"] header span, header h1, header h2');
+        if (headerTitle && headerTitle.textContent.trim()) {
+          const text = headerTitle.textContent.trim();
+          if (!text.includes('Direct') && !text.includes('Inbox') && text.length <= 40) {
+            name = text;
+          }
+        }
+      }
+    } else if (platform === 'linkedin') {
+      const activeCard = document.querySelector('.msg-conversation-listitem--active, [aria-selected="true"].msg-conversation-card, .msg-conversation-card--active');
+      if (activeCard) {
+        const titleEl = activeCard.querySelector('.msg-conversation-card__participant-names, .msg-entity-lockup__title, h3, .artdeco-entity-lockup__title');
+        if (titleEl && titleEl.textContent.trim()) {
+          name = titleEl.textContent.trim();
+        }
+      }
+      if (!name) {
+        const mainHeader = document.querySelector('.msg-title_title, .msg-entity-lockup__title, .msg-thread__name, .msg-overlay-bubble-header__title, .artdeco-entity-lockup__title');
+        if (mainHeader && mainHeader.textContent.trim()) {
+          name = mainHeader.textContent.trim();
+        }
+      }
+    } else if (platform === 'facebook') {
+      const headerTitle = document.querySelector('div[role="main"] h2, div[role="main"] header span, div[role="navigation"] [aria-selected="true"] span');
+      if (headerTitle && headerTitle.textContent.trim()) {
+        name = headerTitle.textContent.trim();
+      }
+    }
+
+    if (handle && !name) name = handle;
+    if (!handle && name) handle = name.toLowerCase().replace(/[^a-z0-9._]/g, '_').replace(/^[._]+|[._]+$/g, '');
+
+    return { handle, name };
+  }
+
   // ─── Context Menu for Header Button ──────────────────────────────────────────
 
   function removeBtnContextMenu() {
@@ -211,16 +269,22 @@ console.log('[AI Vastra Social CRM Extension] Active on social media!');
 
     menu.style.left = `${left}px`;
     menu.style.top = `${top}px`;
+    menu.style.position = 'fixed';
+    menu.style.zIndex = '9999999';
+    menu.style.background = '#fff';
+    menu.style.borderRadius = '8px';
+    menu.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)';
+    menu.style.padding = '8px';
 
     menu.innerHTML = `
       <div style="padding:4px 8px 6px;font-size:10px;font-weight:800;color:#6b7280;text-transform:uppercase;letter-spacing:0.5px;border-bottom:1px solid #f3f4f6;margin-bottom:4px;">
         ⚡ AI CRM Settings
       </div>
-      <button class="aivastra-ctx-item danger" id="aivastra-ctx-remove-btn">
-        <span>❌</span> <span>Remove Button (Temporarily)</span>
+      <button class="aivastra-ctx-item danger" id="aivastra-ctx-remove-btn" style="display:block;width:100%;text-align:left;padding:8px;border:none;background:none;cursor:pointer;color:#dc2626;font-size:12px;">
+        ❌ Remove Button (Temporarily)
       </button>
-      <button class="aivastra-ctx-item" id="aivastra-ctx-reset-btn">
-        <span>📍</span> <span>Reset Button Position</span>
+      <button class="aivastra-ctx-item" id="aivastra-ctx-reset-btn" style="display:block;width:100%;text-align:left;padding:8px;border:none;background:none;cursor:pointer;font-size:12px;">
+        📍 Reset Button Position
       </button>
     `;
 
@@ -233,7 +297,7 @@ console.log('[AI Vastra Social CRM Extension] Active on social media!');
         isButtonHiddenTemp = true;
         try { sessionStorage.setItem('aivastra_btn_hidden', 'true'); } catch (err) {}
 
-        const b = document.getElementById('aivastra-ig-header-btn');
+        const b = document.getElementById('aivastra-header-toggle-btn');
         if (b) b.style.display = 'none';
 
         const p = document.getElementById('aivastra-social-panel');
@@ -250,162 +314,101 @@ console.log('[AI Vastra Social CRM Extension] Active on social media!');
         savedBtnPos = null;
         safeStorageSet({ crm_btn_position: null });
 
-        const b = document.getElementById('aivastra-ig-header-btn');
+        const b = document.getElementById('aivastra-header-toggle-btn');
         if (b) {
           b.style.top = '14px';
-          b.style.right = '80px';
-          b.style.left = 'auto';
+          b.style.left = '240px';
+          b.style.right = 'auto';
         }
         removeBtnContextMenu();
       };
     }
 
-    // Auto-dismiss on click outside
-    setTimeout(() => {
-      const closeHandler = (evt) => {
-        if (!menu.contains(evt.target)) {
-          removeBtnContextMenu();
-          window.removeEventListener('click', closeHandler);
-          window.removeEventListener('contextmenu', closeHandler);
-        }
-      };
-      window.addEventListener('click', closeHandler);
-      window.addEventListener('contextmenu', closeHandler);
-    }, 10);
+    const closeHandler = (evt) => {
+      if (!menu.contains(evt.target)) {
+        removeBtnContextMenu();
+        document.removeEventListener('click', closeHandler);
+      }
+    };
+    setTimeout(() => { document.addEventListener('click', closeHandler); }, 10);
   }
 
-  // ─── Floating Header Button ───────────────────────────────────────────────────
+  // ─── Header AI CRM Button ──────────────────────────────────────────────────
 
   function ensureHeaderButton() {
-    let btn = document.getElementById('aivastra-ig-header-btn');
+    if (isButtonHiddenTemp) return;
 
-    // If temporarily hidden, hide and stop
-    if (isButtonHiddenTemp) {
-      if (btn) btn.style.display = 'none';
-      return;
-    }
-
+    let btn = document.getElementById('aivastra-header-toggle-btn');
     if (!btn) {
       btn = document.createElement('button');
-      btn.id = 'aivastra-ig-header-btn';
-      btn.innerHTML = `<span style="font-size:11px;opacity:0.8;margin-right:2px;cursor:grab;">⋮⋮</span><span>⚡</span> <span>AI CRM</span>`;
-      btn.title = 'Drag to move | Right-click for options | Click to toggle CRM panel';
-
-      // Default position
+      btn.id = 'aivastra-header-toggle-btn';
+      btn.style.position = 'fixed';
+      btn.style.zIndex = '9999998';
       btn.style.top = '14px';
-      btn.style.right = '80px';
-      btn.style.left = 'auto';
+      btn.style.left = '240px';
+      btn.innerHTML = `⚡ AI CRM`;
+      btn.style.cursor = 'grab';
 
-      // Restore saved position
       safeStorageGet(['crm_btn_position'], (res) => {
         if (res && res.crm_btn_position) {
           savedBtnPos = res.crm_btn_position;
           btn.style.top = `${savedBtnPos.top}px`;
           btn.style.left = `${savedBtnPos.left}px`;
-          btn.style.right = 'auto';
         }
       });
 
-      // ── Drag logic ──
       let isDragging = false;
-      let startX = 0;
-      let startY = 0;
-      let initialLeft = 0;
-      let initialTop = 0;
+      let startX = 0, startY = 0, initialLeft = 0, initialTop = 0, hasDraggedMoved = false;
 
-      const onMouseDown = (e) => {
-        if (e.button === 2) return; // ignore right-click
-
-        isDragging = false;
-        startX = e.clientX || (e.touches && e.touches[0] ? e.touches[0].clientX : 0);
-        startY = e.clientY || (e.touches && e.touches[0] ? e.touches[0].clientY : 0);
-
+      btn.addEventListener('mousedown', (e) => {
+        if (e.button !== 0) return;
+        isDragging = true;
+        hasDraggedMoved = false;
+        startX = e.clientX;
+        startY = e.clientY;
         const rect = btn.getBoundingClientRect();
         initialLeft = rect.left;
         initialTop = rect.top;
-
         btn.style.cursor = 'grabbing';
+      });
 
-        const onMouseMove = (moveEvt) => {
-          const clientX = moveEvt.clientX || (moveEvt.touches && moveEvt.touches[0] ? moveEvt.touches[0].clientX : 0);
-          const clientY = moveEvt.clientY || (moveEvt.touches && moveEvt.touches[0] ? moveEvt.touches[0].clientY : 0);
+      window.addEventListener('mousemove', (e) => {
+        if (!isDragging) return;
+        const dx = e.clientX - startX;
+        const dy = e.clientY - startY;
+        if (Math.abs(dx) > 3 || Math.abs(dy) > 3) hasDraggedMoved = true;
+        btn.style.left = `${initialLeft + dx}px`;
+        btn.style.top = `${initialTop + dy}px`;
+        btn.style.right = 'auto';
+      });
 
-          const deltaX = clientX - startX;
-          const deltaY = clientY - startY;
-
-          if (Math.abs(deltaX) > 4 || Math.abs(deltaY) > 4) {
-            isDragging = true;
-          }
-
-          if (isDragging) {
-            const maxLeft = window.innerWidth - btn.offsetWidth - 10;
-            const maxTop = window.innerHeight - btn.offsetHeight - 10;
-
-            btn.style.left = `${Math.max(10, Math.min(initialLeft + deltaX, maxLeft))}px`;
-            btn.style.top = `${Math.max(10, Math.min(initialTop + deltaY, maxTop))}px`;
-            btn.style.right = 'auto';
-          }
-        };
-
-        const onMouseUp = () => {
+      window.addEventListener('mouseup', () => {
+        if (isDragging) {
+          isDragging = false;
           btn.style.cursor = 'grab';
-          window.removeEventListener('mousemove', onMouseMove);
-          window.removeEventListener('mouseup', onMouseUp);
-          window.removeEventListener('touchmove', onMouseMove);
-          window.removeEventListener('touchend', onMouseUp);
-
-          if (isDragging) {
+          if (hasDraggedMoved) {
             const rect = btn.getBoundingClientRect();
             savedBtnPos = { top: Math.round(rect.top), left: Math.round(rect.left) };
             safeStorageSet({ crm_btn_position: savedBtnPos });
           }
-        };
-
-        window.addEventListener('mousemove', onMouseMove);
-        window.addEventListener('mouseup', onMouseUp);
-        window.addEventListener('touchmove', onMouseMove, { passive: false });
-        window.addEventListener('touchend', onMouseUp);
-      };
-
-      btn.addEventListener('mousedown', onMouseDown);
-      btn.addEventListener('touchstart', onMouseDown, { passive: false });
-
-      // Right-click context menu
-      btn.addEventListener('contextmenu', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        showBtnContextMenu(e.clientX, e.clientY);
+        }
       });
 
-      // Left-click toggle
       btn.addEventListener('click', (e) => {
-        if (isDragging) {
-          e.preventDefault();
-          e.stopPropagation();
-          return;
-        }
-        e.stopPropagation();
+        if (hasDraggedMoved) { e.preventDefault(); e.stopPropagation(); return; }
         isPanelVisible = !isPanelVisible;
         const panel = document.getElementById('aivastra-social-panel');
         if (panel) panel.style.display = isPanelVisible ? 'flex' : 'none';
-        if (isPanelVisible) {
-          detectActiveContact(true);
-        }
+        if (isPanelVisible) detectActiveContact(true);
+      });
+
+      btn.addEventListener('contextmenu', (e) => {
+        e.preventDefault();
+        showBtnContextMenu(e.clientX, e.clientY);
       });
 
       document.body.appendChild(btn);
     }
-
-    // Apply saved position
-    if (savedBtnPos) {
-      btn.style.top = `${savedBtnPos.top}px`;
-      btn.style.left = `${savedBtnPos.left}px`;
-      btn.style.right = 'auto';
-    }
-
-    btn.style.display = 'flex';
-    btn.style.visibility = 'visible';
-    btn.style.opacity = '1';
   }
 
   // ─── Panel Container ──────────────────────────────────────────────────────────
@@ -415,6 +418,12 @@ console.log('[AI Vastra Social CRM Extension] Active on social media!');
     if (!panel) {
       panel = document.createElement('div');
       panel.id = 'aivastra-social-panel';
+      panel.style.position = 'fixed';
+      panel.style.zIndex = '9999999';
+      panel.style.top = '60px';
+      panel.style.right = '20px';
+      panel.style.width = '300px';
+      panel.style.background = '#fff';
       document.body.appendChild(panel);
     }
     panel.style.display = isPanelVisible ? 'flex' : 'none';
@@ -434,17 +443,22 @@ console.log('[AI Vastra Social CRM Extension] Active on social media!');
       currentPlatform = platform;
       isEditingProfile = false;
 
-      if (isNewThread) {
-        activeContactHandle = '';
-        activeDisplayName = '';
-        activeFormData = {
-          leadStatus: 'UNASSIGNED',
-          callStatus: null,
-          followUpDate: '',
-          assignedUser: '',
-          clientLanguage: '',
-          notesList: []
-        };
+      if (isNewThread || !activeContactHandle) {
+        const scraped = scrapePlatformHeader(platform);
+        if (scraped.handle) activeContactHandle = scraped.handle;
+        if (scraped.name && (!activeDisplayName || activeDisplayName === activeContactHandle)) {
+          activeDisplayName = scraped.name;
+        }
+        if (isNewThread) {
+          activeFormData = {
+            leadStatus: 'UNASSIGNED',
+            callStatus: null,
+            followUpDate: '',
+            assignedUser: '',
+            clientLanguage: '',
+            notesList: []
+          };
+        }
       }
 
       renderPanel(activeDisplayName, null);
@@ -480,7 +494,6 @@ console.log('[AI Vastra Social CRM Extension] Active on social media!');
         renderPanel(activeDisplayName, null);
       }
 
-      // Also try backend
       safeSendMessage({ action: 'FETCH_CONTACT_DATA', identifier: threadId || activeContactHandle }, (backendRes) => {
         if (generation !== fetchGeneration) return;
 
@@ -521,6 +534,12 @@ console.log('[AI Vastra Social CRM Extension] Active on social media!');
       activeDisplayName = activeContactHandle;
     }
 
+    if (!activeContactHandle && !activeDisplayName) {
+      const scraped = scrapePlatformHeader(currentPlatform);
+      if (scraped.handle) activeContactHandle = scraped.handle;
+      if (scraped.name) activeDisplayName = scraped.name;
+    }
+
     const canonicalJid = `${activeContactHandle || activeThreadId}@${currentPlatform}`;
     const dateEl = panel ? panel.querySelector('#aivastra-followup-date') : null;
     const bdmEl = panel ? panel.querySelector('#aivastra-bdm-user') : null;
@@ -547,13 +566,11 @@ console.log('[AI Vastra Social CRM Extension] Active on social media!');
       updatedAt: Date.now()
     };
 
-    // Persist to chrome.storage
     const saveObj = {};
     if (activeThreadId) saveObj[`crm_social_thread_${activeThreadId}`] = payload;
     if (activeContactHandle) saveObj[`crm_social_${activeContactHandle}@${currentPlatform}`] = payload;
     safeStorageSet(saveObj);
 
-    // Sync to backend API
     try {
       fetch(`${DEFAULT_API_BASE}/api/crm/contact`, {
         method: 'POST',

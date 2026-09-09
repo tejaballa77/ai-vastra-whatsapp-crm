@@ -26,6 +26,8 @@ export interface CRMContact {
   aiDisabled?: boolean;
   isAutoWarm?: boolean;
   manuallySaved?: boolean;
+  assignedUser?: string;
+  clientLanguage?: string;
   updatedAt?: number;
 }
 
@@ -50,6 +52,8 @@ export interface CRMChat {
   aiDisabled?: boolean;
   isAutoWarm?: boolean;
   manuallySaved?: boolean;
+  assignedUser?: string;
+  clientLanguage?: string;
   updatedAt?: number;
 }
 
@@ -298,6 +302,8 @@ class StorageEngine {
           aiDisabled: Boolean(row.ai_disabled),
           isAutoWarm: Boolean(row.is_auto_warm),
           manuallySaved: Boolean(row.manually_saved),
+          assignedUser: row.assigned_user || undefined,
+          clientLanguage: row.client_language || undefined,
           updatedAt: Number(row.updated_at || row.created_at || row.last_message_at || 0),
         });
       }
@@ -331,6 +337,8 @@ class StorageEngine {
           aiDisabled: Boolean(row.ai_disabled),
           isAutoWarm: Boolean(row.is_auto_warm),
           manuallySaved: Boolean(row.manually_saved),
+          assignedUser: row.assigned_user || undefined,
+          clientLanguage: row.client_language || undefined,
           updatedAt: Number(row.updated_at || row.created_at || row.last_message_at || 0),
         });
       }
@@ -1495,6 +1503,8 @@ class StorageEngine {
         aiDisabled: metadata.aiDisabled,
         isAutoWarm: metadata.isAutoWarm !== undefined ? metadata.isAutoWarm : false,
         manuallySaved: metadata.manuallySaved !== undefined ? metadata.manuallySaved : false,
+        assignedUser: metadata.assignedUser || metadata.calledBy || undefined,
+        clientLanguage: metadata.clientLanguage || metadata.language || undefined,
         updatedAt: nowTimestamp,
       };
     } else {
@@ -1509,6 +1519,8 @@ class StorageEngine {
       if (metadata.aiDisabled !== undefined) contact.aiDisabled = metadata.aiDisabled;
       if (metadata.isAutoWarm !== undefined) contact.isAutoWarm = metadata.isAutoWarm;
       if (metadata.manuallySaved === true) contact.manuallySaved = true;
+      if (metadata.assignedUser || metadata.calledBy) (contact as any).assignedUser = metadata.assignedUser || metadata.calledBy;
+      if (metadata.clientLanguage || metadata.language) (contact as any).clientLanguage = metadata.clientLanguage || metadata.language;
       if (tenDigit) contact.phone = `91${tenDigit}`;
       contact.updatedAt = nowTimestamp;
     }
@@ -1541,6 +1553,8 @@ class StorageEngine {
         aiDisabled: metadata.aiDisabled,
         isAutoWarm: metadata.isAutoWarm !== undefined ? metadata.isAutoWarm : false,
         manuallySaved: metadata.manuallySaved !== undefined ? metadata.manuallySaved : false,
+        assignedUser: metadata.assignedUser || metadata.calledBy || undefined,
+        clientLanguage: metadata.clientLanguage || metadata.language || undefined,
         updatedAt: nowTimestamp,
       };
     } else {
@@ -1575,8 +1589,8 @@ class StorageEngine {
     dbManager.query(
       `INSERT INTO crm_contacts (
         jid, name, phone, avatar_url, lead_status, call_status, follow_up_date, previous_follow_up_date,
-        notes, notes_list, tags, ai_disabled, is_auto_warm, manually_saved, updated_at, created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        notes, notes_list, tags, ai_disabled, is_auto_warm, manually_saved, assigned_user, client_language, updated_at, created_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(jid) DO UPDATE SET
         name = EXCLUDED.name,
         phone = EXCLUDED.phone,
@@ -1591,6 +1605,8 @@ class StorageEngine {
         ai_disabled = EXCLUDED.ai_disabled,
         is_auto_warm = EXCLUDED.is_auto_warm,
         manually_saved = EXCLUDED.manually_saved,
+        assigned_user = EXCLUDED.assigned_user,
+        client_language = EXCLUDED.client_language,
         updated_at = EXCLUDED.updated_at`,
       [
         contact.jid,
@@ -1607,6 +1623,8 @@ class StorageEngine {
         contact.aiDisabled ? 1 : 0,
         contact.isAutoWarm ? 1 : 0,
         contact.manuallySaved ? 1 : 0,
+        (contact as any).assignedUser || '',
+        (contact as any).clientLanguage || '',
         contact.updatedAt || Date.now(),
         Date.now(),
       ]
@@ -1616,8 +1634,8 @@ class StorageEngine {
       `INSERT INTO crm_chats (
         jid, name, phone, unread_count, last_message_preview, last_message_at, last_message_from_me,
         last_message_status, avatar_url, is_group, lead_status, call_status, follow_up_date, previous_follow_up_date,
-        notes, notes_list, tags, ai_disabled, is_auto_warm, manually_saved, updated_at, created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        notes, notes_list, tags, ai_disabled, is_auto_warm, manually_saved, assigned_user, client_language, updated_at, created_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(jid) DO UPDATE SET
         name = EXCLUDED.name,
         phone = EXCLUDED.phone,
@@ -1637,6 +1655,8 @@ class StorageEngine {
         ai_disabled = EXCLUDED.ai_disabled,
         is_auto_warm = EXCLUDED.is_auto_warm,
         manually_saved = EXCLUDED.manually_saved,
+        assigned_user = EXCLUDED.assigned_user,
+        client_language = EXCLUDED.client_language,
         updated_at = EXCLUDED.updated_at`,
       [
         chat.jid,
@@ -1659,6 +1679,8 @@ class StorageEngine {
         chat.aiDisabled ? 1 : 0,
         chat.isAutoWarm ? 1 : 0,
         chat.manuallySaved ? 1 : 0,
+        (chat as any).assignedUser || '',
+        (chat as any).clientLanguage || '',
         chat.updatedAt || Date.now(),
         Date.now(),
       ]

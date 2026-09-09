@@ -4,10 +4,10 @@ document.addEventListener('DOMContentLoaded', () => {
   const statusMsg = document.getElementById('statusMsg');
 
   chrome.runtime.sendMessage({ action: 'GET_CONFIG' }, (res) => {
-    if (res && res.apiUrl) {
+    if (res && res.apiUrl && !res.apiUrl.includes('localhost')) {
       apiUrlInput.value = res.apiUrl;
     } else {
-      apiUrlInput.value = 'http://localhost:5000';
+      apiUrlInput.value = 'https://crm.nicedigitalsgroup.com';
     }
   });
 

@@ -1,10 +1,15 @@
 // AI Vastra Social CRM Extension Background Service Worker (Instagram, LinkedIn, Facebook)
-const DEFAULT_API_URL = 'http://localhost:5000';
+const DEFAULT_API_URL = 'https://crm.nicedigitalsgroup.com';
 
 async function getApiUrl() {
   return new Promise((resolve) => {
     chrome.storage.local.get(['apiUrl'], (result) => {
-      resolve(result.apiUrl || DEFAULT_API_URL);
+      let url = result.apiUrl;
+      if (!url || typeof url !== 'string' || url.includes('localhost') || url.includes('127.0.0.1')) {
+        url = DEFAULT_API_URL;
+        chrome.storage.local.set({ apiUrl: DEFAULT_API_URL });
+      }
+      resolve(url);
     });
   });
 }
@@ -42,6 +47,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === 'UPDATE_CRM_METADATA') {
     getApiUrl().then(async (baseUrl) => {
       const endpoint = `${baseUrl}/api/crm/contact`;
+      console.log('[AI Vastra Social CRM Background] POST to', endpoint, request.payload);
       const data = await safeFetchJson(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -75,3 +81,4 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     return true;
   }
 });
+

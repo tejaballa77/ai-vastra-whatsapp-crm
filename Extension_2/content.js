@@ -454,7 +454,9 @@ console.log('[AI Vastra Social CRM Extension] Active on social media!');
       if (scraped.handle) activeContactHandle = scraped.handle;
       if (scraped.name) activeDisplayName = scraped.name;
 
-      renderPanel(activeDisplayName, null);
+      if (isPanelVisible) {
+        renderPanel(activeDisplayName, null);
+      }
       fetchGeneration++;
       fetchCrmDataForThread(threadId, platform, fetchGeneration);
     }
@@ -462,7 +464,7 @@ console.log('[AI Vastra Social CRM Extension] Active on social media!');
 
   function fetchCrmDataForThread(threadId, platform, generation) {
     if (!threadId && !activeContactHandle) {
-      renderPanel('', null);
+      if (isPanelVisible) renderPanel('', null);
       return;
     }
 
@@ -484,7 +486,7 @@ console.log('[AI Vastra Social CRM Extension] Active on social media!');
         };
         if (cached.name) activeDisplayName = cached.name;
         if (cached.phone) activeContactHandle = cached.phone;
-        renderPanel(activeDisplayName, null);
+        if (isPanelVisible) renderPanel(activeDisplayName, null);
       }
 
       safeSendMessage({ action: 'FETCH_CONTACT_DATA', identifier: threadId || activeContactHandle }, (backendRes) => {
@@ -503,7 +505,7 @@ console.log('[AI Vastra Social CRM Extension] Active on social media!');
           if (c.name) activeDisplayName = c.name;
           if (c.phone) activeContactHandle = c.phone;
         }
-        renderPanel(activeDisplayName, null);
+        if (isPanelVisible) renderPanel(activeDisplayName, null);
       });
     });
   }
@@ -763,9 +765,14 @@ console.log('[AI Vastra Social CRM Extension] Active on social media!');
     // Close button
     const closeBtn = panel.querySelector('#aivastra-close-btn');
     if (closeBtn) {
-      closeBtn.onclick = () => {
+      closeBtn.onclick = (e) => {
+        if (e) {
+          e.preventDefault();
+          e.stopPropagation();
+        }
         isPanelVisible = false;
-        panel.style.display = 'none';
+        const p = document.getElementById('aivastra-social-panel');
+        if (p) p.style.display = 'none';
       };
     }
 
@@ -1000,7 +1007,7 @@ console.log('[AI Vastra Social CRM Extension] Active on social media!');
     if (currentUrl !== lastUrl || (currentThread && currentThread !== lastObservedThread)) {
       lastUrl = currentUrl;
       lastObservedThread = currentThread;
-      detectActiveContact(true);
+      detectActiveContact(isPanelVisible);
     }
   };
 

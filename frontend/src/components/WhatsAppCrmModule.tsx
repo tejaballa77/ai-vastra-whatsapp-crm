@@ -165,10 +165,6 @@ export function WhatsAppCrmModule() {
       formattedPhone = `+91 ${tenDigit.slice(0, 5)} ${tenDigit.slice(5)}`;
     } else if (rawNum.length > 0 && rawNum.length <= 12) {
       formattedPhone = `+${rawNum}`;
-    } else if (chat.phone && isNaN(Number(chat.phone))) {
-      formattedPhone = `@${chat.phone.replace(/^@/, '')}`;
-    } else {
-      formattedPhone = isSocial ? `@${(chat.phone || chat.jid || '').split('@')[0]}` : (tenDigit.length === 10 ? `+91 ${tenDigit}` : (rawNum ? `+${rawNum}` : 'Social Contact'));
     }
 
     let nameRaw = (chat.name || '').trim();
@@ -177,14 +173,15 @@ export function WhatsAppCrmModule() {
     }
 
     const isJidEmail = nameRaw.endsWith('@s.whatsapp.net') || nameRaw.endsWith('@c.us') || nameRaw.endsWith('@lid') || nameRaw.includes('@g.us');
-    const isLidDigits = /^\d{13,}$/.test(nameRaw.replace(/\D/g, ''));
+    const isLidDigits = /^\d{10,}$/.test(nameRaw.replace(/\D/g, ''));
     const isBadName = !nameRaw || BAD_NAMES.has(nameRaw.toLowerCase()) || isJidEmail || isLidDigits;
 
-    const displayName = isBadName ? formattedPhone : nameRaw;
+    const hasSavedName = !isBadName && nameRaw.replace(/\D/g, '') !== tenDigit && nameRaw.replace(/\D/g, '') !== rawNum;
+    const displayName = hasSavedName ? nameRaw : (formattedPhone || (chat.phone || chat.jid || '').split('@')[0]);
     const platform = isInstagram ? 'Instagram' : (isLinkedIn ? 'LinkedIn' : (isFacebook ? 'Facebook' : 'WhatsApp'));
     const platformIcon = isInstagram ? '📸' : (isLinkedIn ? '💼' : (isFacebook ? '📘' : '💬'));
 
-    return { displayName, formattedPhone, cleanPhone: tenDigit || rawNum || chat.phone || '', platform, platformIcon };
+    return { displayName, hasSavedName, formattedPhone, cleanPhone: tenDigit || rawNum || chat.phone || '', platform, platformIcon };
   };
 
   const chatsMap = new Map<string, (typeof rawChats)[0]>();
@@ -751,7 +748,7 @@ export function WhatsAppCrmModule() {
                       </tr>
                     ) : (
                       filteredTableLeads.map((chat) => {
-                        const { displayName, formattedPhone, cleanPhone } = getCleanDisplayContact(chat);
+                        const { displayName, hasSavedName, formattedPhone, cleanPhone } = getCleanDisplayContact(chat);
                         const rawUsername = chat.phone || (chat.jid || '').split('@')[0] || '';
                         const cleanUsername = rawUsername.replace(/^@/, '');
                         const displayUserStr = cleanUsername ? `@${cleanUsername}` : '';
@@ -761,9 +758,9 @@ export function WhatsAppCrmModule() {
                             <td className="p-4 align-middle">
                               <div className="font-extrabold text-black text-sm leading-tight">{displayName}</div>
                               {activeNav === 'whatsapp' ? (
-                                formattedPhone && (
-                                  <div className="text-xs font-semibold text-zinc-600 font-mono mt-0.5">📞 {formattedPhone}</div>
-                                )
+                                (hasSavedName && formattedPhone && formattedPhone !== displayName && formattedPhone !== 'Social Contact') ? (
+                                  <div className="text-xs font-semibold text-zinc-500 font-mono mt-0.5">📞 {formattedPhone}</div>
+                                ) : null
                               ) : (
                                 displayUserStr && (
                                   <div className="flex items-center gap-1.5 mt-1 flex-wrap">

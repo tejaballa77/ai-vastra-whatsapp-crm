@@ -1331,11 +1331,13 @@ export function WhatsAppCrmModule() {
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[9999] flex items-center justify-center p-4 text-black font-sans">
           <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl border border-[#e9edef] flex flex-col max-h-[92vh] overflow-hidden animate-in fade-in zoom-in duration-150">
 
-            {/* Header — matches Instagram extension */}
+            {/* Header — dynamic based on platform tab */}
             <div className="h-[54px] bg-[#f0f2f5] border-b border-[#e9edef] flex items-center justify-between px-4 flex-shrink-0">
               <div className="flex items-center gap-2">
                 <span style={{color:'#00a884',fontSize:'16px'}}>⚡</span>
-                <span className="font-extrabold text-sm text-[#111b21]">Instagram CRM</span>
+                <span className="font-extrabold text-sm text-[#111b21]">
+                  {activeNav === 'whatsapp' ? 'WhatsApp CRM' : activeNav === 'instagram' ? 'Instagram CRM' : activeNav === 'linkedin' ? 'LinkedIn CRM' : 'Facebook CRM'}
+                </span>
               </div>
               <div className="flex items-center gap-2">
                 <button
@@ -1363,7 +1365,7 @@ export function WhatsAppCrmModule() {
             {/* Body */}
             <div className="overflow-y-auto flex-1 p-4 space-y-4">
 
-              {/* Contact Card — avatar + name + @handle */}
+              {/* Contact Card */}
               <div className="bg-[#f0f2f5] border border-[#e9edef] rounded-xl p-3.5 text-center flex flex-col items-center">
                 <div className="w-12 h-12 rounded-full bg-[#00a884] text-white flex items-center justify-center font-black text-lg uppercase mb-1.5">
                   {(getCleanDisplayContact(editingContact).displayName || '?').charAt(0)}
@@ -1371,9 +1373,17 @@ export function WhatsAppCrmModule() {
                 <div className="text-sm font-extrabold text-[#111b21]">
                   {getCleanDisplayContact(editingContact).displayName}
                 </div>
-                <div className="text-xs font-semibold text-[#667781] mt-0.5">
-                  @{(editingContact.phone || '').replace(/^@/, '')}
-                </div>
+                {activeNav === 'whatsapp' ? (
+                  getCleanDisplayContact(editingContact).hasSavedName && getCleanDisplayContact(editingContact).formattedPhone ? (
+                    <div className="text-xs font-semibold text-[#667781] mt-0.5 font-mono">
+                      📞 {getCleanDisplayContact(editingContact).formattedPhone}
+                    </div>
+                  ) : null
+                ) : (
+                  <div className="text-xs font-semibold text-[#667781] mt-0.5">
+                    @{(editingContact.phone || '').replace(/^@/, '')}
+                  </div>
+                )}
               </div>
 
               {/* LEAD STATUS */}
@@ -1426,29 +1436,59 @@ export function WhatsAppCrmModule() {
                 </div>
               </div>
 
-              {/* BDM & LANGUAGE */}
-              <div>
-                <div className="text-[11px] font-bold text-[#667781] uppercase tracking-wider mb-1.5">BDM &amp; LANGUAGE</div>
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    value={editBdmUser}
-                    onChange={(e) => setEditBdmUser(e.target.value)}
-                    placeholder="BDM Name"
-                    className="flex-1 p-2.5 bg-[#f0f2f5] border border-[#e9edef] rounded-lg text-xs font-bold text-[#111b21] outline-none focus:border-[#00a884] transition-all"
-                  />
-                  <select
-                    value={editLanguage}
-                    onChange={(e) => setEditLanguage(e.target.value)}
-                    className="flex-1 p-2.5 bg-[#f0f2f5] border border-[#e9edef] rounded-lg text-xs font-bold text-[#111b21] outline-none focus:border-[#00a884] transition-all"
-                  >
-                    <option value="">-- Language --</option>
-                    <option value="Telugu">Telugu</option>
-                    <option value="Hindi">Hindi</option>
-                    <option value="English">English</option>
-                  </select>
+              {/* CALL REQUEST (WhatsApp) vs BDM & LANGUAGE (Social) */}
+              {activeNav === 'whatsapp' ? (
+                <div>
+                  <div className="text-[11px] font-bold text-[#667781] uppercase tracking-wider mb-1.5">CALL REQUEST</div>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setEditCallStatus('YES')}
+                      className={`flex-1 py-2 px-1 rounded-lg text-xs font-bold border transition-all text-center ${
+                        editCallStatus === 'YES'
+                          ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm'
+                          : 'bg-[#f0f2f5] hover:bg-[#e9edef] text-[#111b21] border-[#e9edef]'
+                      }`}
+                    >
+                      📞 Yes
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setEditCallStatus('NO')}
+                      className={`flex-1 py-2 px-1 rounded-lg text-xs font-bold border transition-all text-center ${
+                        editCallStatus === 'NO'
+                          ? 'bg-zinc-700 text-white border-zinc-700 shadow-sm'
+                          : 'bg-[#f0f2f5] hover:bg-[#e9edef] text-[#111b21] border-[#e9edef]'
+                      }`}
+                    >
+                      No
+                    </button>
+                  </div>
                 </div>
-              </div>
+              ) : (
+                <div>
+                  <div className="text-[11px] font-bold text-[#667781] uppercase tracking-wider mb-1.5">BDM &amp; LANGUAGE</div>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={editBdmUser}
+                      onChange={(e) => setEditBdmUser(e.target.value)}
+                      placeholder="BDM Name"
+                      className="flex-1 p-2.5 bg-[#f0f2f5] border border-[#e9edef] rounded-lg text-xs font-bold text-[#111b21] outline-none focus:border-[#00a884] transition-all"
+                    />
+                    <select
+                      value={editLanguage}
+                      onChange={(e) => setEditLanguage(e.target.value)}
+                      className="flex-1 p-2.5 bg-[#f0f2f5] border border-[#e9edef] rounded-lg text-xs font-bold text-[#111b21] outline-none focus:border-[#00a884] transition-all"
+                    >
+                      <option value="">-- Language --</option>
+                      <option value="Telugu">Telugu</option>
+                      <option value="Hindi">Hindi</option>
+                      <option value="English">English</option>
+                    </select>
+                  </div>
+                </div>
+              )}
 
               {/* CRM NOTES */}
               <div>

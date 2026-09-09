@@ -418,12 +418,6 @@ console.log('[AI Vastra Social CRM Extension] Active on social media!');
     if (!panel) {
       panel = document.createElement('div');
       panel.id = 'aivastra-social-panel';
-      panel.style.position = 'fixed';
-      panel.style.zIndex = '9999999';
-      panel.style.top = '60px';
-      panel.style.right = '20px';
-      panel.style.width = '300px';
-      panel.style.background = '#fff';
       document.body.appendChild(panel);
     }
     panel.style.display = isPanelVisible ? 'flex' : 'none';
@@ -728,7 +722,7 @@ console.log('[AI Vastra Social CRM Extension] Active on social media!');
           </div>
         </div>
 
-        <div style="display:flex;flex-direction:column;flex:1;">
+        <div style="display:flex;flex-direction:column;">
           <div class="aivastra-section-title">CRM NOTES</div>
           <textarea id="aivastra-note-text" class="aivastra-notes-area" placeholder="Add key note about customer requirements..."></textarea>
           <button id="aivastra-add-note-btn" class="aivastra-add-note-btn">+ Add Note</button>
@@ -741,10 +735,10 @@ console.log('[AI Vastra Social CRM Extension] Active on social media!');
             `).join('')}
           </div>
         </div>
+      </div>
 
-        <div style="margin-top:auto;padding-top:8px;">
-          <button id="aivastra-save-main-btn" class="aivastra-save-btn">💾 Save Contact Info</button>
-        </div>
+      <div class="aivastra-footer">
+        <button id="aivastra-save-main-btn" class="aivastra-save-btn">💾 Save Contact Info</button>
       </div>
     `;
 

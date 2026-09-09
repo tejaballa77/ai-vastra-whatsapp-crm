@@ -346,7 +346,7 @@ console.log('[AI Vastra Social CRM Extension] Active on social media!');
       btn.style.zIndex = '9999998';
       btn.style.top = '14px';
       btn.style.left = '240px';
-      btn.innerHTML = `⚡ AI CRM`;
+      btn.innerHTML = `<span style="font-size:11px;opacity:0.8;margin-right:2px;cursor:grab;">⋮⋮</span><span>⚡</span> <span>AI CRM</span>`;
       btn.style.cursor = 'grab';
 
       safeStorageGet(['crm_btn_position'], (res) => {

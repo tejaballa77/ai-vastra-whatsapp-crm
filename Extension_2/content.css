@@ -16,16 +16,16 @@
   color: #111b21;
 }
 
-#aivastra-ig-header-btn {
+#aivastra-ig-header-btn, #aivastra-header-toggle-btn {
   position: fixed !important;
   z-index: 9999999 !important;
-  background-color: #00a884 !important;
-  color: #ffffff !important;
-  border: 1px solid rgba(255, 255, 255, 0.3) !important;
+  background-color: #25d366 !important;
+  color: #000000 !important;
+  border: 1px solid #1da851 !important;
   border-radius: 20px !important;
   padding: 6px 14px !important;
   font-size: 13px !important;
-  font-weight: 700 !important;
+  font-weight: 800 !important;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;
   cursor: grab !important;
   display: flex !important;
@@ -39,8 +39,9 @@
   touch-action: none !important;
 }
 
-#aivastra-ig-header-btn:hover {
-  background-color: #008f70 !important;
+#aivastra-ig-header-btn:hover, #aivastra-header-toggle-btn:hover {
+  background-color: #1da851 !important;
+  color: #000000 !important;
   box-shadow: 0 6px 16px rgba(0, 0, 0, 0.35) !important;
 }
 

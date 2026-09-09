@@ -46,7 +46,7 @@ console.log('[AI Vastra Social CRM Extension] Active on social media!');
   let activeThreadId = '';
   let activeContactHandle = '';
   let activeDisplayName = '';
-  let isPanelVisible = true;
+  let isPanelVisible = false;
   let fetchGeneration = 0;
   let isEditingProfile = false;
   let savedBtnPos = null;

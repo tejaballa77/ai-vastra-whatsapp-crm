@@ -396,10 +396,20 @@ console.log('[AI Vastra Social CRM Extension] Active on social media!');
 
       btn.addEventListener('click', (e) => {
         if (hasDraggedMoved) { e.preventDefault(); e.stopPropagation(); return; }
-        isPanelVisible = !isPanelVisible;
+        if (e) {
+          e.preventDefault();
+          e.stopPropagation();
+        }
+
         const panel = document.getElementById('aivastra-social-panel');
-        if (panel) panel.style.display = isPanelVisible ? 'flex' : 'none';
-        if (isPanelVisible) detectActiveContact(true);
+        if (panel && panel.style.display === 'flex') {
+          isPanelVisible = false;
+          panel.style.display = 'none';
+        } else {
+          isPanelVisible = true;
+          if (panel) panel.style.display = 'flex';
+          detectActiveContact(true);
+        }
       });
 
       btn.addEventListener('contextmenu', (e) => {

@@ -510,9 +510,9 @@ export function WhatsAppCrmModule() {
     <div className="w-screen h-screen flex overflow-hidden bg-white text-black">
       <aside className="w-64 bg-white text-black flex flex-col justify-between p-4 flex-shrink-0 select-none border-r border-zinc-200">
         <div>
-          {/* Top Logo Box — Maximum Size Display */}
-          <div className="p-1 mb-6 bg-white rounded-2xl border border-zinc-200 shadow-sm flex items-center justify-center h-24 overflow-hidden">
-            <img src="/ai_vastra_logo.png" alt="Ai Vastra" className="w-full h-full object-contain scale-125" />
+          {/* Top Logo Box — Perfect Fit Display */}
+          <div className="px-3 py-2 mb-6 bg-white rounded-2xl border border-zinc-200 shadow-sm flex items-center justify-center h-20">
+            <img src="/ai_vastra_logo.png" alt="Ai Vastra" className="w-full h-full object-contain scale-110" />
           </div>
 
           <nav className="space-y-1.5">

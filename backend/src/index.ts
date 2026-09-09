@@ -257,14 +257,13 @@ app.delete('/api/chats/:jid', (req, res) => {
 });
 
 app.post('/api/crm/contact/clear', (req, res) => {
-  const { jid, phone, name } = req.body;
-  const target = jid || phone || name;
-  if (target) {
-    db.deleteChat(target);
-    if (phone) db.deleteChat(phone);
-    io.emit('chats_updated', db.getAllChatsSorted());
-    io.emit('cold_calls_updated', db.getAllColdCalls());
-  }
+  const { jid, phone, name, threadId } = req.body;
+  if (jid) db.deleteChat(jid);
+  if (phone) db.deleteChat(phone);
+  if (threadId) db.deleteChat(threadId);
+  if (name && !jid && !phone && !threadId) db.deleteChat(name);
+  io.emit('chats_updated', db.getAllChatsSorted());
+  io.emit('cold_calls_updated', db.getAllColdCalls());
   res.json({ success: true, message: 'Contact cleared successfully' });
 });
 

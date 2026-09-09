@@ -774,7 +774,15 @@ console.log('[AI Vastra Social CRM Extension] Active on social media!');
     const clearBtn = panel.querySelector('#aivastra-clear-btn');
     if (clearBtn) {
       clearBtn.onclick = () => {
-        showConfirmModal('Clear CRM Data', `Are you sure you want to clear CRM info for ${displayName || 'this contact'}?`, () => {
+        showConfirmModal('Clear CRM Data', `Are you sure you want to clear CRM info for ${activeDisplayName || activeContactHandle || 'this contact'}?`, () => {
+          const canonicalJid = `${activeContactHandle || activeThreadId}@${currentPlatform}`;
+          const clearPayload = {
+            jid: canonicalJid,
+            phone: activeContactHandle,
+            name: activeDisplayName,
+            threadId: activeThreadId
+          };
+
           activeFormData = {
             leadStatus: 'UNASSIGNED',
             callStatus: null,
@@ -789,7 +797,19 @@ console.log('[AI Vastra Social CRM Extension] Active on social media!');
 
           const saveObj = {};
           if (activeThreadId) saveObj[`crm_social_thread_${activeThreadId}`] = null;
+          if (activeContactHandle) saveObj[`crm_social_${activeContactHandle}@${currentPlatform}`] = null;
           safeStorageSet(saveObj);
+
+          // Direct fetch + background message to clear CRM backend database automatically
+          try {
+            fetch(`${DEFAULT_API_BASE}/api/crm/contact/clear`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(clearPayload)
+            }).catch(() => {});
+          } catch (e) {}
+
+          safeSendMessage({ action: 'CLEAR_CRM_CONTACT', payload: clearPayload }, () => {});
 
           renderPanel('', 'CLEARED');
         });

@@ -58,6 +58,20 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     return true;
   }
 
+  if (request.action === 'CLEAR_CRM_CONTACT') {
+    getApiUrl().then(async (baseUrl) => {
+      const endpoint = `${baseUrl}/api/crm/contact/clear`;
+      console.log('[AI Vastra Social CRM Background] CLEAR POST to', endpoint, request.payload);
+      const data = await safeFetchJson(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(request.payload)
+      });
+      sendResponse({ success: Boolean(data && data.success), data });
+    });
+    return true;
+  }
+
   if (request.action === 'FETCH_CONTACT_DATA') {
     getApiUrl().then(async (baseUrl) => {
       const identifier = request.identifier;

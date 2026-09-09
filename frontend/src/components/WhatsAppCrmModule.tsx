@@ -196,11 +196,14 @@ export function WhatsAppCrmModule() {
     }
     const tenDigit = canonicalPhone(phoneDigits);
 
+    const isSocial = c.jid?.includes('@instagram') || c.jid?.includes('@linkedin') || c.jid?.includes('@facebook');
     let dedupeKey = `jid_${c.jid}`;
-    if (tenDigit && tenDigit.length === 10) {
-      dedupeKey = `phone_${tenDigit}`;
-    } else if (phoneDigits && phoneDigits.length >= 7) {
-      dedupeKey = `phone_${phoneDigits}`;
+    if (!isSocial) {
+      if (tenDigit && tenDigit.length === 10) {
+        dedupeKey = `phone_${tenDigit}`;
+      } else if (phoneDigits && phoneDigits.length >= 7) {
+        dedupeKey = `phone_${phoneDigits}`;
+      }
     }
 
     if (!chatsMap.has(dedupeKey)) {

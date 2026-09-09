@@ -608,6 +608,9 @@ class StorageEngine {
 
   public resolveJid(jid: string): string {
     if (!jid) return jid;
+    if (jid.endsWith('@instagram') || jid.endsWith('@linkedin') || jid.endsWith('@facebook')) {
+      return jid;
+    }
     const clean = jid.split('@')[0];
     const mapped = this.lidToJidMap.get(jid) || this.lidToJidMap.get(clean);
     const target = mapped || jid;
@@ -665,6 +668,9 @@ class StorageEngine {
 
   public formatPhoneFallback(raw: string): string {
     if (!raw) return 'Unknown Contact';
+    if (raw.endsWith('@instagram') || raw.endsWith('@linkedin') || raw.endsWith('@facebook')) {
+      return raw.split('@')[0];
+    }
 
     let clean = raw.split('@')[0];
     const mapped = this.lidToJidMap.get(raw) || this.lidToJidMap.get(clean);
@@ -1093,6 +1099,9 @@ class StorageEngine {
     const nameToKey = new Map<string, string>();
 
     const getOrAssignDedupeKey = (validTen: string, rawDigits: string, resolvedKey: string): string => {
+      if (resolvedKey.endsWith('@instagram') || resolvedKey.endsWith('@linkedin') || resolvedKey.endsWith('@facebook')) {
+        return `social_${resolvedKey.toLowerCase()}`;
+      }
       if (validTen && validTen.length === 10 && phoneToKey.has(validTen)) {
         return phoneToKey.get(validTen)!;
       }
@@ -1381,11 +1390,17 @@ class StorageEngine {
     clientLanguage?: string;
     language?: string;
   }) {
+    const isSocialJid = rawJid.endsWith('@instagram') || rawJid.endsWith('@linkedin') || rawJid.endsWith('@facebook');
     const jid = this.resolveJid(rawJid);
     const hasExplicitPhone = Boolean(metadata.phone && metadata.phone.replace(/\D/g, '').length >= 10);
-    const rawDigits = hasExplicitPhone ? metadata.phone!.replace(/\D/g, '') : (rawJid.replace(/\D/g, '').length >= 10 ? rawJid.replace(/\D/g, '') : '');
-    const tenDigit = this.canonicalPhone(rawDigits);
-    const canonicalJid = jid.endsWith('@g.us') ? jid : (tenDigit.length === 10 ? `91${tenDigit}@s.whatsapp.net` : jid);
+    const rawDigits = (!isSocialJid && hasExplicitPhone) ? metadata.phone!.replace(/\D/g, '') : ((!isSocialJid && rawJid.replace(/\D/g, '').length >= 10) ? rawJid.replace(/\D/g, '') : '');
+    const tenDigit = isSocialJid ? '' : this.canonicalPhone(rawDigits);
+    const canonicalJid = isSocialJid ? rawJid : (jid.endsWith('@g.us') ? jid : (tenDigit.length === 10 ? `91${tenDigit}@s.whatsapp.net` : jid));
+
+    let platform = 'whatsapp';
+    if (canonicalJid.endsWith('@instagram')) platform = 'instagram';
+    else if (canonicalJid.endsWith('@linkedin')) platform = 'linkedin';
+    else if (canonicalJid.endsWith('@facebook')) platform = 'facebook';
 
     const BAD_NAMES = new Set(['.', 'contact', 'unsaved contact', 'unknown contact', 'ai vastra sales agent', 'ai sales agent', 'ai vastra', 'me', '']);
     const incomingNameClean = (metadata.name || '').trim();
@@ -1589,8 +1604,8 @@ class StorageEngine {
     dbManager.query(
       `INSERT INTO crm_contacts (
         jid, name, phone, avatar_url, lead_status, call_status, follow_up_date, previous_follow_up_date,
-        notes, notes_list, tags, ai_disabled, is_auto_warm, manually_saved, assigned_user, client_language, updated_at, created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        notes, notes_list, tags, ai_disabled, is_auto_warm, manually_saved, assigned_user, client_language, platform, updated_at, created_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(jid) DO UPDATE SET
         name = EXCLUDED.name,
         phone = EXCLUDED.phone,
@@ -1607,6 +1622,7 @@ class StorageEngine {
         manually_saved = EXCLUDED.manually_saved,
         assigned_user = EXCLUDED.assigned_user,
         client_language = EXCLUDED.client_language,
+        platform = EXCLUDED.platform,
         updated_at = EXCLUDED.updated_at`,
       [
         contact.jid,
@@ -1625,6 +1641,7 @@ class StorageEngine {
         contact.manuallySaved ? 1 : 0,
         (contact as any).assignedUser || '',
         (contact as any).clientLanguage || '',
+        platform,
         contact.updatedAt || Date.now(),
         Date.now(),
       ]
@@ -1634,17 +1651,12 @@ class StorageEngine {
       `INSERT INTO crm_chats (
         jid, name, phone, unread_count, last_message_preview, last_message_at, last_message_from_me,
         last_message_status, avatar_url, is_group, lead_status, call_status, follow_up_date, previous_follow_up_date,
-        notes, notes_list, tags, ai_disabled, is_auto_warm, manually_saved, assigned_user, client_language, updated_at, created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        notes, notes_list, tags, ai_disabled, is_auto_warm, manually_saved, assigned_user, client_language, platform, updated_at, created_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(jid) DO UPDATE SET
         name = EXCLUDED.name,
         phone = EXCLUDED.phone,
         unread_count = EXCLUDED.unread_count,
-        last_message_preview = EXCLUDED.last_message_preview,
-        last_message_at = EXCLUDED.last_message_at,
-        last_message_from_me = EXCLUDED.last_message_from_me,
-        last_message_status = EXCLUDED.last_message_status,
-        avatar_url = EXCLUDED.avatar_url,
         lead_status = EXCLUDED.lead_status,
         call_status = EXCLUDED.call_status,
         follow_up_date = EXCLUDED.follow_up_date,
@@ -1657,6 +1669,12 @@ class StorageEngine {
         manually_saved = EXCLUDED.manually_saved,
         assigned_user = EXCLUDED.assigned_user,
         client_language = EXCLUDED.client_language,
+        platform = EXCLUDED.platform,
+        last_message_preview = EXCLUDED.last_message_preview,
+        last_message_at = EXCLUDED.last_message_at,
+        last_message_from_me = EXCLUDED.last_message_from_me,
+        last_message_status = EXCLUDED.last_message_status,
+        avatar_url = EXCLUDED.avatar_url,
         updated_at = EXCLUDED.updated_at`,
       [
         chat.jid,
@@ -1681,6 +1699,7 @@ class StorageEngine {
         chat.manuallySaved ? 1 : 0,
         (chat as any).assignedUser || '',
         (chat as any).clientLanguage || '',
+        platform,
         chat.updatedAt || Date.now(),
         Date.now(),
       ]

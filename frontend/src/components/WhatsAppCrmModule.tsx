@@ -525,7 +525,7 @@ export function WhatsAppCrmModule() {
               <img
                 src="/whatsapp_icon.png"
                 alt="WhatsApp"
-                className={`w-5 h-5 object-contain transition-all ${activeNav === 'whatsapp' ? 'invert' : ''}`}
+                className={`w-6 h-6 object-contain flex-shrink-0 scale-110 transition-all ${activeNav === 'whatsapp' ? 'invert' : ''}`}
               />
               <span className="flex-1 text-left">WhatsApp</span>
             </button>
@@ -539,7 +539,7 @@ export function WhatsAppCrmModule() {
                 activeNav === 'calls' ? 'bg-black text-white shadow-md font-extrabold' : 'text-zinc-700 hover:bg-zinc-100 hover:text-black font-semibold'
               }`}
             >
-              <PhoneCall className="w-5 h-5" />
+              <PhoneCall className="w-6 h-6 flex-shrink-0" />
               <span className="flex-1 text-left">Cold Calls</span>
             </button>
 
@@ -552,7 +552,7 @@ export function WhatsAppCrmModule() {
               <img
                 src="/instagram_icon.png"
                 alt="Instagram"
-                className={`w-5 h-5 object-contain transition-all ${activeNav === 'instagram' ? 'invert' : ''}`}
+                className={`w-6 h-6 object-contain flex-shrink-0 scale-110 transition-all ${activeNav === 'instagram' ? 'invert' : ''}`}
               />
               <span className="flex-1 text-left">Instagram</span>
             </button>
@@ -566,7 +566,7 @@ export function WhatsAppCrmModule() {
               <img
                 src="/linkedin_icon.png"
                 alt="LinkedIn"
-                className={`w-5 h-5 object-contain transition-all ${activeNav === 'linkedin' ? 'invert' : ''}`}
+                className={`w-6 h-6 object-contain flex-shrink-0 scale-110 transition-all ${activeNav === 'linkedin' ? 'invert' : ''}`}
               />
               <span className="flex-1 text-left">LinkedIn</span>
             </button>
@@ -580,7 +580,7 @@ export function WhatsAppCrmModule() {
               <img
                 src="/facebook_icon.png"
                 alt="Facebook"
-                className={`w-5 h-5 object-contain transition-all ${activeNav === 'facebook' ? 'invert' : ''}`}
+                className={`w-6 h-6 object-contain flex-shrink-0 scale-110 transition-all ${activeNav === 'facebook' ? 'invert' : ''}`}
               />
               <span className="flex-1 text-left">Facebook</span>
               <span className="ml-auto text-[10px] bg-zinc-100 text-zinc-500 border border-zinc-200 px-2 py-0.5 rounded-full font-bold">Soon</span>
@@ -592,7 +592,7 @@ export function WhatsAppCrmModule() {
                 activeNav === 'settings' ? 'bg-black text-white shadow-md font-extrabold' : 'text-zinc-700 hover:bg-zinc-100 hover:text-black font-semibold'
               }`}
             >
-              <Settings className="w-5 h-5 text-zinc-500" />
+              <Settings className="w-6 h-6 flex-shrink-0 text-zinc-500" />
               <span className="flex-1 text-left">Settings</span>
             </button>
           </nav>

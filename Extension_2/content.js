@@ -433,27 +433,26 @@ console.log('[AI Vastra Social CRM Extension] Active on social media!');
     const isNewThread = Boolean(threadId && activeThreadId !== threadId);
 
     if (isNewThread || force) {
-      if (threadId) activeThreadId = threadId;
+      if (isNewThread) {
+        activeThreadId = threadId;
+        activeContactHandle = '';
+        activeDisplayName = '';
+        activeFormData = {
+          leadStatus: 'UNASSIGNED',
+          callStatus: null,
+          followUpDate: '',
+          assignedUser: '',
+          clientLanguage: '',
+          notesList: []
+        };
+      }
+
       currentPlatform = platform;
       isEditingProfile = false;
 
-      if (isNewThread || !activeContactHandle) {
-        const scraped = scrapePlatformHeader(platform);
-        if (scraped.handle) activeContactHandle = scraped.handle;
-        if (scraped.name && (!activeDisplayName || activeDisplayName === activeContactHandle)) {
-          activeDisplayName = scraped.name;
-        }
-        if (isNewThread) {
-          activeFormData = {
-            leadStatus: 'UNASSIGNED',
-            callStatus: null,
-            followUpDate: '',
-            assignedUser: '',
-            clientLanguage: '',
-            notesList: []
-          };
-        }
-      }
+      const scraped = scrapePlatformHeader(platform);
+      if (scraped.handle) activeContactHandle = scraped.handle;
+      if (scraped.name) activeDisplayName = scraped.name;
 
       renderPanel(activeDisplayName, null);
       fetchGeneration++;

@@ -333,6 +333,17 @@ export function WhatsAppCrmModule() {
     return true;
   }
 
+  // Filter to include ONLY saved / extension-entered / edited CRM leads (excluding raw unedited phonebook contacts)
+  const savedLeads = navChats.filter((c) => {
+    const hasStatus = Boolean(c.leadStatus && c.leadStatus !== 'UNASSIGNED');
+    const hasCall = Boolean(c.callStatus && c.callStatus !== undefined && c.callStatus !== null && (c.callStatus as any) !== 'None');
+    const hasFollow = Boolean(c.followUpDate && c.followUpDate.trim().length > 0 && c.followUpDate !== '—');
+    const hasNotes = Boolean((c.notesList && c.notesList.length > 0) || (c.notes && c.notes.trim().length > 0));
+    const isManuallySaved = (c as any).manuallySaved === true;
+
+    return hasStatus || hasCall || hasFollow || hasNotes || isManuallySaved;
+  });
+
   // Calculate dynamic stats for current active tab
   const interestedChats = navChats.filter((c) => c.leadStatus === 'INTERESTED');
   const warmTabLeads = navChats.filter((c) => c.leadStatus === 'WARM' || c.leadStatus === 'WARM_INTERESTED' || isPureAutoWarmLead(c));
@@ -348,10 +359,13 @@ export function WhatsAppCrmModule() {
   const notInterestedCount = notInterestedChats.length;
   const followUpsCount = scheduledFollowupChatsList.length;
   const callsYesCount = navChats.filter((c) => c.callStatus === 'YES').length;
-  const allTabLeads = navChats;
+  const allTabLeads = savedLeads;
+
+  // Base list for table: default to savedLeads unless specific filter tab is chosen
+  const baseLeads = tableFilter === 'WARM' ? warmTabLeads : (tableFilter === 'ALL' ? savedLeads : savedLeads);
 
   // Filter table leads based on selected sub-filter and search
-  const filteredTableLeads = navChats
+  const filteredTableLeads = baseLeads
     .filter((c) => {
       const matchesSearch =
         (c.name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||

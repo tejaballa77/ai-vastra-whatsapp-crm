@@ -566,7 +566,7 @@ export function WhatsAppCrmModule() {
               <img
                 src="/linkedin_icon.png"
                 alt="LinkedIn"
-                className={`w-6 h-6 object-contain flex-shrink-0 scale-110 transition-all ${activeNav === 'linkedin' ? 'invert' : ''}`}
+                className={`w-6 h-6 object-contain flex-shrink-0 scale-135 transition-all ${activeNav === 'linkedin' ? 'invert' : ''}`}
               />
               <span className="flex-1 text-left">LinkedIn</span>
             </button>

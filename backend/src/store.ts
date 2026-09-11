@@ -459,8 +459,8 @@ class StorageEngine {
 
         const isTestJid = testJidsToPurge.includes(jidLower) || testJidsToPurge.includes(nameLower) || (phoneDigits.length < 7 && !isSocial && (jidLower.includes('client new') || jidLower.includes('sai durga') || jidLower.includes('durga rao')));
         const isEmptyRow = !isSocial && !hasRealData;
-        // Purge garbage JIDs: phone part has 1-6 digits (e.g. "1@s.whatsapp.net" created by appended digit to name)
-        const isGarbageJid = !isSocial && !jidLower.endsWith('@g.us') && phoneDigits.length > 0 && phoneDigits.length < 7 && !hasRealData;
+        // Purge garbage JIDs: phone part has 1-6 digits (e.g. "1@s.whatsapp.net" or "1" created by appended digit to name)
+        const isGarbageJid = !isSocial && !jidLower.endsWith('@g.us') && phoneDigits.length > 0 && phoneDigits.length < 7;
 
         if (isTestJid || isEmptyRow || isGarbageJid) {
           this.chats.delete(k);
@@ -1183,6 +1183,12 @@ class StorageEngine {
         (validTen && validTen.length === 10 && this.clearedLeadsSet.has(validTen)) ||
         (rawDigits && rawDigits.length >= 10 && this.clearedLeadsSet.has(rawDigits));
 
+      const isSocial = resolvedKey.endsWith('@instagram') || resolvedKey.endsWith('@linkedin') || resolvedKey.endsWith('@facebook');
+      // Skip garbage short-digit JIDs (e.g. "1@s.whatsapp.net" or "1")
+      if (!isSocial && !resolvedKey.endsWith('@g.us') && rawDigits.length > 0 && rawDigits.length < 7) {
+        continue;
+      }
+
       if (isBlacklisted) {
         continue;
       }
@@ -1305,6 +1311,11 @@ class StorageEngine {
       const validTen = this.canonicalPhone(rawDigits);
       const cNameClean = (contact.name && !BAD_NAMES.has(contact.name.toLowerCase().trim()) && contact.name.replace(/\D/g, '').length < 10) ? contact.name.toLowerCase().trim().replace(/[^a-z0-9]/g, '') : '';
       const cAlphaName = (contact.name && !BAD_NAMES.has(contact.name.toLowerCase().trim())) ? contact.name.toLowerCase().trim().replace(/\+?\d+/g, '').replace(/[^a-z0-9]/g, '') : '';
+
+      const isSocial = resolvedKey.endsWith('@instagram') || resolvedKey.endsWith('@linkedin') || resolvedKey.endsWith('@facebook');
+      if (!isSocial && !resolvedKey.endsWith('@g.us') && rawDigits.length > 0 && rawDigits.length < 7) {
+        continue;
+      }
 
       if (
         this.clearedLeadsSet.has(resolvedKey.toLowerCase()) ||

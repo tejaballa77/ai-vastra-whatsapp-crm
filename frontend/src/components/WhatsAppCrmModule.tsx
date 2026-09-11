@@ -283,6 +283,13 @@ export function WhatsAppCrmModule() {
   const allRawChats = Array.from(chatsMap.values()).filter(c => {
     const isSocial = c.jid?.includes('@instagram') || c.jid?.includes('@linkedin') || c.jid?.includes('@facebook');
     if (isSocial) return true;
+    const isGroup = c.jid?.endsWith('@g.us');
+    if (isGroup) return false;
+    const phoneDigits = (c.phone || (c.jid || '').split('@')[0]).replace(/\D/g, '');
+    if (phoneDigits.length > 0 && phoneDigits.length < 7) {
+      // Reject any garbage rows like "1@s.whatsapp.net" or phone "1"
+      return false;
+    }
     const hasNotes = Boolean(c.notes && c.notes.trim()) || Boolean(c.notesList && Array.isArray(c.notesList) && c.notesList.length > 0);
     const hasStatus = Boolean(c.leadStatus && c.leadStatus !== 'UNASSIGNED');
     const hasFollowUp = Boolean(c.followUpDate && c.followUpDate.trim() !== '' && c.followUpDate !== '—');

@@ -652,14 +652,19 @@ function fetchCrmMetadata(searchKey, displayName, domAvatar, generation) {
         const effectiveDisplayName = currentNameIsValid ? displayName : chat.name;
 
         // Auto-sync contact name to backend whenever WhatsApp Web display name changes or is saved
-        if (isNameDifferent && (validPhoneClean || queryPhone)) {
-          const targetJid = (validPhoneClean || queryPhone).endsWith('@s.whatsapp.net')
-            ? (validPhoneClean || queryPhone)
-            : `${validPhoneClean || queryPhone}@s.whatsapp.net`;
+        const chatPhoneDigits = (chat.phone || (chat.jid || '').split('@')[0]).replace(/\D/g, '');
+        const reliablePhone = (validPhoneClean && validPhoneClean.length >= 7) ? validPhoneClean
+          : (queryPhone && queryPhone.length >= 7) ? queryPhone
+          : (chatPhoneDigits.length >= 7 ? chatPhoneDigits : '');
 
+        const reliableJid = reliablePhone
+          ? (reliablePhone.endsWith('@s.whatsapp.net') ? reliablePhone : `${reliablePhone}@s.whatsapp.net`)
+          : (chat.jid && !chat.jid.startsWith('1@') && (chat.jid.split('@')[0].replace(/\D/g, '').length >= 7) ? chat.jid : '');
+
+        if (isNameDifferent && reliableJid) {
           const updatePayload = {
-            jid: targetJid,
-            phone: validPhoneClean || queryPhone,
+            jid: reliableJid,
+            phone: reliablePhone,
             name: displayName,
             leadStatus: activeFormData.leadStatus,
             callStatus: activeFormData.callStatus,
@@ -670,7 +675,7 @@ function fetchCrmMetadata(searchKey, displayName, domAvatar, generation) {
             updatedAt: Date.now()
           };
 
-          safeSendMessage({ action: 'UPDATE_CRM_METADATA', jid: targetJid, data: updatePayload }, () => {});
+          safeSendMessage({ action: 'UPDATE_CRM_METADATA', jid: reliableJid, data: updatePayload }, () => {});
         }
 
         // Cache ONLY under phone/JID keys — never under display name
@@ -727,9 +732,22 @@ function saveCrmMetadata(forcedAiDisabled) {
   if (cleanDigits.length === 10) cleanDigits = '91' + cleanDigits;
 
   const validPhone = (cleanDigits && cleanDigits.length >= 10) ? cleanDigits : (activePhoneClean && activePhoneClean.length >= 10 ? activePhoneClean : '');
-  const targetJid = validPhone
-    ? `${validPhone}@s.whatsapp.net`
-    : (activeContactKey.includes('@') ? activeContactKey : `${activeContactKey}@s.whatsapp.net`);
+  
+  // Guard: activeContactKey might be a contact name (e.g. "Prashanth 1 Contradiction").
+  // NEVER create a JID using activeContactKey unless it is an actual phone or contains '@'.
+  const contactKeyDigits = (activeContactKey || '').replace(/\D/g, '');
+  let targetJid = '';
+  if (validPhone) {
+    targetJid = `${validPhone}@s.whatsapp.net`;
+  } else if (activeContactKey && activeContactKey.includes('@')) {
+    targetJid = activeContactKey;
+  } else if (contactKeyDigits.length >= 7) {
+    targetJid = `${contactKeyDigits}@s.whatsapp.net`;
+  } else {
+    // Cannot determine valid phone JID — do not create garbage JID like "1@s.whatsapp.net"
+    console.warn('[AI Vastra] Cannot determine valid phone JID for save, aborting save to prevent garbage entry.');
+    return;
+  }
 
   // Update activePhoneClean cache ONLY if valid 10+ digit phone belongs to this chat
   if (validPhone) activePhoneClean = validPhone;

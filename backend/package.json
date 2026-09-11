@@ -8,7 +8,8 @@
     "import-backup": "ts-node src/importBackupScript.ts",
     "build": "tsc",
     "start": "node dist/index.js",
-    "view-whatsapp-leads": "node -e \"const { db } = require('./dist/store'); db.initSqlData().then(() => { const list = db.getAllChatsSorted().filter(c => (!c.jid || (!c.jid.includes('@instagram') && !c.jid.includes('@linkedin') && !c.jid.includes('@facebook'))) && (c.leadStatus !== 'UNASSIGNED' || c.notes || c.followUpDate || c.manuallySaved)); console.table(list.map(c => ({ 'Name / Phone': c.name || c.phone || c.jid, 'JID': c.jid, 'Lead Status': c.leadStatus || 'UNASSIGNED', 'BDM': c.assignedUser || '—', 'Follow-Up Date': c.followUpDate || '—', 'Notes': (c.notes || '').replace(/\\n/g, ' ').slice(0, 35) }))); process.exit(0); });\""
+    "leads": "node view-leads.js",
+    "view-whatsapp-leads": "node view-leads.js"
   },
   "dependencies": {
     "@whiskeysockets/baileys": "^6.7.13",

@@ -814,6 +814,14 @@ function fetchCrmMetadata(searchKey, displayName, domAvatar, generation) {
             updatedAt: Date.now()
           };
 
+          try {
+            fetch(`${DEFAULT_API_BASE}/api/crm/contact`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(updatePayload)
+            }).catch(() => {});
+          } catch (e) {}
+
           safeSendMessage({ action: 'UPDATE_CRM_METADATA', jid: reliableJid, data: updatePayload }, () => {});
         }
 
@@ -850,8 +858,8 @@ function fetchCrmMetadata(searchKey, displayName, domAvatar, generation) {
         if (!validPhoneClean && !validTenDigit) {
           setTimeout(() => {
             if (generation !== fetchRequestGeneration) return;
-            const retryPhone = extractPhoneNumberFromDom();
-            if (retryPhone && retryPhone.length >= 10) {
+            const retryPhone = extractPhoneNumberFromDom() || findPhoneInCacheByName(displayName);
+            if (retryPhone && retryPhone.length >= 7) {
               // Phone is now available! Re-run the full detection which will
               // use the phone as contactKey and load data correctly.
               detectActiveContact(true);

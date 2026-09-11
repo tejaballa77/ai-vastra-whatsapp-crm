@@ -1465,11 +1465,11 @@ class StorageEngine {
       for (const [ck, cObj] of this.contacts.entries()) {
         const cPhoneDigits = (cObj.phone || ck.split('@')[0]).replace(/\D/g, '');
         const cTen = this.canonicalPhone(cPhoneDigits);
-        if (cTen && cTen.length === 10) {
+        if (cTen && cTen.length >= 7) {
           const cNameClean = (cObj.name || '').toLowerCase().trim();
           if (cNameClean === incomingNameClean.toLowerCase() || (searchAlphaName && cNameClean.replace(/\+?\d+/g, '').replace(/[^a-z0-9]/g, '') === searchAlphaName)) {
             tenDigit = cTen;
-            rawDigits = `91${cTen}`;
+            rawDigits = cTen.length === 10 ? `91${cTen}` : cTen;
             break;
           }
         }
@@ -1477,13 +1477,13 @@ class StorageEngine {
     }
 
     // SECOND GUARD: After name resolution attempt, if we STILL can't resolve to a
-    // valid 10-digit phone and the raw JID digits are < 7, reject unconditionally.
+    // valid phone (>= 7 digits) and the raw JID digits are < 7, reject unconditionally.
     // A valid contact name does NOT justify creating a record under garbage JID "1@s.whatsapp.net".
-    if (!isSocialJid && !jid.endsWith('@g.us') && tenDigit.length < 10 && rawDigits.length > 0 && rawDigits.length < 7) {
+    if (!isSocialJid && !jid.endsWith('@g.us') && tenDigit.length < 7 && rawDigits.length > 0 && rawDigits.length < 7) {
       return; // Cannot resolve to valid phone — discard
     }
 
-    const canonicalJid = isSocialJid ? rawJid : (jid.endsWith('@g.us') ? jid : (tenDigit.length === 10 ? `91${tenDigit}@s.whatsapp.net` : jid));
+    const canonicalJid = isSocialJid ? rawJid : (jid.endsWith('@g.us') ? jid : (tenDigit.length === 10 ? `91${tenDigit}@s.whatsapp.net` : (tenDigit.length >= 7 ? `${tenDigit}@s.whatsapp.net` : jid)));
 
     let platform = 'whatsapp';
     if (canonicalJid.endsWith('@instagram')) platform = 'instagram';
@@ -1518,7 +1518,7 @@ class StorageEngine {
       const cIsPhone = cNameClean.replace(/\D/g, '').length >= 7;
       const cAlpha = (cObj.name && !cIsPhone) ? cNameClean.replace(/\+?\d+/g, '').replace(/[^a-z0-9]/g, '').trim() : '';
 
-      const matchPhone = Boolean(tenDigit && tenDigit.length === 10 && cTen === tenDigit);
+      const matchPhone = Boolean((tenDigit && tenDigit.length >= 7 && cTen === tenDigit) || (rawDigits && rawDigits.length >= 7 && cPhoneDigits === rawDigits));
       const matchName = Boolean(searchAlphaName && searchAlphaName.length >= 2 && (cAlpha === searchAlphaName || cNameClean === incomingNameClean.toLowerCase()));
 
       if (ck === canonicalJid || ck === jid || matchPhone || matchName) {
@@ -1540,7 +1540,7 @@ class StorageEngine {
       const chIsPhone = chNameClean.replace(/\D/g, '').length >= 7;
       const chAlpha = (chObj.name && !chIsPhone) ? chNameClean.replace(/\+?\d+/g, '').replace(/[^a-z0-9]/g, '').trim() : '';
 
-      const matchPhone = Boolean(tenDigit && tenDigit.length === 10 && chTen === tenDigit);
+      const matchPhone = Boolean((tenDigit && tenDigit.length >= 7 && chTen === tenDigit) || (rawDigits && rawDigits.length >= 7 && chPhoneDigits === rawDigits));
       const matchName = Boolean(searchAlphaName && searchAlphaName.length >= 2 && (chAlpha === searchAlphaName || chNameClean === incomingNameClean.toLowerCase()));
 
       if (chk === canonicalJid || chk === jid || matchPhone || matchName) {
@@ -1584,7 +1584,7 @@ class StorageEngine {
     if (!contact) {
       contact = {
         jid: canonicalJid,
-        phone: tenDigit ? `91${tenDigit}` : rawDigits,
+        phone: tenDigit ? (tenDigit.length === 10 ? `91${tenDigit}` : tenDigit) : rawDigits,
         name: incomingNameIsValid ? incomingNameClean : this.formatPhoneFallback(rawDigits),
         leadStatus: metadata.leadStatus || 'UNASSIGNED',
         tags: metadata.tags || [],
@@ -1614,7 +1614,7 @@ class StorageEngine {
       if (metadata.manuallySaved === true) contact.manuallySaved = true;
       if (metadata.assignedUser || metadata.calledBy) (contact as any).assignedUser = metadata.assignedUser || metadata.calledBy;
       if (metadata.clientLanguage || metadata.language) (contact as any).clientLanguage = metadata.clientLanguage || metadata.language;
-      if (tenDigit) contact.phone = `91${tenDigit}`;
+      if (tenDigit) contact.phone = tenDigit.length === 10 ? `91${tenDigit}` : tenDigit;
       contact.updatedAt = nowTimestamp;
     }
 
@@ -1631,7 +1631,7 @@ class StorageEngine {
     if (!chat) {
       chat = {
         jid: canonicalJid,
-        phone: tenDigit ? `91${tenDigit}` : rawDigits,
+        phone: tenDigit ? (tenDigit.length === 10 ? `91${tenDigit}` : tenDigit) : rawDigits,
         name: incomingNameIsValid ? incomingNameClean : (contact.name || this.formatPhoneFallback(rawDigits)),
         unreadCount: 0,
         lastMessageAt: Date.now(),

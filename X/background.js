@@ -52,18 +52,27 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         if (byPhone) return sendResponse({ success: true, chat: byPhone });
       }
 
-      // STEP 2: Display-name lookup (exact or clean alpha match)
+      // STEP 2: Display-name lookup (exact, normalized, or base-letter match)
       const searchName = (request.displayName || request.searchKey || '').toLowerCase().trim();
-      const searchAlpha = searchName.replace(/\+?\d+/g, '').replace(/[^a-z0-9]/g, '');
-      const nameIsValid = searchName &&
-        !badNames.includes(searchName) &&
-        searchName.replace(/\D/g, '').length < 10;
+      const searchAlpha = searchName.replace(/[^a-z0-9]/g, '');
+      const searchLetters = searchName.replace(/[^a-z]/g, '');
+      const nameIsValid = searchName && !badNames.includes(searchName);
 
       if (nameIsValid) {
         const byName = allChats.find((c) => {
           const cName = (c.name || '').toLowerCase().trim();
-          const cAlpha = cName.replace(/\+?\d+/g, '').replace(/[^a-z0-9]/g, '');
-          return cName === searchName || (searchAlpha.length >= 2 && cAlpha === searchAlpha);
+          if (!cName || badNames.includes(cName)) return false;
+          if (cName === searchName) return true;
+
+          const cAlpha = cName.replace(/[^a-z0-9]/g, '');
+          if (searchAlpha && cAlpha && cAlpha === searchAlpha) return true;
+
+          // Match base letter identity (e.g. "Prashanth" matches "Prashanth 1" or "Prashanth 1 Contradiction")
+          const cLetters = cName.replace(/[^a-z]/g, '');
+          if (searchLetters && cLetters && searchLetters.length >= 3 && (cLetters === searchLetters || cLetters.startsWith(searchLetters) || searchLetters.startsWith(cLetters))) {
+            return true;
+          }
+          return false;
         });
         if (byName) return sendResponse({ success: true, chat: byName });
       }

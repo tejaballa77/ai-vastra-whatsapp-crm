@@ -170,17 +170,13 @@ export function WhatsAppCrmModule() {
     }
 
     let nameRaw = (chat.name || '').trim();
-    if (nameRaw) {
-      nameRaw = nameRaw.replace(/\s*\+?\d{8,15}$/, '').trim();
-    }
 
     const isJidEmail = nameRaw.endsWith('@s.whatsapp.net') || nameRaw.endsWith('@c.us') || nameRaw.endsWith('@lid') || nameRaw.includes('@g.us');
-    const isLidDigits = /^\d{10,}$/.test(nameRaw.replace(/\D/g, ''));
-    const isBadName = !nameRaw || BAD_NAMES.has(nameRaw.toLowerCase()) || isJidEmail || isLidDigits;
+    const isBadName = !nameRaw || BAD_NAMES.has(nameRaw.toLowerCase()) || isJidEmail;
 
     const nameDigits = nameRaw.replace(/\D/g, '');
-    // Only treat the name as a "phone number" if it contains ≥7 digits.
-    // Names like "Prashanth 1 Contradiction" have 1 digit — that's NOT a phone.
+    // Only treat the name as an unsaved phone number if it contains ≥7 digits AND literally matches this contact's own phone/JID.
+    // Deliberate contact names like "123456789" or "Prashanth 1" are never treated as unsaved phone numbers.
     const nameIsPhone = nameDigits.length >= 7 && (nameDigits === tenDigit || nameDigits === rawNum);
     const hasSavedName = !isBadName && !nameIsPhone;
     const displayName = hasSavedName ? nameRaw : (formattedPhone || (chat.phone || chat.jid || '').split('@')[0]);
@@ -204,7 +200,9 @@ export function WhatsAppCrmModule() {
       phoneDigits = c.jid.split('@')[0].replace(/\D/g, '');
     }
     const tenDigit = canonicalPhone(phoneDigits);
-    const cleanName = (c.name && !BAD_NAMES.has(c.name.toLowerCase().trim()) && c.name.replace(/\D/g, '').length < 10)
+    const cPhoneDigits = (c.phone || c.jid || '').replace(/\D/g, '');
+    const isNameSameAsPhone = c.name && c.name.replace(/\D/g, '') === cPhoneDigits;
+    const cleanName = (c.name && !BAD_NAMES.has(c.name.toLowerCase().trim()) && !isNameSameAsPhone)
       ? c.name.toLowerCase().trim().replace(/[^a-z0-9]/g, '')
       : '';
 

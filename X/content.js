@@ -61,6 +61,98 @@ let activeFormData = {
 
 let isPanelVisible = true;
 let chatsMetadataMap = {};
+let indexedDbContactMap = new Map();
+
+async function syncContactsFromIndexedDb() {
+  try {
+    if (typeof indexedDB === 'undefined' || !indexedDB.databases) return;
+    const dbs = await indexedDB.databases();
+    const waDb = dbs.find((d) => d.name && (d.name.includes('model') || d.name.includes('wawc') || d.name.includes('whatsapp')));
+    if (!waDb || !waDb.name) return;
+
+    const req = indexedDB.open(waDb.name);
+    req.onsuccess = (evt) => {
+      try {
+        const db = evt.target.result;
+        const storeName = Array.from(db.objectStoreNames).find((s) => s === 'contact' || s === 'contacts');
+        if (!storeName) return;
+
+        const tx = db.transaction([storeName], 'readonly');
+        const store = tx.objectStore(storeName);
+        const getAllReq = store.getAll();
+        getAllReq.onsuccess = (ev) => {
+          const list = ev.target.result || [];
+          for (const c of list) {
+            if (!c) continue;
+            const rawId = typeof c.id === 'object' ? String(c.id?._serialized || c.id?.user || '') : String(c.id || '');
+            const cleanId = rawId.split('@')[0].replace(/\D/g, '');
+
+            let phoneNum = '';
+            if (c.phoneNumber) {
+              phoneNum = String(c.phoneNumber).split('@')[0].replace(/\D/g, '');
+            } else if (c.pnJid) {
+              phoneNum = String(c.pnJid).split('@')[0].replace(/\D/g, '');
+            } else if (c.user && String(c.user).replace(/\D/g, '').length >= 10 && String(c.user).replace(/\D/g, '').length <= 15) {
+              phoneNum = String(c.user).replace(/\D/g, '');
+            } else if (cleanId.length >= 10 && cleanId.length <= 15) {
+              phoneNum = cleanId;
+            }
+
+            const name = (c.name || c.formattedName || c.displayName || c.verifiedName || '').trim();
+            if (name && phoneNum && phoneNum.length >= 10) {
+              indexedDbContactMap.set(name.toLowerCase(), phoneNum);
+              const alpha = name.toLowerCase().replace(/[^a-z0-9]/g, '');
+              if (alpha.length >= 2) indexedDbContactMap.set(alpha, phoneNum);
+            }
+          }
+        };
+      } catch (e) {}
+    };
+  } catch (e) {}
+}
+
+function findPhoneInCacheByName(name) {
+  if (!name || typeof name !== 'string') return '';
+  const searchName = name.trim().toLowerCase();
+  const badNames = ['.', 'contact', 'unsaved contact', 'unknown contact', 'whatsapp contact', ''];
+  if (!searchName || badNames.includes(searchName)) return '';
+
+  const searchAlpha = searchName.replace(/[^a-z0-9]/g, '');
+  const searchLetters = searchName.replace(/[^a-z]/g, '');
+
+  // 1. IndexedDB contact address book check
+  if (indexedDbContactMap.has(searchName)) {
+    return indexedDbContactMap.get(searchName);
+  }
+  if (searchAlpha && indexedDbContactMap.has(searchAlpha)) {
+    return indexedDbContactMap.get(searchAlpha);
+  }
+
+  // 2. Search in-memory chatsMetadataMap entries
+  for (const entry of Object.values(chatsMetadataMap)) {
+    if (!entry || !entry.phone) continue;
+    const p = entry.phone.replace(/\D/g, '');
+    if (p.length < 10) continue;
+
+    const entryName = (entry.name || '').trim().toLowerCase();
+    if (!entryName) continue;
+
+    if (entryName === searchName) return p;
+
+    const entryAlpha = entryName.replace(/[^a-z0-9]/g, '');
+    if (searchAlpha.length >= 2 && entryAlpha === searchAlpha) {
+      return p;
+    }
+
+    // Common root letter match (e.g. "Prashanth" matches "Prashanth 1" or "Prashanth 1 Contradiction")
+    const entryLetters = entryName.replace(/[^a-z]/g, '');
+    if (searchLetters && entryLetters && searchLetters.length >= 3 && (searchLetters === entryLetters || searchLetters.startsWith(entryLetters) || entryLetters.startsWith(searchLetters))) {
+      return p;
+    }
+  }
+
+  return '';
+}
 
 // Generation counter — incremented on every chat switch.
 // Async callbacks compare their captured generation with this value
@@ -131,6 +223,8 @@ function ensureHeaderButton() {
 
 // Sync all saved CRM chats from backend into chatsMetadataMap
 function syncAllCrmChats(callback) {
+  syncContactsFromIndexedDb();
+
   // First load locally cached names instantly
   safeStorageGet(['crm_name_cache'], (res) => {
     const localCache = res?.crm_name_cache || {};
@@ -151,8 +245,7 @@ function syncAllCrmChats(callback) {
           const tenDigit = (rawNum.length === 12 && rawNum.startsWith('91')) ? rawNum.slice(2) : rawNum;
 
           const badNames = ['.', 'contact', 'unsaved contact', 'unknown contact', 'whatsapp contact', ''];
-          const hasValidName = Boolean(c.name && c.name.trim() && !badNames.includes(c.name.trim().toLowerCase()) && c.name.trim().replace(/\D/g, '').length < 10);
-
+          const hasValidName = Boolean(c.name && c.name.trim() && !badNames.includes(c.name.trim().toLowerCase()));
 
           const hasInfo = Boolean(
             hasValidName ||
@@ -178,7 +271,6 @@ function syncAllCrmChats(callback) {
             if (tenDigit) chatsMetadataMap[tenDigit] = meta;
             if (rawNum && rawNum !== tenDigit) chatsMetadataMap[rawNum] = meta;
             if (c.jid) chatsMetadataMap[c.jid] = meta;
-            // Intentionally NOT storing under c.name — name keys cause cross-contact collisions
           }
         }
       }
@@ -289,39 +381,39 @@ function extractProfileNameFromDom() {
 
 function extractPhoneNumberFromDom() {
   function phoneFromDataId(dataId) {
-    if (!dataId) return '';
-    const match = dataId.match(/(\d{10,15})@(s\.whatsapp\.net|c\.us)/);
-    return match?.[1] || '';
+    if (!dataId || typeof dataId !== 'string') return '';
+    // JID match with optional multi-device index: e.g. 919876543210:0@c.us, 919876543210@s.whatsapp.net
+    const jidMatch = dataId.match(/(\d{10,15})(?::\d+)?@(s\.whatsapp\.net|c\.us)/);
+    if (jidMatch && jidMatch[1]) return jidMatch[1];
+
+    // Message ID prefix match: true_919876543210:0@... or false_919876543210_...
+    const prefixMatch = dataId.match(/(?:true|false|out|in)_(\d{10,15})/i);
+    if (prefixMatch && prefixMatch[1]) return prefixMatch[1];
+
+    return '';
   }
 
   function phoneFromElement(element) {
     let node = element;
-    while (node && node.id !== 'pane-side') {
-      const directPhone = phoneFromDataId(node.getAttribute?.('data-id') || '');
+    while (node && node.id !== 'pane-side' && node !== document.body) {
+      const directPhone = phoneFromDataId(node.getAttribute?.('data-id') || node.getAttribute?.('data-item-id') || node.getAttribute?.('id') || '');
       if (directPhone) return directPhone;
-      const childWithId = node.querySelector?.('[data-id]');
-      const childPhone = phoneFromDataId(childWithId?.getAttribute('data-id') || '');
-      if (childPhone) return childPhone;
+      const childWithId = node.querySelector?.('[data-id], [data-item-id], [id^="msg-"]');
+      if (childWithId) {
+        const childPhone = phoneFromDataId(childWithId.getAttribute?.('data-id') || childWithId.getAttribute?.('data-item-id') || childWithId.getAttribute?.('id') || '');
+        if (childPhone) return childPhone;
+      }
       node = node.parentElement;
     }
     return '';
   }
 
-  // ─────────────────────────────────────────────────────────────────────────
-  // SAFE RULE: We ONLY read phone numbers from:
-  //   • data-id attributes  (e.g. "919876543210@s.whatsapp.net")
-  //   • img src URLs        (e.g. "...u=919876543210...")
-  //   • span[title] ONLY when the title is purely numeric (contact IS a number)
-  //
-  // We NEVER read span.textContent — message bubble text contains other
-  // contacts' phone numbers that would corrupt the active contact detection.
-  // ─────────────────────────────────────────────────────────────────────────
-
-  // Step 0: Active sidebar chat item — data-id and img src only
+  // Step 0: Active sidebar chat item — data-id, cached attribute, and img src
   try {
     const activeItem =
       document.querySelector('#pane-side [aria-selected="true"]') ||
       document.querySelector('#pane-side [data-selected="true"]') ||
+      document.querySelector('#pane-side [tabindex="0"]') ||
       document.querySelector('#pane-side .active') ||
       document.querySelector('#pane-side li[class*="active"]');
 
@@ -330,13 +422,19 @@ function extractPhoneNumberFromDom() {
       if (cachedPhone && cachedPhone.length >= 10) return cachedPhone;
 
       const activePhone = phoneFromElement(activeItem);
-      if (activePhone) return activePhone;
+      if (activePhone) {
+        activeItem.setAttribute('data-aivastra-phone', activePhone);
+        return activePhone;
+      }
 
       const imgs = activeItem.querySelectorAll('img');
       for (const img of imgs) {
         if (img.src) {
-          const match = img.src.match(/u=(\d{10,15})/);
-          if (match && match[1]) return match[1];
+          const match = img.src.match(/[?&;]u(?:ser)?(?:%3D|=)(\d{10,15})/i) || img.src.match(/u=(\d{10,15})/);
+          if (match && match[1]) {
+            activeItem.setAttribute('data-aivastra-phone', match[1]);
+            return match[1];
+          }
         }
       }
 
@@ -349,35 +447,51 @@ function extractPhoneNumberFromDom() {
           return stripped;
         }
       }
-      // ↑ NO s.textContent — that reads message preview text in the sidebar
     }
   } catch (e) {}
 
-  // Step 1: Match sidebar item by header title — data-id output only
+  // Step 1: Match sidebar item by header title
   try {
-    const allItems = document.querySelectorAll('#pane-side [data-id]');
-    const mainTitleEl = document.querySelector('#main header span[title], #main header span[dir="auto"][title]');
-    const mainTitle = (mainTitleEl?.getAttribute('title') || '').trim();
+    const mainTitleEl = document.querySelector('#main header span[title], #main header span[dir="auto"][title], #main header span[dir="auto"]');
+    const mainTitle = (mainTitleEl?.getAttribute('title') || mainTitleEl?.textContent || '').trim();
     if (mainTitle) {
-      for (const item of allItems) {
-        // Match via span[title] attribute ONLY (never textContent = message preview)
-        const titleSpan = item.querySelector('span[title]');
-        if (titleSpan && titleSpan.getAttribute('title') === mainTitle) {
-          const phone = phoneFromElement(item);
-          if (phone) return phone;
+      const allRows = document.querySelectorAll('#pane-side [role="listitem"], #pane-side [role="row"], #pane-side div[tabindex]');
+      for (const row of allRows) {
+        const titleSpan = row.querySelector('span[title], span[dir="auto"]');
+        const rTitle = (titleSpan?.getAttribute('title') || titleSpan?.textContent || '').trim();
+        if (rTitle && rTitle === mainTitle) {
+          const cached = row.getAttribute('data-aivastra-phone');
+          if (cached && cached.length >= 10) return cached;
+
+          const phone = phoneFromElement(row);
+          if (phone) {
+            row.setAttribute('data-aivastra-phone', phone);
+            return phone;
+          }
+
+          const imgs = row.querySelectorAll('img');
+          for (const img of imgs) {
+            if (img.src) {
+              const match = img.src.match(/[?&;]u(?:ser)?(?:%3D|=)(\d{10,15})/i) || img.src.match(/u=(\d{10,15})/);
+              if (match && match[1]) {
+                row.setAttribute('data-aivastra-phone', match[1]);
+                return match[1];
+              }
+            }
+          }
         }
       }
     }
   } catch (e) {}
 
-  // Step 2: Header avatar images — no span text reads
+  // Step 2: Header avatar images
   try {
     const mainHeader = document.querySelector('#main header');
     if (mainHeader) {
       const headerImgs = mainHeader.querySelectorAll('img');
       for (const img of headerImgs) {
         if (img.src) {
-          const match = img.src.match(/u=(\d{10,15})/);
+          const match = img.src.match(/[?&;]u(?:ser)?(?:%3D|=)(\d{10,15})/i) || img.src.match(/u=(\d{10,15})/);
           if (match && match[1]) return match[1];
         }
       }
@@ -390,52 +504,67 @@ function extractPhoneNumberFromDom() {
           return stripped;
         }
       }
-      // ↑ NO span.textContent — header area also contains message text nearby
     }
   } catch (e) {}
 
-  // Step 3: Contact Info drawer — img src only, no text content
+  // Step 3: Contact Info drawer (if open)
   try {
     const drawer = document.querySelector('[role="region"], [data-testid="contact-info-drawer"]');
     if (drawer) {
       const imgs = drawer.querySelectorAll('img');
       for (const img of imgs) {
         if (img.src) {
-          const match = img.src.match(/u=(\d{10,15})/);
+          const match = img.src.match(/[?&;]u(?:ser)?(?:%3D|=)(\d{10,15})/i) || img.src.match(/u=(\d{10,15})/);
           if (match && match[1]) return match[1];
         }
       }
-      const drawerTitleSpans = drawer.querySelectorAll('span[title]');
-      for (const s of drawerTitleSpans) {
-        const t = (s.getAttribute('title') || '').trim();
-        const stripped = t.replace(/[+\s\-()]/g, '');
-        if (stripped.length >= 10 && stripped.length <= 15 && /^\d+$/.test(stripped)) {
-          return stripped;
+      const textNodes = drawer.querySelectorAll('span, div, p, a');
+      for (const node of textNodes) {
+        if (node.children.length > 0) continue;
+        const txt = (node.textContent || '').trim();
+        if (/^\+?\d[\d\s\-().]{8,}\d$/.test(txt)) {
+          const digits = txt.replace(/\D/g, '');
+          if (digits.length >= 10 && digits.length <= 15) {
+            return digits;
+          }
         }
       }
     }
   } catch (e) {}
 
-  // Step 4: Active chat panel message data-id attributes in #main
+  // Step 4: Active chat panel message data-id / message-in / message-out attributes in #main
   try {
-    const messageElements = document.querySelectorAll('#main [data-id]');
+    const messageElements = document.querySelectorAll(
+      '#main [data-id], #main [data-item-id], #main [data-msg-id], #main [id^="msg-"], #main div.message-in, #main div.message-out'
+    );
     for (const msgEl of messageElements) {
-      const dataId = msgEl.getAttribute('data-id') || '';
-      const match = dataId.match(/(\d{10,15})@(s\.whatsapp\.net|c\.us)/);
-      if (match && match[1]) {
-        return match[1];
+      const dataId = msgEl.getAttribute('data-id') || msgEl.getAttribute('data-item-id') || msgEl.getAttribute('data-msg-id') || msgEl.getAttribute('id') || '';
+      const phone = phoneFromDataId(dataId);
+      if (phone && phone.length >= 10) {
+        return phone;
+      }
+      const copyable = msgEl.querySelector?.('.copyable-text');
+      if (copyable) {
+        const pre = copyable.getAttribute('data-pre-plain-text') || '';
+        const match = pre.match(/\+?(\d{1,4})?[\s\-.]?(\d{10})/);
+        if (match) {
+          const clean = (match[1] || '') + match[2];
+          if (clean.length >= 10 && clean.length <= 15) return clean;
+        }
       }
     }
   } catch (e) {}
 
-  // Step 5: Check header subtitle or contact drawer text for formatted phone numbers (e.g. +91 98765 43210)
+  // Step 5: Check header subtitle or info text for formatted phone numbers (e.g. +91 98765 43210)
   try {
     const textNodes = document.querySelectorAll('#main header span, [role="region"] span');
     for (const node of textNodes) {
       const txt = (node.textContent || '').trim();
-      const digits = txt.replace(/\D/g, '');
-      if (digits.length >= 10 && digits.length <= 15 && (digits.startsWith('91') || digits.length === 10)) {
-        return digits;
+      if (/^\+?\d[\d\s\-().]{8,}\d$/.test(txt)) {
+        const digits = txt.replace(/\D/g, '');
+        if (digits.length >= 10 && digits.length <= 15) {
+          return digits;
+        }
       }
     }
   } catch (e) {}
@@ -480,16 +609,25 @@ function detectActiveContact(force = false) {
       }
     }
 
-    let cleanDigits = targetTitle.replace(/\D/g, '');
+    let cleanDigits = '';
+    const isUnsavedTitle = targetTitle.trim().startsWith('+') || /^\d{10,15}$/.test(targetTitle.replace(/\s+/g, ''));
+    if (isUnsavedTitle) {
+      cleanDigits = targetTitle.replace(/\D/g, '');
+    }
+
     if (cleanDigits.length < 10) {
       const domPhone = extractPhoneNumberFromDom();
       if (domPhone && domPhone.length >= 10) {
         cleanDigits = domPhone;
-      } else if (activePhoneClean && activePhoneClean.length >= 10) {
-        cleanDigits = activePhoneClean;
+      } else {
+        const cachedPhone = findPhoneInCacheByName(targetTitle);
+        if (cachedPhone && cachedPhone.length >= 10) {
+          cleanDigits = cachedPhone;
+        } else if (activeDisplayName === targetTitle && activePhoneClean && activePhoneClean.length >= 10) {
+          cleanDigits = activePhoneClean;
+        }
       }
     }
-
 
     const tenDigit = (cleanDigits.length === 12 && cleanDigits.startsWith('91')) ? cleanDigits.slice(2) : cleanDigits;
     const contactKey = cleanDigits.length >= 10 ? cleanDigits : (activePhoneClean || targetTitle);
@@ -523,10 +661,10 @@ function detectActiveContact(force = false) {
       // so they use the CORRECT generation to check against.
       if (cleanDigits.length < 10) {
         const snapGen = fetchRequestGeneration;
-        [350, 900, 1800].forEach((delay) => {
+        [200, 500, 1000, 2000].forEach((delay) => {
           setTimeout(() => {
             if (snapGen !== fetchRequestGeneration) return;
-            const retryPhone = extractPhoneNumberFromDom();
+            const retryPhone = extractPhoneNumberFromDom() || findPhoneInCacheByName(targetTitle);
             if (retryPhone && retryPhone.length >= 10 && activePhoneClean !== retryPhone) {
               detectActiveContact(true);
             }
@@ -549,7 +687,8 @@ function detectActiveContact(force = false) {
 
 function fetchCrmMetadata(searchKey, displayName, domAvatar, generation) {
   const badNames = ['.', 'contact', 'unsaved contact', 'unknown contact', 'whatsapp contact', ''];
-  const isValidName = displayName && !badNames.includes(displayName.toLowerCase().trim()) && displayName.replace(/\D/g, '').length < 10;
+  const isPhoneHeader = displayName && (displayName.trim().startsWith('+') || (activePhoneClean && displayName.replace(/\D/g, '') === activePhoneClean));
+  const isValidName = displayName && !badNames.includes(displayName.toLowerCase().trim()) && !isPhoneHeader;
 
   const rawClean = (activePhoneClean || searchKey || '').replace(/\D/g, '');
   const tenDigit = (rawClean.length === 12 && rawClean.startsWith('91')) ? rawClean.slice(2) : rawClean;
@@ -647,7 +786,7 @@ function fetchCrmMetadata(searchKey, displayName, domAvatar, generation) {
 
         if (!resolvedAvatar && chat.avatarUrl) resolvedAvatar = chat.avatarUrl;
 
-        const currentNameIsValid = displayName && !badNames.includes(displayName.toLowerCase().trim()) && displayName.replace(/\D/g, '').length < 10;
+        const currentNameIsValid = displayName && !badNames.includes(displayName.toLowerCase().trim()) && !isPhoneHeader;
         const isNameDifferent = currentNameIsValid && (displayName.trim() !== (chat.name || '').trim());
         const effectiveDisplayName = currentNameIsValid ? displayName : chat.name;
 
@@ -678,11 +817,22 @@ function fetchCrmMetadata(searchKey, displayName, domAvatar, generation) {
           safeSendMessage({ action: 'UPDATE_CRM_METADATA', jid: reliableJid, data: updatePayload }, () => {});
         }
 
+        // If the backend has a verified phone for this chat, bind it to activePhoneClean
+        // so any subsequent click on 'Save Contact Info' uses this verified phone!
+        if (reliablePhone && reliablePhone.length >= 7) {
+          activePhoneClean = reliablePhone;
+          if (!activeContactKey || activeContactKey.length < 7 || activeContactKey === displayName) {
+            activeContactKey = reliablePhone;
+          }
+        }
+
         // Cache ONLY under phone/JID keys — never under display name
-        const meta = { ...activeFormData, name: effectiveDisplayName, phone: validPhoneClean || queryPhone };
+        const meta = { ...activeFormData, name: effectiveDisplayName, phone: reliablePhone || validPhoneClean || queryPhone };
+        if (reliablePhone) chatsMetadataMap[reliablePhone] = meta;
         if (validPhoneClean) chatsMetadataMap[validPhoneClean] = meta;
         if (validTenDigit && validTenDigit !== validPhoneClean) chatsMetadataMap[validTenDigit] = meta;
         if (queryPhone && queryPhone.length >= 10 && queryPhone !== validPhoneClean) chatsMetadataMap[queryPhone] = meta;
+        if (displayName) chatsMetadataMap[displayName] = meta;
       } else if (localData) {
         // No backend record found but we have a valid local cache hit — use it
         activeFormData = {
@@ -717,34 +867,63 @@ function fetchCrmMetadata(searchKey, displayName, domAvatar, generation) {
   });
 }
 
-function saveCrmMetadata(forcedAiDisabled) {
+function saveCrmMetadata(forcedAiDisabled, retryCount = 0) {
   // Normal CRM saves stop AI; the toggle passes an explicit state in either direction.
   activeFormData.aiDisabled = forcedAiDisabled !== undefined ? forcedAiDisabled : true;
 
   let domPhone = extractPhoneNumberFromDom();
-  let titleDigits = activeDisplayName.replace(/\D/g, '');
-  let cleanDigits = domPhone ? domPhone.replace(/\D/g, '') : (titleDigits.length >= 10 ? titleDigits : (activePhoneClean || ''));
-  if (cleanDigits.length < 10 && chatsMetadataMap[activeDisplayName]?.phone) {
-    const cachedP = chatsMetadataMap[activeDisplayName].phone.replace(/\D/g, '');
-    if (cachedP.length >= 10) cleanDigits = cachedP;
+  if (!domPhone || domPhone.length < 10) {
+    domPhone = findPhoneInCacheByName(activeDisplayName) || findPhoneInCacheByName(activeContactKey);
   }
+
+  let cleanDigits = domPhone ? domPhone.replace(/\D/g, '') : '';
+  if (cleanDigits.length < 10 && activePhoneClean && activePhoneClean.length >= 10) {
+    cleanDigits = activePhoneClean;
+  }
+  if (cleanDigits.length < 10 && activeDisplayName && activeDisplayName.trim().startsWith('+')) {
+    const pDigits = activeDisplayName.replace(/\D/g, '');
+    if (pDigits.length >= 10) cleanDigits = pDigits;
+  }
+
   const tenDigit = (cleanDigits.length === 12 && cleanDigits.startsWith('91')) ? cleanDigits.slice(2) : (cleanDigits.length === 10 ? cleanDigits : '');
   if (cleanDigits.length === 10) cleanDigits = '91' + cleanDigits;
 
   const validPhone = (cleanDigits && cleanDigits.length >= 10) ? cleanDigits : (activePhoneClean && activePhoneClean.length >= 10 ? activePhoneClean : '');
-  
-  // Guard: activeContactKey might be a contact name (e.g. "Prashanth 1 Contradiction").
-  // NEVER create a JID using activeContactKey unless it is an actual phone or contains '@'.
+
+  // Guard: if phone is still missing, attempt emergency extraction from Contact Info drawer
+  if (!validPhone && retryCount < 2) {
+    const headerEl = document.querySelector('#main header div[role="button"], #main header span[title]');
+    if (headerEl) {
+      headerEl.click();
+      setTimeout(() => {
+        saveCrmMetadata(forcedAiDisabled, retryCount + 1);
+      }, 250);
+      return;
+    }
+  }
+
   const contactKeyDigits = (activeContactKey || '').replace(/\D/g, '');
   let targetJid = '';
   if (validPhone) {
     targetJid = `${validPhone}@s.whatsapp.net`;
-  } else if (activeContactKey && activeContactKey.includes('@')) {
+  } else if (activeContactKey && activeContactKey.includes('@') && !activeContactKey.startsWith('1@')) {
     targetJid = activeContactKey;
-  } else if (contactKeyDigits.length >= 7) {
+  } else if (contactKeyDigits.length >= 7 && contactKeyDigits !== '1') {
     targetJid = `${contactKeyDigits}@s.whatsapp.net`;
+  } else if (activeDisplayName) {
+    safeSendMessage({ action: 'FETCH_CRM_METADATA', displayName: activeDisplayName, searchKey: activeDisplayName }, (res) => {
+      if (res && res.success && res.chat && (res.chat.phone || res.chat.jid)) {
+        const p = (res.chat.phone || res.chat.jid.split('@')[0]).replace(/\D/g, '');
+        if (p.length >= 7) {
+          activePhoneClean = p;
+          saveCrmMetadata(forcedAiDisabled, 99);
+          return;
+        }
+      }
+      console.warn('[AI Vastra] Cannot determine valid phone JID for save, aborting save to prevent garbage entry.');
+    });
+    return;
   } else {
-    // Cannot determine valid phone JID — do not create garbage JID like "1@s.whatsapp.net"
     console.warn('[AI Vastra] Cannot determine valid phone JID for save, aborting save to prevent garbage entry.');
     return;
   }
@@ -809,7 +988,8 @@ function saveCrmMetadata(forcedAiDisabled) {
       .then((res) => res.json())
       .then((data) => {
         console.log('[AI Vastra Extension] Direct sync success:', data);
-        fetchCrmMetadata(activeContactKey, effectiveName, activeAvatarUrl);
+        fetchRequestGeneration++;
+        fetchCrmMetadata(validPhone || targetJid || activeContactKey, effectiveName, activeAvatarUrl, fetchRequestGeneration);
       })
       .catch((e) => console.warn('[AI Vastra Extension] Direct sync fallback:', e));
   } catch (e) {}
@@ -848,11 +1028,10 @@ function renderCrmPanel(displayName, cleanPhone, avatarUrl, showSaveToast = fals
     }
   }
 
-  const isSavedContact = Boolean(
-    displayName && 
-    !badNames.includes(displayName.toLowerCase().trim()) && 
-    digitsInName.length < 10
-  );
+  const cleanDigitsOfName = (displayName || '').replace(/\D/g, '');
+  const cleanDigitsOfPhone = (cleanPhone || '').replace(/\D/g, '');
+  const isPhoneNumberTitle = (displayName && displayName.trim().startsWith('+')) || (cleanDigitsOfName && cleanDigitsOfPhone && cleanDigitsOfName === cleanDigitsOfPhone);
+  const isSavedContact = Boolean(displayName && !badNames.includes(displayName.toLowerCase().trim()) && !isPhoneNumberTitle);
 
   const displayTitle = isSavedContact
     ? displayName

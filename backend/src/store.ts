@@ -1465,6 +1465,12 @@ class StorageEngine {
       }
     }
 
+    // SECOND GUARD: After name resolution attempt, if we STILL can't resolve to a
+    // valid 10-digit phone and the raw JID digits are < 7, reject unconditionally.
+    // A valid contact name does NOT justify creating a record under garbage JID "1@s.whatsapp.net".
+    if (!isSocialJid && !jid.endsWith('@g.us') && tenDigit.length < 10 && rawDigits.length > 0 && rawDigits.length < 7) {
+      return; // Cannot resolve to valid phone — discard
+    }
 
     const canonicalJid = isSocialJid ? rawJid : (jid.endsWith('@g.us') ? jid : (tenDigit.length === 10 ? `91${tenDigit}@s.whatsapp.net` : jid));
 

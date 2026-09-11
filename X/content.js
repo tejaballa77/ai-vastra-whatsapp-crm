@@ -553,7 +553,10 @@ function fetchCrmMetadata(searchKey, displayName, domAvatar, generation) {
 
   const rawClean = (activePhoneClean || searchKey || '').replace(/\D/g, '');
   const tenDigit = (rawClean.length === 12 && rawClean.startsWith('91')) ? rawClean.slice(2) : rawClean;
-  const queryPhone = (activePhoneClean || tenDigit || '').replace(/\D/g, '');
+  // queryPhone MUST be at least 10 digits — short digit strings extracted from
+  // contact names (e.g. "1" from "Prashanth 1") must NEVER be used as phone/JID.
+  const queryPhone = (activePhoneClean && activePhoneClean.length >= 10) ? activePhoneClean
+    : (tenDigit && tenDigit.length >= 10) ? tenDigit : '';
 
   // Phone-only storage keys — never use name as a key to avoid cross-contact collisions
   const storageKeys = [];

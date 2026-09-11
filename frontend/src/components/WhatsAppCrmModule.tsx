@@ -178,7 +178,11 @@ export function WhatsAppCrmModule() {
     const isLidDigits = /^\d{10,}$/.test(nameRaw.replace(/\D/g, ''));
     const isBadName = !nameRaw || BAD_NAMES.has(nameRaw.toLowerCase()) || isJidEmail || isLidDigits;
 
-    const hasSavedName = !isBadName && nameRaw.replace(/\D/g, '') !== tenDigit && nameRaw.replace(/\D/g, '') !== rawNum;
+    const nameDigits = nameRaw.replace(/\D/g, '');
+    // Only treat the name as a "phone number" if it contains ≥7 digits.
+    // Names like "Prashanth 1 Contradiction" have 1 digit — that's NOT a phone.
+    const nameIsPhone = nameDigits.length >= 7 && (nameDigits === tenDigit || nameDigits === rawNum);
+    const hasSavedName = !isBadName && !nameIsPhone;
     const displayName = hasSavedName ? nameRaw : (formattedPhone || (chat.phone || chat.jid || '').split('@')[0]);
     const platform = isInstagram ? 'Instagram' : (isLinkedIn ? 'LinkedIn' : (isFacebook ? 'Facebook' : 'WhatsApp'));
     const platformIcon = isInstagram ? '📸' : (isLinkedIn ? '💼' : (isFacebook ? '📘' : '💬'));

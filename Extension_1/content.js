@@ -476,6 +476,15 @@ function detectActiveContact(force = false) {
       }
     }
 
+    if (cleanDigits.length < 10) {
+      setTimeout(() => {
+        const retryPhone = extractPhoneNumberFromDom();
+        if (retryPhone && retryPhone.length >= 10 && activePhoneClean !== retryPhone) {
+          detectActiveContact(true);
+        }
+      }, 350);
+    }
+
     const tenDigit = (cleanDigits.length === 12 && cleanDigits.startsWith('91')) ? cleanDigits.slice(2) : cleanDigits;
     const contactKey = cleanDigits.length >= 10 ? cleanDigits : targetTitle;
 
@@ -610,6 +619,28 @@ function fetchCrmMetadata(searchKey, displayName, domAvatar, generation) {
         const backendNameIsPhoneOrBad = !chat.name || badNames.includes(chat.name.toLowerCase().trim()) || chat.name.replace(/\D/g, '').length >= 10;
         const currentNameIsValid = displayName && !badNames.includes(displayName.toLowerCase().trim()) && displayName.replace(/\D/g, '').length < 10;
         const effectiveDisplayName = currentNameIsValid ? displayName : (backendNameIsPhoneOrBad ? displayName : chat.name);
+
+        // Auto-sync newly saved contact name to backend CRM database if backend currently holds unsaved phone number name
+        if (currentNameIsValid && backendNameIsPhoneOrBad && (validPhoneClean || queryPhone)) {
+          const targetJid = (validPhoneClean || queryPhone).endsWith('@s.whatsapp.net')
+            ? (validPhoneClean || queryPhone)
+            : `${validPhoneClean || queryPhone}@s.whatsapp.net`;
+
+          const updatePayload = {
+            jid: targetJid,
+            phone: validPhoneClean || queryPhone,
+            name: displayName,
+            leadStatus: activeFormData.leadStatus,
+            callStatus: activeFormData.callStatus,
+            followUpDate: activeFormData.followUpDate,
+            previousFollowUpDate: activeFormData.previousFollowUpDate,
+            notesList: activeFormData.notesList,
+            manuallySaved: true,
+            updatedAt: Date.now()
+          };
+
+          safeSendMessage({ action: 'UPDATE_CRM_METADATA', jid: targetJid, data: updatePayload }, () => {});
+        }
 
         // Cache ONLY under phone/JID keys — never under display name
         const meta = { ...activeFormData, name: effectiveDisplayName, phone: validPhoneClean || queryPhone };

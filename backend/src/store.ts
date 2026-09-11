@@ -1098,7 +1098,7 @@ class StorageEngine {
     const phoneToKey = new Map<string, string>();
     const nameToKey = new Map<string, string>();
 
-    const getOrAssignDedupeKey = (validTen: string, rawDigits: string, resolvedKey: string): string => {
+    const getOrAssignDedupeKey = (validTen: string, rawDigits: string, resolvedKey: string, cleanName: string): string => {
       if (resolvedKey.endsWith('@instagram') || resolvedKey.endsWith('@linkedin') || resolvedKey.endsWith('@facebook')) {
         return `social_${resolvedKey.toLowerCase()}`;
       }
@@ -1108,13 +1108,17 @@ class StorageEngine {
       if (rawDigits && rawDigits.length >= 7 && phoneToKey.has(rawDigits)) {
         return phoneToKey.get(rawDigits)!;
       }
+      if (cleanName && cleanName.length >= 3 && nameToKey.has(cleanName)) {
+        return nameToKey.get(cleanName)!;
+      }
 
       const newKey = (validTen && validTen.length === 10)
         ? `phone_${validTen}`
-        : ((rawDigits && rawDigits.length >= 7) ? `phone_${rawDigits}` : `jid_${resolvedKey}`);
+        : ((rawDigits && rawDigits.length >= 7) ? `phone_${rawDigits}` : ((cleanName && cleanName.length >= 3) ? `name_${cleanName}` : `jid_${resolvedKey}`));
 
       if (validTen && validTen.length === 10) phoneToKey.set(validTen, newKey);
       if (rawDigits && rawDigits.length >= 7) phoneToKey.set(rawDigits, newKey);
+      if (cleanName && cleanName.length >= 3) nameToKey.set(cleanName, newKey);
 
       return newKey;
     };
@@ -1149,7 +1153,7 @@ class StorageEngine {
         continue;
       }
 
-      const dedupeKey = getOrAssignDedupeKey(validTen, rawDigits, resolvedKey);
+      const dedupeKey = getOrAssignDedupeKey(validTen, rawDigits, resolvedKey, cleanName);
 
       const avatarUrl = this.contacts.get(resolvedKey)?.avatarUrl || c.avatarUrl;
       const msgs = this.getMessagesForChat(c.jid);
@@ -1279,7 +1283,7 @@ class StorageEngine {
         continue;
       }
 
-      const dedupeKey = getOrAssignDedupeKey(validTen, rawDigits, resolvedKey);
+      const dedupeKey = getOrAssignDedupeKey(validTen, rawDigits, resolvedKey, cNameClean);
 
       if (!uniqueMap.has(dedupeKey)) {
         const contactChat: CRMChat = {
@@ -1441,7 +1445,7 @@ class StorageEngine {
       const cAlpha = (cObj.name && !cIsPhone) ? cNameClean.replace(/\+?\d+/g, '').replace(/[^a-z0-9]/g, '').trim() : '';
 
       const matchPhone = Boolean(tenDigit && tenDigit.length === 10 && cTen === tenDigit);
-      const matchName = Boolean(tenDigit.length !== 10 && searchAlphaName && searchAlphaName.length >= 3 && cAlpha === searchAlphaName);
+      const matchName = Boolean(searchAlphaName && searchAlphaName.length >= 2 && (cAlpha === searchAlphaName || cNameClean === incomingNameClean.toLowerCase()));
 
       if (ck === canonicalJid || ck === jid || matchPhone || matchName) {
         matchingContactKeys.push(ck);
@@ -1463,7 +1467,7 @@ class StorageEngine {
       const chAlpha = (chObj.name && !chIsPhone) ? chNameClean.replace(/\+?\d+/g, '').replace(/[^a-z0-9]/g, '').trim() : '';
 
       const matchPhone = Boolean(tenDigit && tenDigit.length === 10 && chTen === tenDigit);
-      const matchName = Boolean(tenDigit.length !== 10 && searchAlphaName && searchAlphaName.length >= 3 && chAlpha === searchAlphaName);
+      const matchName = Boolean(searchAlphaName && searchAlphaName.length >= 2 && (chAlpha === searchAlphaName || chNameClean === incomingNameClean.toLowerCase()));
 
       if (chk === canonicalJid || chk === jid || matchPhone || matchName) {
         matchingChatKeys.push(chk);

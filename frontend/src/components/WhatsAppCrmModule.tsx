@@ -197,12 +197,15 @@ export function WhatsAppCrmModule() {
     const tenDigit = canonicalPhone(phoneDigits);
 
     const isSocial = c.jid?.includes('@instagram') || c.jid?.includes('@linkedin') || c.jid?.includes('@facebook');
+    const cleanName = (c.name && !BAD_NAMES.has(c.name.toLowerCase().trim()) && c.name.replace(/\D/g, '').length < 10) ? c.name.toLowerCase().trim().replace(/[^a-z0-9]/g, '') : '';
     let dedupeKey = `jid_${c.jid}`;
     if (!isSocial) {
       if (tenDigit && tenDigit.length === 10) {
         dedupeKey = `phone_${tenDigit}`;
       } else if (phoneDigits && phoneDigits.length >= 7) {
         dedupeKey = `phone_${phoneDigits}`;
+      } else if (cleanName && cleanName.length >= 3) {
+        dedupeKey = `name_${cleanName}`;
       }
     }
 

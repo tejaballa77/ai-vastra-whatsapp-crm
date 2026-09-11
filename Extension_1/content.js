@@ -507,30 +507,6 @@ function detectActiveContact(force = false) {
     const isNewContact = activeContactKey !== contactKey;
     const isNameChanged = Boolean(displayTitle && activeDisplayName && activeDisplayName !== displayTitle);
 
-    const badNames = ['.', 'contact', 'unsaved contact', 'unknown contact', 'whatsapp contact', ''];
-    const currentNameIsValid = displayTitle && !badNames.includes(displayTitle.toLowerCase().trim()) && displayTitle.replace(/\D/g, '').length < 10;
-    const validPhone = (cleanDigits.length >= 10 ? cleanDigits : (activePhoneClean || '')).replace(/\D/g, '');
-
-    // INSTANT REAL-TIME AUTO-SYNC: If contact name was saved or edited in WhatsApp Web, push to CRM immediately
-    if (isNameChanged && currentNameIsValid && validPhone.length >= 10) {
-      const targetJid = validPhone.endsWith('@s.whatsapp.net') ? validPhone : `${validPhone}@s.whatsapp.net`;
-      const syncPayload = {
-        jid: targetJid,
-        phone: validPhone,
-        name: displayTitle,
-        manuallySaved: true,
-        updatedAt: Date.now()
-      };
-      try {
-        fetch(`${DEFAULT_API_BASE}/api/crm/contact`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(syncPayload)
-        }).catch(() => {});
-      } catch (e) {}
-      safeSendMessage({ action: 'UPDATE_CRM_METADATA', jid: targetJid, data: syncPayload }, () => {});
-    }
-
     if (isNewContact || isNameChanged || force) {
       activeContactKey = contactKey;
       activeDisplayName = displayTitle;

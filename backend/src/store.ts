@@ -436,7 +436,7 @@ class StorageEngine {
         this.activeUsers.add(row.username);
       }
 
-      // Purge old orphan text-JID test records completely
+      // Purge old orphan text-JID test records and blank empty chats completely
       const testJidsToPurge = [
         'client new@s.whatsapp.net',
         'sai durga digital@s.whatsapp.net',
@@ -449,15 +449,22 @@ class StorageEngine {
         const jidLower = (c.jid || '').toLowerCase().trim();
         const nameLower = (c.name || '').toLowerCase().trim();
         const phoneDigits = (c.phone || jidLower.split('@')[0]).replace(/\D/g, '');
-        if (
-          testJidsToPurge.includes(jidLower) ||
-          testJidsToPurge.includes(nameLower) ||
-          (phoneDigits.length < 7 && !jidLower.endsWith('@instagram') && !jidLower.endsWith('@linkedin') && !jidLower.endsWith('@facebook') && (jidLower.includes('client new') || jidLower.includes('sai durga') || jidLower.includes('durga rao')))
-        ) {
+        const isSocial = jidLower.endsWith('@instagram') || jidLower.endsWith('@linkedin') || jidLower.endsWith('@facebook');
+
+        const notesStr = (c.notes || '').trim();
+        const hasNotesList = Boolean(c.notesList && Array.isArray(c.notesList) && c.notesList.length > 0);
+        const hasLeadStatus = Boolean(c.leadStatus && c.leadStatus !== 'UNASSIGNED');
+        const hasFollowUp = Boolean(c.followUpDate && c.followUpDate.trim() !== '' && c.followUpDate !== '—');
+        const hasRealData = notesStr.length > 0 || hasNotesList || hasLeadStatus || hasFollowUp;
+
+        const isTestJid = testJidsToPurge.includes(jidLower) || testJidsToPurge.includes(nameLower) || (phoneDigits.length < 7 && !isSocial && (jidLower.includes('client new') || jidLower.includes('sai durga') || jidLower.includes('durga rao')));
+        const isEmptyRow = !isSocial && !hasRealData;
+
+        if (isTestJid || isEmptyRow) {
           this.chats.delete(k);
           this.contacts.delete(k);
-          await dbManager.query(`DELETE FROM crm_chats WHERE LOWER(jid) = ? OR LOWER(name) = ?`, [jidLower, nameLower]).catch(() => {});
-          await dbManager.query(`DELETE FROM crm_contacts WHERE LOWER(jid) = ? OR LOWER(name) = ?`, [jidLower, nameLower]).catch(() => {});
+          await dbManager.query(`DELETE FROM crm_chats WHERE jid = ? OR LOWER(name) = ?`, [c.jid, nameLower]).catch(() => {});
+          await dbManager.query(`DELETE FROM crm_contacts WHERE jid = ? OR LOWER(name) = ?`, [c.jid, nameLower]).catch(() => {});
         }
       }
 

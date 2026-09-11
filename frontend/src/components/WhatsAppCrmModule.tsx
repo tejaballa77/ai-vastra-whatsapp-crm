@@ -274,7 +274,14 @@ export function WhatsAppCrmModule() {
     }
   }
 
-  const allRawChats = Array.from(chatsMap.values());
+  const allRawChats = Array.from(chatsMap.values()).filter(c => {
+    const isSocial = c.jid?.includes('@instagram') || c.jid?.includes('@linkedin') || c.jid?.includes('@facebook');
+    if (isSocial) return true;
+    const hasNotes = Boolean(c.notes && c.notes.trim()) || Boolean(c.notesList && Array.isArray(c.notesList) && c.notesList.length > 0);
+    const hasStatus = Boolean(c.leadStatus && c.leadStatus !== 'UNASSIGNED');
+    const hasFollowUp = Boolean(c.followUpDate && c.followUpDate.trim() !== '' && c.followUpDate !== '—');
+    return hasNotes || hasStatus || hasFollowUp;
+  });
   const chats = allRawChats;
 
   const getLocalYYYYMMDD = (ts?: number | string) => {

@@ -486,19 +486,10 @@ function detectActiveContact(force = false) {
       if (domPhone && domPhone.length >= 10) {
         cleanDigits = domPhone;
       } else if (activePhoneClean && activePhoneClean.length >= 10) {
-        // Fallback: preserve known phone number for the active chat session
         cleanDigits = activePhoneClean;
       }
     }
 
-    if (cleanDigits.length < 10) {
-      setTimeout(() => {
-        const retryPhone = extractPhoneNumberFromDom();
-        if (retryPhone && retryPhone.length >= 10 && activePhoneClean !== retryPhone) {
-          detectActiveContact(true);
-        }
-      }, 350);
-    }
 
     const tenDigit = (cleanDigits.length === 12 && cleanDigits.startsWith('91')) ? cleanDigits.slice(2) : cleanDigits;
     const contactKey = cleanDigits.length >= 10 ? cleanDigits : (activePhoneClean || targetTitle);
@@ -508,7 +499,7 @@ function detectActiveContact(force = false) {
     const isNameChanged = Boolean(displayTitle && activeDisplayName && activeDisplayName !== displayTitle);
 
     if (isNewContact || force) {
-      // Genuinely different contact — reset everything clean to prevent data bleed
+      // Genuinely different contact OR forced retry (phone finally found) — full reload
       activeContactKey = contactKey;
       activeDisplayName = displayTitle;
       activePhoneClean = cleanDigits.length >= 10 ? cleanDigits : (activePhoneClean || '');
@@ -523,23 +514,33 @@ function detectActiveContact(force = false) {
         aiDisabled: false
       };
 
-      // Show blank panel immediately so old contact's data never bleeds through
       renderCrmPanel(displayTitle, cleanDigits.length >= 10 ? cleanDigits : '', domAvatar);
 
-      // Bump generation so any in-flight response for the previous chat is discarded
       fetchRequestGeneration++;
       fetchCrmMetadata(contactKey, displayTitle, domAvatar, fetchRequestGeneration);
 
+      // Schedule phone-extraction retries AFTER generation is bumped,
+      // so they use the CORRECT generation to check against.
+      if (cleanDigits.length < 10) {
+        const snapGen = fetchRequestGeneration;
+        [350, 900, 1800].forEach((delay) => {
+          setTimeout(() => {
+            if (snapGen !== fetchRequestGeneration) return;
+            const retryPhone = extractPhoneNumberFromDom();
+            if (retryPhone && retryPhone.length >= 10 && activePhoneClean !== retryPhone) {
+              detectActiveContact(true);
+            }
+          }, delay);
+        });
+      }
+
     } else if (isNameChanged) {
-      // SAME contact, name was edited in WhatsApp — update the display name only,
-      // DO NOT reset form data (the user's saved data stays intact in the panel)
+      // SAME contact, name edited — update display only, keep all data intact
       activeDisplayName = displayTitle;
       activePhoneClean = cleanDigits.length >= 10 ? cleanDigits : (activePhoneClean || '');
 
-      // Re-render panel with new name but preserve all current form data
       renderCrmPanel(displayTitle, activePhoneClean, activeAvatarUrl);
 
-      // Sync the new name to CRM backend (only if contact already exists there)
       fetchRequestGeneration++;
       fetchCrmMetadata(contactKey, displayTitle, activeAvatarUrl, fetchRequestGeneration);
     }
@@ -684,8 +685,22 @@ function fetchCrmMetadata(searchKey, displayName, domAvatar, generation) {
           notesList: parseNotesList(localData.notes, localData.notesList),
           aiDisabled: Boolean(localData.aiDisabled)
         };
+      } else {
+        // No data found anywhere — likely we couldn't extract phone from a saved contact.
+        // The DOM might not be fully rendered yet. Schedule a delayed retry so that
+        // detectActiveContact can re-extract the phone from data-id attributes.
+        if (!validPhoneClean && !validTenDigit) {
+          setTimeout(() => {
+            if (generation !== fetchRequestGeneration) return;
+            const retryPhone = extractPhoneNumberFromDom();
+            if (retryPhone && retryPhone.length >= 10) {
+              // Phone is now available! Re-run the full detection which will
+              // use the phone as contactKey and load data correctly.
+              detectActiveContact(true);
+            }
+          }, 1500);
+        }
       }
-      // else: no data anywhere — activeFormData stays blank (reset above)
 
       activeAvatarUrl = resolvedAvatar;
       renderCrmPanel(activeDisplayName || displayName, activePhoneClean, resolvedAvatar);

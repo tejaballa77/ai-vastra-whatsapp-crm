@@ -184,29 +184,41 @@ export function WhatsAppCrmModule() {
     return { displayName, hasSavedName, formattedPhone, cleanPhone: tenDigit || rawNum || chat.phone || '', platform, platformIcon };
   };
 
+  const phoneToKey = new Map<string, string>();
+  const nameToKey = new Map<string, string>();
+
   const chatsMap = new Map<string, (typeof rawChats)[0]>();
   for (const c of rawChats) {
-    if (!c.jid) continue;
-    if (c.jid.endsWith('@lid')) {
-      continue;
-    }
+    if (!c.jid || c.jid.endsWith('@lid')) continue;
+
+    const isSocial = c.jid.includes('@instagram') || c.jid.includes('@linkedin') || c.jid.includes('@facebook');
+
     let phoneDigits = (c.phone || '').replace(/\D/g, '');
     if (!phoneDigits && c.jid.endsWith('@s.whatsapp.net')) {
       phoneDigits = c.jid.split('@')[0].replace(/\D/g, '');
     }
     const tenDigit = canonicalPhone(phoneDigits);
+    const cleanName = (c.name && !BAD_NAMES.has(c.name.toLowerCase().trim()) && c.name.replace(/\D/g, '').length < 10)
+      ? c.name.toLowerCase().trim().replace(/[^a-z0-9]/g, '')
+      : '';
 
-    const isSocial = c.jid?.includes('@instagram') || c.jid?.includes('@linkedin') || c.jid?.includes('@facebook');
-    const cleanName = (c.name && !BAD_NAMES.has(c.name.toLowerCase().trim()) && c.name.replace(/\D/g, '').length < 10) ? c.name.toLowerCase().trim().replace(/[^a-z0-9]/g, '') : '';
     let dedupeKey = `jid_${c.jid}`;
-    if (!isSocial) {
-      if (tenDigit && tenDigit.length === 10) {
-        dedupeKey = `phone_${tenDigit}`;
-      } else if (phoneDigits && phoneDigits.length >= 7) {
-        dedupeKey = `phone_${phoneDigits}`;
-      } else if (cleanName && cleanName.length >= 3) {
-        dedupeKey = `name_${cleanName}`;
-      }
+    if (isSocial) {
+      dedupeKey = `social_${c.jid.toLowerCase()}`;
+    } else if (tenDigit && tenDigit.length === 10 && phoneToKey.has(tenDigit)) {
+      dedupeKey = phoneToKey.get(tenDigit)!;
+    } else if (phoneDigits && phoneDigits.length >= 7 && phoneToKey.has(phoneDigits)) {
+      dedupeKey = phoneToKey.get(phoneDigits)!;
+    } else if (cleanName && cleanName.length >= 3 && nameToKey.has(cleanName)) {
+      dedupeKey = nameToKey.get(cleanName)!;
+    } else {
+      dedupeKey = (tenDigit && tenDigit.length === 10)
+        ? `phone_${tenDigit}`
+        : ((phoneDigits && phoneDigits.length >= 7) ? `phone_${phoneDigits}` : ((cleanName && cleanName.length >= 3) ? `name_${cleanName}` : `jid_${c.jid}`));
+
+      if (tenDigit && tenDigit.length === 10) phoneToKey.set(tenDigit, dedupeKey);
+      if (phoneDigits && phoneDigits.length >= 7) phoneToKey.set(phoneDigits, dedupeKey);
+      if (cleanName && cleanName.length >= 3) nameToKey.set(cleanName, dedupeKey);
     }
 
     if (!chatsMap.has(dedupeKey)) {

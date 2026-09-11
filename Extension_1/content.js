@@ -290,7 +290,7 @@ function extractProfileNameFromDom() {
 function extractPhoneNumberFromDom() {
   function phoneFromDataId(dataId) {
     if (!dataId) return '';
-    const match = dataId.match(/(\d{10,15})@s\.whatsapp\.net/);
+    const match = dataId.match(/(\d{10,15})@(s\.whatsapp\.net|c\.us)/);
     return match?.[1] || '';
   }
 
@@ -421,9 +421,21 @@ function extractPhoneNumberFromDom() {
     const messageElements = document.querySelectorAll('#main [data-id]');
     for (const msgEl of messageElements) {
       const dataId = msgEl.getAttribute('data-id') || '';
-      const match = dataId.match(/(\d{10,15})@s\.whatsapp\.net/);
+      const match = dataId.match(/(\d{10,15})@(s\.whatsapp\.net|c\.us)/);
       if (match && match[1]) {
         return match[1];
+      }
+    }
+  } catch (e) {}
+
+  // Step 5: Check header subtitle or contact drawer text for formatted phone numbers (e.g. +91 98765 43210)
+  try {
+    const textNodes = document.querySelectorAll('#main header span, [role="region"] span');
+    for (const node of textNodes) {
+      const txt = (node.textContent || '').trim();
+      const digits = txt.replace(/\D/g, '');
+      if (digits.length >= 10 && digits.length <= 15 && (digits.startsWith('91') || digits.length === 10)) {
+        return digits;
       }
     }
   } catch (e) {}
@@ -473,6 +485,9 @@ function detectActiveContact(force = false) {
       const domPhone = extractPhoneNumberFromDom();
       if (domPhone && domPhone.length >= 10) {
         cleanDigits = domPhone;
+      } else if (activePhoneClean && activePhoneClean.length >= 10) {
+        // Fallback: preserve known phone number for the active chat session
+        cleanDigits = activePhoneClean;
       }
     }
 
@@ -486,7 +501,7 @@ function detectActiveContact(force = false) {
     }
 
     const tenDigit = (cleanDigits.length === 12 && cleanDigits.startsWith('91')) ? cleanDigits.slice(2) : cleanDigits;
-    const contactKey = cleanDigits.length >= 10 ? cleanDigits : targetTitle;
+    const contactKey = cleanDigits.length >= 10 ? cleanDigits : (activePhoneClean || targetTitle);
 
     let displayTitle = targetTitle;
     const isNewContact = activeContactKey !== contactKey;
@@ -495,7 +510,7 @@ function detectActiveContact(force = false) {
     if (isNewContact || isNameChanged || force) {
       activeContactKey = contactKey;
       activeDisplayName = displayTitle;
-      activePhoneClean = cleanDigits.length >= 10 ? cleanDigits : '';
+      activePhoneClean = cleanDigits.length >= 10 ? cleanDigits : (activePhoneClean || '');
       activeAvatarUrl = domAvatar;
 
       // Reset active form data immediately to prevent cross-chat data bleeding.
@@ -673,7 +688,7 @@ function saveCrmMetadata(forcedAiDisabled) {
 
   let domPhone = extractPhoneNumberFromDom();
   let titleDigits = activeDisplayName.replace(/\D/g, '');
-  let cleanDigits = domPhone ? domPhone.replace(/\D/g, '') : (titleDigits.length >= 10 ? titleDigits : '');
+  let cleanDigits = domPhone ? domPhone.replace(/\D/g, '') : (titleDigits.length >= 10 ? titleDigits : (activePhoneClean || ''));
   if (cleanDigits.length < 10 && chatsMetadataMap[activeDisplayName]?.phone) {
     const cachedP = chatsMetadataMap[activeDisplayName].phone.replace(/\D/g, '');
     if (cachedP.length >= 10) cleanDigits = cachedP;
@@ -681,12 +696,13 @@ function saveCrmMetadata(forcedAiDisabled) {
   const tenDigit = (cleanDigits.length === 12 && cleanDigits.startsWith('91')) ? cleanDigits.slice(2) : (cleanDigits.length === 10 ? cleanDigits : '');
   if (cleanDigits.length === 10) cleanDigits = '91' + cleanDigits;
 
-  const targetJid = cleanDigits.length >= 10
-    ? `${cleanDigits}@s.whatsapp.net`
-    : `${activeContactKey}@s.whatsapp.net`;
+  const validPhone = (cleanDigits && cleanDigits.length >= 10) ? cleanDigits : (activePhoneClean && activePhoneClean.length >= 10 ? activePhoneClean : '');
+  const targetJid = validPhone
+    ? `${validPhone}@s.whatsapp.net`
+    : (activeContactKey.includes('@') ? activeContactKey : `${activeContactKey}@s.whatsapp.net`);
 
   // Update activePhoneClean cache ONLY if valid 10+ digit phone belongs to this chat
-  if (cleanDigits.length >= 10) activePhoneClean = cleanDigits;
+  if (validPhone) activePhoneClean = validPhone;
 
   // Use phone number as display name fallback if name is invalid (".", "Contact", empty)
   const badNames = ['.', 'contact', 'unsaved contact', ''];

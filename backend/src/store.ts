@@ -1397,8 +1397,33 @@ class StorageEngine {
     const isSocialJid = rawJid.endsWith('@instagram') || rawJid.endsWith('@linkedin') || rawJid.endsWith('@facebook');
     const jid = this.resolveJid(rawJid);
     const hasExplicitPhone = Boolean(metadata.phone && metadata.phone.replace(/\D/g, '').length >= 10);
-    const rawDigits = (!isSocialJid && hasExplicitPhone) ? metadata.phone!.replace(/\D/g, '') : ((!isSocialJid && rawJid.replace(/\D/g, '').length >= 10) ? rawJid.replace(/\D/g, '') : '');
-    const tenDigit = isSocialJid ? '' : this.canonicalPhone(rawDigits);
+    const BAD_NAMES = new Set(['.', 'contact', 'unsaved contact', 'unknown contact', 'ai vastra sales agent', 'ai sales agent', 'ai vastra', 'me', '']);
+    const incomingNameClean = (metadata.name || '').trim();
+    const incomingNameIsValid = incomingNameClean.length > 1 && !BAD_NAMES.has(incomingNameClean.toLowerCase());
+
+    const isPurePhoneInput = incomingNameClean.replace(/\D/g, '').length >= 7;
+    const searchAlphaName = (incomingNameIsValid && !isPurePhoneInput)
+      ? incomingNameClean.toLowerCase().replace(/\+?\d+/g, '').replace(/[^a-z0-9]/g, '').trim()
+      : '';
+
+    let rawDigits = (!isSocialJid && hasExplicitPhone) ? metadata.phone!.replace(/\D/g, '') : ((!isSocialJid && rawJid.replace(/\D/g, '').length >= 10) ? rawJid.replace(/\D/g, '') : '');
+    let tenDigit = isSocialJid ? '' : this.canonicalPhone(rawDigits);
+
+    if (!isSocialJid && !tenDigit && incomingNameIsValid) {
+      for (const [ck, cObj] of this.contacts.entries()) {
+        const cPhoneDigits = (cObj.phone || ck.split('@')[0]).replace(/\D/g, '');
+        const cTen = this.canonicalPhone(cPhoneDigits);
+        if (cTen && cTen.length === 10) {
+          const cNameClean = (cObj.name || '').toLowerCase().trim();
+          if (cNameClean === incomingNameClean.toLowerCase() || (searchAlphaName && cNameClean.replace(/\+?\d+/g, '').replace(/[^a-z0-9]/g, '') === searchAlphaName)) {
+            tenDigit = cTen;
+            rawDigits = `91${cTen}`;
+            break;
+          }
+        }
+      }
+    }
+
     const canonicalJid = isSocialJid ? rawJid : (jid.endsWith('@g.us') ? jid : (tenDigit.length === 10 ? `91${tenDigit}@s.whatsapp.net` : jid));
 
     let platform = 'whatsapp';
@@ -1406,17 +1431,7 @@ class StorageEngine {
     else if (canonicalJid.endsWith('@linkedin')) platform = 'linkedin';
     else if (canonicalJid.endsWith('@facebook')) platform = 'facebook';
 
-    const BAD_NAMES = new Set(['.', 'contact', 'unsaved contact', 'unknown contact', 'ai vastra sales agent', 'ai sales agent', 'ai vastra', 'me', '']);
-    const incomingNameClean = (metadata.name || '').trim();
-    const incomingNameIsValid = incomingNameClean.length > 1 && !BAD_NAMES.has(incomingNameClean.toLowerCase());
-
     const nowTimestamp = Date.now();
-
-    // Un-blacklist contact keys when user explicitly saves new data
-    const isPurePhoneInput = incomingNameClean.replace(/\D/g, '').length >= 7;
-    const searchAlphaName = (incomingNameIsValid && !isPurePhoneInput)
-      ? incomingNameClean.toLowerCase().replace(/\+?\d+/g, '').replace(/[^a-z0-9]/g, '').trim()
-      : '';
 
     const unBlacklistKeys = [
       canonicalJid.toLowerCase(),

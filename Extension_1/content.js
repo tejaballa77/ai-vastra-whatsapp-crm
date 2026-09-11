@@ -631,12 +631,12 @@ function fetchCrmMetadata(searchKey, displayName, domAvatar, generation) {
 
         if (!resolvedAvatar && chat.avatarUrl) resolvedAvatar = chat.avatarUrl;
 
-        const backendNameIsPhoneOrBad = !chat.name || badNames.includes(chat.name.toLowerCase().trim()) || chat.name.replace(/\D/g, '').length >= 10;
         const currentNameIsValid = displayName && !badNames.includes(displayName.toLowerCase().trim()) && displayName.replace(/\D/g, '').length < 10;
-        const effectiveDisplayName = currentNameIsValid ? displayName : (backendNameIsPhoneOrBad ? displayName : chat.name);
+        const isNameDifferent = currentNameIsValid && (displayName.trim() !== (chat.name || '').trim());
+        const effectiveDisplayName = currentNameIsValid ? displayName : chat.name;
 
-        // Auto-sync newly saved contact name to backend CRM database if backend currently holds unsaved phone number name
-        if (currentNameIsValid && backendNameIsPhoneOrBad && (validPhoneClean || queryPhone)) {
+        // Auto-sync contact name to backend whenever WhatsApp Web display name changes or is saved
+        if (isNameDifferent && (validPhoneClean || queryPhone)) {
           const targetJid = (validPhoneClean || queryPhone).endsWith('@s.whatsapp.net')
             ? (validPhoneClean || queryPhone)
             : `${validPhoneClean || queryPhone}@s.whatsapp.net`;

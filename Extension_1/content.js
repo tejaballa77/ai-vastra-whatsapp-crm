@@ -413,7 +413,18 @@ function extractPhoneNumberFromDom() {
           return stripped;
         }
       }
-      // ↑ NO span.textContent — drawer content could contain any arbitrary text
+    }
+  } catch (e) {}
+
+  // Step 4: Active chat panel message data-id attributes in #main
+  try {
+    const messageElements = document.querySelectorAll('#main [data-id]');
+    for (const msgEl of messageElements) {
+      const dataId = msgEl.getAttribute('data-id') || '';
+      const match = dataId.match(/(\d{10,15})@s\.whatsapp\.net/);
+      if (match && match[1]) {
+        return match[1];
+      }
     }
   } catch (e) {}
 

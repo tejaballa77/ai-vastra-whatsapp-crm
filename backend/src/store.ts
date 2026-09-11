@@ -459,8 +459,10 @@ class StorageEngine {
 
         const isTestJid = testJidsToPurge.includes(jidLower) || testJidsToPurge.includes(nameLower) || (phoneDigits.length < 7 && !isSocial && (jidLower.includes('client new') || jidLower.includes('sai durga') || jidLower.includes('durga rao')));
         const isEmptyRow = !isSocial && !hasRealData;
+        // Purge garbage JIDs: phone part has 1-6 digits (e.g. "1@s.whatsapp.net" created by appended digit to name)
+        const isGarbageJid = !isSocial && !jidLower.endsWith('@g.us') && phoneDigits.length > 0 && phoneDigits.length < 7 && !hasRealData;
 
-        if (isTestJid || isEmptyRow) {
+        if (isTestJid || isEmptyRow || isGarbageJid) {
           this.chats.delete(k);
           this.contacts.delete(k);
           await dbManager.query(`DELETE FROM crm_chats WHERE jid = ? OR LOWER(name) = ?`, [c.jid, nameLower]).catch(() => {});
@@ -1441,6 +1443,13 @@ class StorageEngine {
     let rawDigits = (!isSocialJid && hasExplicitPhone) ? metadata.phone!.replace(/\D/g, '') : ((!isSocialJid && rawJid.replace(/\D/g, '').length >= 10) ? rawJid.replace(/\D/g, '') : '');
     let tenDigit = isSocialJid ? '' : this.canonicalPhone(rawDigits);
 
+    // GUARD: Reject garbage short-digit JIDs (e.g. "1@s.whatsapp.net" created when
+    // a digit was appended to a contact name and the extension briefly used that digit as the JID.
+    // We only allow saving if there's a valid 10-digit phone OR a valid name that resolves to one.
+    if (!isSocialJid && !jid.endsWith('@g.us') && rawDigits.length > 0 && rawDigits.length < 7 && !incomingNameIsValid) {
+      return; // Silently discard — not a real contact
+    }
+
     if (!isSocialJid && !tenDigit && incomingNameIsValid) {
       for (const [ck, cObj] of this.contacts.entries()) {
         const cPhoneDigits = (cObj.phone || ck.split('@')[0]).replace(/\D/g, '');
@@ -1455,6 +1464,7 @@ class StorageEngine {
         }
       }
     }
+
 
     const canonicalJid = isSocialJid ? rawJid : (jid.endsWith('@g.us') ? jid : (tenDigit.length === 10 ? `91${tenDigit}@s.whatsapp.net` : jid));
 

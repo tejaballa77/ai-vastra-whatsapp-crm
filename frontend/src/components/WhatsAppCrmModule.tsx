@@ -163,7 +163,9 @@ export function WhatsAppCrmModule() {
     let formattedPhone = '';
     if (tenDigit.length === 10) {
       formattedPhone = `+91 ${tenDigit.slice(0, 5)} ${tenDigit.slice(5)}`;
-    } else if (rawNum.length > 0 && rawNum.length <= 12) {
+    } else if (rawNum.length >= 7 && rawNum.length <= 12) {
+      // Only format as phone if it has at least 7 digits (real phone number)
+      // Prevents garbage JIDs like "1@s.whatsapp.net" from displaying as "+1"
       formattedPhone = `+${rawNum}`;
     }
 

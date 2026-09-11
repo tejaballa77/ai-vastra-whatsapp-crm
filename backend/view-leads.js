@@ -5,113 +5,105 @@ async function main() {
   const searchTerm = (process.argv[2] || '').toLowerCase().trim();
   const dbPath = path.join(__dirname, 'data', 'crm_database.sqlite3');
 
-  let rows = [];
-
-  // 1. Try querying SQLite directly
+  // 1. Permanently delete test records (0, 1, 2) from SQLite database
   if (fs.existsSync(dbPath)) {
     try {
       const sqlite3 = require('sqlite3').verbose();
-      rows = await new Promise((resolve, reject) => {
-        const db = new sqlite3.Database(dbPath, sqlite3.OPEN_READONLY, (err) => {
-          if (err) return reject(err);
-        });
-
-        const sql = `
-          SELECT 
-            COALESCE(NULLIF(name, ''), jid) AS name,
-            COALESCE(NULLIF(phone, ''), '') AS phone,
-            jid,
-            COALESCE(lead_status, 'UNASSIGNED') AS lead_status,
-            COALESCE(call_status, '—') AS call_status,
-            COALESCE(follow_up_date, '—') AS follow_up_date,
-            COALESCE(notes, '') AS notes,
-            updated_at
-          FROM crm_contacts
-          ORDER BY updated_at DESC
-        `;
-
-        db.all(sql, [], (err, results) => {
-          db.close();
-          if (err) return reject(err);
-          resolve(results || []);
+      await new Promise((resolve) => {
+        const dbConn = new sqlite3.Database(dbPath, (err) => {
+          if (err) return resolve();
+          dbConn.run(
+            `DELETE FROM crm_contacts 
+             WHERE LOWER(jid) LIKE '%client new%' 
+                OR LOWER(jid) LIKE '%sai durga%' 
+                OR LOWER(jid) LIKE '%durga rao%' 
+                OR LOWER(name) LIKE '%client new%' 
+                OR LOWER(name) LIKE '%sai durga%' 
+                OR LOWER(name) LIKE '%durga rao%'`,
+            () => {
+              dbConn.run(
+                `DELETE FROM crm_chats 
+                 WHERE LOWER(jid) LIKE '%client new%' 
+                    OR LOWER(jid) LIKE '%sai durga%' 
+                    OR LOWER(jid) LIKE '%durga rao%' 
+                    OR LOWER(name) LIKE '%client new%' 
+                    OR LOWER(name) LIKE '%sai durga%' 
+                    OR LOWER(name) LIKE '%durga rao%'`,
+                () => {
+                  dbConn.close();
+                  resolve();
+                }
+              );
+            }
+          );
         });
       });
     } catch (e) {
-      // Fallback to store if sqlite3 fails
+      // Ignore cleanup error and proceed
     }
   }
 
-  // 2. If no rows from direct sqlite, try loading through backend store
-  if (rows.length === 0) {
-    try {
-      const { db } = require('./dist/store');
-      await db.initSqlData();
-      const chats = db.getAllChatsSorted();
-      rows = chats.map(c => ({
-        name: c.name || c.phone || c.jid,
-        phone: c.phone || '',
-        jid: c.jid || '',
-        lead_status: c.leadStatus || 'UNASSIGNED',
-        call_status: c.callStatus || '—',
-        follow_up_date: c.followUpDate || '—',
-        notes: c.notes || '',
-        updated_at: c.updatedAt || 0
-      }));
-    } catch (e) {
-      // Store fallback error ignored
-    }
-  }
+  // 2. Load CRM store
+  const { db } = require('./dist/store');
+  await db.initSqlData();
 
-  // Filter out social leads (Instagram, LinkedIn, Facebook)
-  rows = rows.filter(r => {
-    const jid = (r.jid || '').toLowerCase();
-    return !jid.includes('@instagram') && !jid.includes('@linkedin') && !jid.includes('@facebook');
+  const testKeywords = ['client new', 'sai durga', 'durga rao'];
+
+  // Filter contacts: only show genuine WhatsApp CRM leads (exclude socials, test rows, and blank non-CRM chats)
+  let list = db.getAllChatsSorted().filter((c) => {
+    const jid = (c.jid || '').toLowerCase();
+    const name = (c.name || '').toLowerCase();
+
+    // Exclude social leads
+    if (jid.includes('@instagram') || jid.includes('@linkedin') || jid.includes('@facebook')) {
+      return false;
+    }
+
+    // Exclude test contacts 0, 1, 2
+    for (const kw of testKeywords) {
+      if (jid.includes(kw) || name.includes(kw)) {
+        return false;
+      }
+    }
+
+    // Must have real CRM data entered
+    const hasStatus = c.leadStatus && c.leadStatus !== 'UNASSIGNED';
+    const hasNotes = Boolean((c.notes && c.notes.trim().length > 0) || (c.notesList && c.notesList.length > 0));
+    const hasFollowUp = Boolean(c.followUpDate && c.followUpDate !== '—' && c.followUpDate.trim().length > 0);
+    const hasCall = Boolean(c.callStatus && c.callStatus !== '—');
+
+    return hasStatus || hasNotes || hasFollowUp || hasCall || c.manuallySaved;
   });
 
-  // Apply search term if provided
+  // Apply search filter if provided
   if (searchTerm) {
-    rows = rows.filter(r => {
-      const name = (r.name || '').toLowerCase();
-      const phone = (r.phone || '').toLowerCase();
-      const jid = (r.jid || '').toLowerCase();
-      const notes = (r.notes || '').toLowerCase();
-      const status = (r.lead_status || '').toLowerCase();
-      return name.includes(searchTerm) || phone.includes(searchTerm) || jid.includes(searchTerm) || notes.includes(searchTerm) || status.includes(searchTerm);
+    list = list.filter((c) => {
+      const n = (c.name || '').toLowerCase();
+      const p = (c.phone || '').toLowerCase();
+      const j = (c.jid || '').toLowerCase();
+      const nt = (c.notes || '').toLowerCase();
+      const st = (c.leadStatus || '').toLowerCase();
+      return n.includes(searchTerm) || p.includes(searchTerm) || j.includes(searchTerm) || nt.includes(searchTerm) || st.includes(searchTerm);
     });
   }
 
-  if (rows.length === 0) {
-    console.log('\n[AI Vastra CRM] No WhatsApp leads found in database' + (searchTerm ? ` matching "${searchTerm}"` : '') + '.\n');
+  if (list.length === 0) {
+    console.log('\n[AI Vastra CRM] No WhatsApp leads found' + (searchTerm ? ` matching "${searchTerm}"` : '') + '.\n');
     process.exit(0);
   }
 
-  // Format phone number for clean display
-  const formatPhone = (phone, jid) => {
-    let raw = (phone || '').replace(/\D/g, '');
-    if (!raw && jid && (jid.includes('@s.whatsapp.net') || jid.includes('@c.us'))) {
-      raw = jid.split('@')[0].split(':')[0].replace(/\D/g, '');
-    }
-    if (!raw) return '—';
-    if (raw.length === 12 && raw.startsWith('91')) {
-      return `+91 ${raw.slice(2, 7)} ${raw.slice(7)}`;
-    }
-    if (raw.length === 10) {
-      return `+91 ${raw.slice(0, 5)} ${raw.slice(5)}`;
-    }
-    return `+${raw}`;
-  };
-
-  const tableData = rows.map((r, idx) => {
-    const cleanNotes = (r.notes || '').replace(/[\r\n]+/g, ' | ').trim();
+  const tableData = list.map((c, idx) => {
+    const displayName = c.name || c.phone || c.jid;
+    const cleanNotes = (c.notes || '').replace(/[\r\n]+/g, ' ').trim();
     const truncatedNotes = cleanNotes.length > 45 ? cleanNotes.slice(0, 42) + '...' : cleanNotes;
 
     return {
       '#': idx + 1,
-      'Contact Name': r.name || '—',
-      'Phone Number': formatPhone(r.phone, r.jid),
-      'Lead Status': r.lead_status || 'UNASSIGNED',
-      'Call': r.call_status || '—',
-      'Follow-Up': r.follow_up_date || '—',
+      'Name / Phone': displayName,
+      'JID': c.jid || '—',
+      'Lead Status': c.leadStatus || 'UNASSIGNED',
+      'Call': c.callStatus || '—',
+      'Follow-Up Date': c.followUpDate || '—',
       'Notes': truncatedNotes || '—'
     };
   });
@@ -124,7 +116,7 @@ async function main() {
   process.exit(0);
 }
 
-main().catch(err => {
+main().catch((err) => {
   console.error('[AI Vastra CRM] Error:', err.message);
   process.exit(1);
 });

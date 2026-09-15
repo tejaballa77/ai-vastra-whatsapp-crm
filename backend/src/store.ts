@@ -834,7 +834,9 @@ class StorageEngine {
 
       for (const [jid, contact] of this.contacts.entries()) {
         const contactNum = jid.split('@')[0].replace(/\D/g, '');
-        if (contactNum.endsWith(cleanPhone) || cleanPhone.endsWith(contactNum)) {
+        const cTen = this.canonicalPhone(contactNum);
+        const itemTen = this.canonicalPhone(cleanPhone);
+        if (jid === item.phone || (cTen && itemTen && cTen === itemTen)) {
           contact.name = item.name;
           this.contacts.set(jid, contact);
           const chat = this.chats.get(jid);
@@ -848,7 +850,9 @@ class StorageEngine {
 
       for (const [jid, chat] of this.chats.entries()) {
         const chatNum = jid.split('@')[0].replace(/\D/g, '');
-        if (chatNum.endsWith(cleanPhone) || cleanPhone.endsWith(chatNum)) {
+        const cTen = this.canonicalPhone(chatNum);
+        const itemTen = this.canonicalPhone(cleanPhone);
+        if (jid === item.phone || (cTen && itemTen && cTen === itemTen)) {
           chat.name = item.name;
           this.chats.set(jid, chat);
           matchCount++;

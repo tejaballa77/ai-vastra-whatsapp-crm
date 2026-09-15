@@ -382,12 +382,15 @@ function extractProfileNameFromDom() {
 function extractPhoneNumberFromDom() {
   function phoneFromDataId(dataId) {
     if (!dataId || typeof dataId !== 'string') return '';
+    // Skip outgoing messages (true_) — they contain the logged-in user's own phone number!
+    if (/^true_/i.test(dataId) || /_true_/i.test(dataId)) return '';
+
     // JID match with optional multi-device index: e.g. 919876543210:0@c.us, 919876543210@s.whatsapp.net
     const jidMatch = dataId.match(/(\d{10,15})(?::\d+)?@(s\.whatsapp\.net|c\.us)/);
     if (jidMatch && jidMatch[1]) return jidMatch[1];
 
-    // Message ID prefix match: true_919876543210:0@... or false_919876543210_...
-    const prefixMatch = dataId.match(/(?:true|false|out|in)_(\d{10,15})/i);
+    // Message ID prefix match: false_919876543210_... or in_919876543210
+    const prefixMatch = dataId.match(/(?:false|in)_(\d{10,15})/i);
     if (prefixMatch && prefixMatch[1]) return prefixMatch[1];
 
     return '';
@@ -532,13 +535,14 @@ function extractPhoneNumberFromDom() {
     }
   } catch (e) {}
 
-  // Step 4: Active chat panel message data-id / message-in / message-out attributes in #main
+  // Step 4: Active chat panel message data-id in #main (INCOMING messages only)
   try {
     const messageElements = document.querySelectorAll(
-      '#main [data-id], #main [data-item-id], #main [data-msg-id], #main [id^="msg-"], #main div.message-in, #main div.message-out'
+      '#main div.message-in[data-id], #main div.message-in [data-id], #main [data-id*="false_"]'
     );
     for (const msgEl of messageElements) {
       const dataId = msgEl.getAttribute('data-id') || msgEl.getAttribute('data-item-id') || msgEl.getAttribute('data-msg-id') || msgEl.getAttribute('id') || '';
+      if (/^true_/i.test(dataId) || /_true_/i.test(dataId)) continue;
       const phone = phoneFromDataId(dataId);
       if (phone && phone.length >= 10) {
         return phone;

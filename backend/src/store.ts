@@ -692,8 +692,10 @@ class StorageEngine {
     for (const c of this.contacts.values()) {
       if (c.phone) {
         const cp = c.phone.replace(/\D/g, '');
-        if (cp && (cp === cleanNum || cp === rawNum || cp.endsWith(cleanNum) || cleanNum.endsWith(cp))) {
-          if (c.name && c.name !== 'Unsaved Contact' && !isJidEmail(c.name) && !/^\d{13,}$/.test(c.name.replace(/\D/g, ''))) {
+        const cTen = this.canonicalPhone(cp);
+        const targetTen = this.canonicalPhone(cleanNum || rawNum);
+        if (cTen && targetTen && cTen.length >= 7 && targetTen.length >= 7 && cTen === targetTen) {
+          if (c.name && c.name !== 'Unsaved Contact' && !isJidEmail(c.name) && !isJidEmail(c.name) && !/^\d{13,}$/.test(c.name.replace(/\D/g, ''))) {
             return c.name;
           }
         }

@@ -194,7 +194,10 @@ export function WhatsAppCrmModule() {
 
     const isSocial = c.jid.includes('@instagram') || c.jid.includes('@linkedin') || c.jid.includes('@facebook');
 
-    let phoneDigits = (c.phone || '').replace(/\D/g, '');
+    // Use the canonical chat identity, not a potentially stale phone column.
+    // WhatsApp device suffixes must never become part of the phone number.
+    const phoneJid = c.jid.trim().toLowerCase().match(/^(\d{7,15})(?::\d+)?@(?:s\.whatsapp\.net|c\.us)$/);
+    let phoneDigits = phoneJid ? phoneJid[1] : (c.phone || '').replace(/\D/g, '');
     if (!phoneDigits && c.jid.endsWith('@s.whatsapp.net')) {
       phoneDigits = c.jid.split('@')[0].replace(/\D/g, '');
     }
@@ -208,6 +211,8 @@ export function WhatsAppCrmModule() {
     let dedupeKey = `jid_${c.jid.toLowerCase()}`;
     if (isSocial) {
       dedupeKey = `social_${c.jid.toLowerCase()}`;
+    } else if (phoneJid) {
+      dedupeKey = `phone_${tenDigit}`;
     } else if (tenDigit && tenDigit.length === 10 && phoneToKey.has(tenDigit)) {
       dedupeKey = phoneToKey.get(tenDigit)!;
     } else if (phoneDigits && phoneDigits.length >= 7 && phoneToKey.has(phoneDigits)) {

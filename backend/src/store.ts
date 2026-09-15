@@ -651,7 +651,8 @@ class StorageEngine {
     const clean = jid.split('@')[0];
     const mapped = this.lidToJidMap.get(jid) || this.lidToJidMap.get(clean);
     const target = mapped || jid;
-    const targetClean = target.split('@')[0];
+    // Device suffixes are not phone digits (e.g. 919876543210:12).
+    const targetClean = target.split('@')[0].split(':')[0];
     if (target.endsWith('@g.us')) return `${targetClean}@g.us`;
     const digits = targetClean.replace(/\D/g, '');
     const ten = this.canonicalPhone(digits);
@@ -1146,6 +1147,8 @@ class StorageEngine {
       if (resolvedKey.endsWith('@instagram') || resolvedKey.endsWith('@linkedin') || resolvedKey.endsWith('@facebook')) {
         return `social_${resolvedKey.toLowerCase()}`;
       }
+      const phoneJid = resolvedKey.toLowerCase().match(/^(\d{7,15})@(?:s\.whatsapp\.net|c\.us)$/);
+      if (phoneJid) return `phone_${this.canonicalPhone(phoneJid[1])}`;
       if (validTen && validTen.length === 10 && phoneToKey.has(validTen)) {
         return phoneToKey.get(validTen)!;
       }

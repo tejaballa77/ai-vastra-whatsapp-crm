@@ -55,6 +55,22 @@ test('CRM frontend never merges different phones merely because names match', ()
   vm.runInNewContext(code, context);
   assert.equal(context.result.length, 2);
 });
+test('CRM shows phone-JID aliases once despite stale phone columns and device suffixes', () => {
+  const source = fs.readFileSync(path.join(root, 'frontend/src/components/WhatsAppCrmModule.tsx'), 'utf8');
+  const block = source.slice(source.indexOf('  const phoneToKey ='), source.indexOf('  const allRawChats ='));
+  const code = ts.transpileModule(block + '\n globalThis.result = Array.from(chatsMap.values());', { compilerOptions: { target: ts.ScriptTarget.ES2020 } }).outputText;
+  const context = { rawChats: [
+    { jid: '918471058274@s.whatsapp.net', phone: '918471058274', name: 'Contact', notesList: ['keep'] },
+    { jid: '918471058274@c.us', phone: '919000000001', name: 'Contact', notesList: ['keep'] },
+    { jid: '918471058274:12@s.whatsapp.net', name: 'Contact', notesList: ['keep'] },
+    { jid: '919000000001@s.whatsapp.net', phone: '918471058274', name: 'Contact', notesList: ['separate'] },
+  ], BAD_NAMES: new Set(), canonicalPhone: (p) => p.length === 12 && p.startsWith('91') ? p.slice(2) : p };
+  vm.runInNewContext(code, context);
+  assert.equal(context.result.length, 2);
+  assert.deepEqual(Array.from(context.result[0].notesList), ['keep']);
+  const db = makeStore();
+  assert.equal(db.resolveJid('918471058274:12@c.us'), '918471058274@s.whatsapp.net');
+});
 test('extension cache cannot use corrupted CRM names to guess another phone', () => {
   const context = { console, setTimeout: () => {}, setInterval: () => {} };
   vm.createContext(context);

@@ -700,6 +700,10 @@ function fetchCrmMetadata(searchKey, displayName, domAvatar, generation) {
         notesList: parseNotesList(localData.notes, localData.notesList),
         aiDisabled: Boolean(localData.aiDisabled || localData.leadStatus === 'WARM' || localData.leadStatus === 'WARM_INTERESTED')
       };
+      // Render verified phone-keyed data immediately; do not leave the panel
+      // blank while the server request is pending. The generation guard above
+      // prevents another chat's cache from being rendered here.
+      renderCrmPanel(activeDisplayName || displayName, activePhoneClean, domAvatar);
     } else {
       activeFormData = {
         leadStatus: 'UNASSIGNED',

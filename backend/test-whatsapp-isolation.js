@@ -77,6 +77,17 @@ test('startup does not delete saved leads or apply hardcoded contact corrections
   assert.equal(/DELETE FROM crm_(?:chats|contacts)/i.test(startup), false);
   assert.equal(startup.includes('Contradictions'), false);
 });
+test('phone-keyed extension data renders before a slow server responds, but stale chats do not render', () => {
+  const context = { console, setTimeout: () => {}, setInterval: () => {}, rendered: [],
+    chrome: { storage: { local: { get: (keys, cb) => cb({ crm_meta_918471058274: { notesList: ['keep'], leadStatus: 'INTERESTED' } }) } }, runtime: { sendMessage: () => {} } } };
+  vm.createContext(context);
+  vm.runInContext(fs.readFileSync(path.join(root, 'X/content.js'), 'utf8'), context);
+  vm.runInContext("renderCrmPanel = () => rendered.push([...activeFormData.notesList]); activePhoneClean = '918471058274'; activeDisplayName = 'New Saved Name'; fetchRequestGeneration = 4; fetchCrmMetadata('918471058274', 'New Saved Name', '', 4);", context);
+  assert.equal(context.rendered.length, 1);
+  assert.deepEqual(Array.from(context.rendered[0]), ['keep']);
+  vm.runInContext("fetchCrmMetadata('918471058274', 'Old Chat', '', 3);", context);
+  assert.equal(context.rendered.length, 1);
+});
 test('extension cache cannot use corrupted CRM names to guess another phone', () => {
   const context = { console, setTimeout: () => {}, setInterval: () => {} };
   vm.createContext(context);

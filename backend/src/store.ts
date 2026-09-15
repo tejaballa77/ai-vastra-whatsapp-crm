@@ -1369,7 +1369,9 @@ class StorageEngine {
 
         uniqueMap.set(dedupeKey, {
           ...existing,
-          name: (existing.name && !BAD_NAMES.has(existing.name.toLowerCase().trim())) ? existing.name : (contact.name || existing.name),
+          name: ((contact.manuallySaved || (contact.updatedAt || 0) >= (existing.updatedAt || 0)) && contact.name && !BAD_NAMES.has(contact.name.toLowerCase().trim()))
+            ? contact.name
+            : ((existing.name && !BAD_NAMES.has(existing.name.toLowerCase().trim())) ? existing.name : (contact.name || existing.name)),
           phone: existing.phone || contact.phone,
           leadStatus: (existing.leadStatus && existing.leadStatus !== 'UNASSIGNED') ? existing.leadStatus : (contact.leadStatus || 'UNASSIGNED'),
           callStatus: existing.callStatus !== undefined ? existing.callStatus : contact.callStatus,

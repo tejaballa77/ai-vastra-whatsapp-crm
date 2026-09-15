@@ -623,14 +623,12 @@ function detectActiveContact(force = false) {
         const cachedPhone = findPhoneInCacheByName(targetTitle);
         if (cachedPhone && cachedPhone.length >= 10) {
           cleanDigits = cachedPhone;
-        } else if (activeDisplayName === targetTitle && activePhoneClean && activePhoneClean.length >= 10) {
-          cleanDigits = activePhoneClean;
         }
       }
     }
 
     const tenDigit = (cleanDigits.length === 12 && cleanDigits.startsWith('91')) ? cleanDigits.slice(2) : cleanDigits;
-    const contactKey = cleanDigits.length >= 10 ? cleanDigits : (activePhoneClean || targetTitle);
+    const contactKey = cleanDigits.length >= 10 ? cleanDigits : targetTitle;
 
     let displayTitle = targetTitle;
     const isNewContact = activeContactKey !== contactKey;
@@ -640,7 +638,7 @@ function detectActiveContact(force = false) {
       // Genuinely different contact OR forced retry (phone finally found) — full reload
       activeContactKey = contactKey;
       activeDisplayName = displayTitle;
-      activePhoneClean = cleanDigits.length >= 10 ? cleanDigits : (activePhoneClean || '');
+      activePhoneClean = cleanDigits.length >= 10 ? cleanDigits : '';
       activeAvatarUrl = domAvatar;
 
       activeFormData = {
@@ -675,7 +673,7 @@ function detectActiveContact(force = false) {
     } else if (isNameChanged) {
       // SAME contact, name edited — update display only, keep all data intact
       activeDisplayName = displayTitle;
-      activePhoneClean = cleanDigits.length >= 10 ? cleanDigits : (activePhoneClean || '');
+      activePhoneClean = cleanDigits.length >= 10 ? cleanDigits : '';
 
       renderCrmPanel(displayTitle, activePhoneClean, activeAvatarUrl);
 

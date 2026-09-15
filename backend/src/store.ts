@@ -1257,7 +1257,9 @@ class StorageEngine {
         uniqueMap.set(dedupeKey, updatedChat);
       } else {
         const existing = uniqueMap.get(dedupeKey)!;
-        const primary = (updatedChat.lastMessageAt || 0) >= (existing.lastMessageAt || 0) ? updatedChat : existing;
+        const timeA = Math.max(updatedChat.updatedAt || 0, updatedChat.lastMessageAt || 0);
+        const timeB = Math.max(existing.updatedAt || 0, existing.lastMessageAt || 0);
+        const primary = (updatedChat.manuallySaved && !existing.manuallySaved) ? updatedChat : (timeA >= timeB ? updatedChat : existing);
         const secondary = primary === updatedChat ? existing : updatedChat;
 
         const curNameBad = !primary.name || BAD_NAMES.has(primary.name.toLowerCase().trim()) || primary.name.length <= 1;
@@ -1372,16 +1374,16 @@ class StorageEngine {
           name: ((contact.manuallySaved || (contact.updatedAt || 0) >= (existing.updatedAt || 0)) && contact.name && !BAD_NAMES.has(contact.name.toLowerCase().trim()))
             ? contact.name
             : ((existing.name && !BAD_NAMES.has(existing.name.toLowerCase().trim())) ? existing.name : (contact.name || existing.name)),
-          phone: existing.phone || contact.phone,
-          leadStatus: (existing.leadStatus && existing.leadStatus !== 'UNASSIGNED') ? existing.leadStatus : (contact.leadStatus || 'UNASSIGNED'),
-          callStatus: existing.callStatus !== undefined ? existing.callStatus : contact.callStatus,
-          followUpDate: existing.followUpDate || contact.followUpDate,
-          previousFollowUpDate: existing.previousFollowUpDate || contact.previousFollowUpDate,
-          notes: existing.notes || contact.notes || (combinedList[0] ? (typeof combinedList[0] === 'string' ? combinedList[0] : (combinedList[0]?.text || '')) : ''),
+          phone: contact.phone || existing.phone,
+          leadStatus: (contact.leadStatus && contact.leadStatus !== 'UNASSIGNED') ? contact.leadStatus : (existing.leadStatus || 'UNASSIGNED'),
+          callStatus: contact.callStatus !== undefined && contact.callStatus !== null ? contact.callStatus : existing.callStatus,
+          followUpDate: (contact.followUpDate && contact.followUpDate.trim() !== '' && contact.followUpDate !== '—') ? contact.followUpDate : (existing.followUpDate || ''),
+          previousFollowUpDate: contact.previousFollowUpDate || existing.previousFollowUpDate,
+          notes: (contact.notes && contact.notes.trim() !== '') ? contact.notes : (existing.notes || (combinedList[0] ? (typeof combinedList[0] === 'string' ? combinedList[0] : (combinedList[0]?.text || '')) : '')),
           notesList: combinedList,
-          avatarUrl: existing.avatarUrl || contact.avatarUrl,
-          aiDisabled: Boolean(existing.aiDisabled || contact.aiDisabled),
-          isAutoWarm: existing.isAutoWarm !== undefined ? existing.isAutoWarm : contact.isAutoWarm,
+          avatarUrl: contact.avatarUrl || existing.avatarUrl,
+          aiDisabled: Boolean(contact.aiDisabled || existing.aiDisabled),
+          isAutoWarm: contact.isAutoWarm !== undefined ? contact.isAutoWarm : existing.isAutoWarm,
           manuallySaved: Boolean(existing.manuallySaved || contact.manuallySaved),
           updatedAt: Math.max(existing.updatedAt || 0, contact.updatedAt || 0),
         });

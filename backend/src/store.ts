@@ -1525,9 +1525,8 @@ class StorageEngine {
       const cAlpha = (cObj.name && !cIsPhone) ? cNameClean.replace(/\+?\d+/g, '').replace(/[^a-z0-9]/g, '').trim() : '';
 
       const matchPhone = Boolean((tenDigit && tenDigit.length >= 7 && cTen === tenDigit) || (rawDigits && rawDigits.length >= 7 && cPhoneDigits === rawDigits));
-      const matchName = Boolean(searchAlphaName && searchAlphaName.length >= 2 && (cAlpha === searchAlphaName || cNameClean === incomingNameClean.toLowerCase()));
 
-      if (ck === canonicalJid || ck === jid || matchPhone || matchName) {
+      if (ck === canonicalJid || ck === jid || matchPhone) {
         matchingContactKeys.push(ck);
         const list: any[] = cObj.notesList || (cObj.notes ? [cObj.notes] : []);
         for (const n of list) {
@@ -1542,14 +1541,10 @@ class StorageEngine {
     for (const [chk, chObj] of this.chats.entries()) {
       const chPhoneDigits = (chObj.phone || chk.split('@')[0]).replace(/\D/g, '');
       const chTen = this.canonicalPhone(chPhoneDigits);
-      const chNameClean = (chObj.name || '').toLowerCase().trim();
-      const chIsPhone = chNameClean.replace(/\D/g, '').length >= 7;
-      const chAlpha = (chObj.name && !chIsPhone) ? chNameClean.replace(/\+?\d+/g, '').replace(/[^a-z0-9]/g, '').trim() : '';
 
       const matchPhone = Boolean((tenDigit && tenDigit.length >= 7 && chTen === tenDigit) || (rawDigits && rawDigits.length >= 7 && chPhoneDigits === rawDigits));
-      const matchName = Boolean(searchAlphaName && searchAlphaName.length >= 2 && (chAlpha === searchAlphaName || chNameClean === incomingNameClean.toLowerCase()));
 
-      if (chk === canonicalJid || chk === jid || matchPhone || matchName) {
+      if (chk === canonicalJid || chk === jid || matchPhone) {
         matchingChatKeys.push(chk);
         const list: any[] = chObj.notesList || (chObj.notes ? [chObj.notes] : []);
         for (const n of list) {

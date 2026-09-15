@@ -1,0 +1,23 @@
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+const vm = require('node:vm');
+const root = path.resolve(__dirname, '..');
+const source = fs.readFileSync(path.join(root, 'Extension_2/content.js'), 'utf8');
+const context = { currentPlatform: 'facebook', activeThreadId: '123456789' };
+vm.createContext(context);
+vm.runInContext(source.slice(source.indexOf('  function parseDraggedProfileData('), source.indexOf('  function scrapePlatformHeader(')), context);
+assert.equal(context.parseDraggedProfileData('Amar Shah').name, 'Amar Shah');
+assert.equal(context.parseDraggedProfileData('Amar Shah').handle, '123456789');
+assert.equal(context.parseDraggedProfileData('https://www.facebook.com/amar.shah').handle, 'amar.shah');
+assert.equal(context.parseDraggedProfileData('https://www.facebook.com/profile.php?id=12345').handle, '12345');
+const requests = [];
+const records = [{ jid: '123456789@instagram', phone: '123456789', notes: 'Instagram private' }, { jid: '123456789@facebook', notes: 'Facebook only' }];
+const background = { console, chrome: { runtime: { onMessage: { addListener: handler => requests.push(handler) } }, storage: { local: { get: (keys, cb) => cb({ apiUrl: 'https://crm.nicedigitalsgroup.com' }), set: () => {} } } }, fetch: async () => ({ ok: true, text: async () => JSON.stringify(records) }) };
+vm.createContext(background);
+vm.runInContext(fs.readFileSync(path.join(root, 'Extension_2/background.js'), 'utf8'), background);
+new Promise(resolve => requests[0]({ action: 'FETCH_CONTACT_DATA', platform: 'facebook', identifier: '123456789' }, {}, resolve)).then(response => {
+  assert.equal(response.contact.jid, '123456789@facebook');
+  assert.equal(response.contact.notes, 'Facebook only');
+  console.log('PASS: exact Facebook name/profile drops and cross-platform lookup isolation.');
+}).catch(error => { console.error(error); process.exitCode = 1; });

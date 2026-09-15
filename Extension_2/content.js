@@ -137,7 +137,16 @@ console.log('[AI Vastra Social CRM Extension] Active on social media!');
 
   // ─── Drag-and-Drop Profile Parser ────────────────────────────────────────────
 
-  function parseDraggedProfileData(dragText) {
+  function parseDraggedProfileData(dragText, platform = currentPlatform) {
+    if (platform === 'facebook') {
+      const text = String(dragText || '').replace(/<[^>]+>/g, '\n').trim();
+      const lines = text.replace(/https?:\/\/[^\s]+/g, '').split(/[\n\r\t]+/).map(s => s.trim()).filter(Boolean);
+      const name = lines[0] || '';
+      const profile = text.match(/https?:\/\/(?:www\.)?facebook\.com\/(?:profile\.php\?id=(\d+)|([a-zA-Z0-9._]+))/i);
+      const candidate = profile ? (profile[1] || profile[2]) : '';
+      const handle = candidate && !['messages', 'messenger', 'groups', 'pages', 'profile.php'].includes(candidate.toLowerCase()) ? candidate : '';
+      return { name: name || handle, handle: handle || activeThreadId || '' };
+    }
     let extractedHandle = '';
     let extractedName = '';
 
@@ -500,13 +509,15 @@ console.log('[AI Vastra Social CRM Extension] Active on social media!');
       return;
     }
 
-    const threadStorageKey = threadId ? `crm_social_thread_${threadId}` : '';
-    const lookupKeys = threadStorageKey ? [threadStorageKey] : [];
+    const threadStorageKey = threadId ? `crm_social_thread_${platform}_${threadId}` : '';
+    const legacyThreadStorageKey = threadId ? `crm_social_thread_${threadId}` : '';
+    const lookupKeys = threadStorageKey ? [threadStorageKey, legacyThreadStorageKey] : [];
 
     safeStorageGet(lookupKeys, (localRes) => {
       if (generation !== fetchGeneration) return;
 
-      const cached = threadStorageKey ? (localRes && localRes[threadStorageKey]) : null;
+      const legacy = localRes && localRes[legacyThreadStorageKey];
+      const cached = (localRes && localRes[threadStorageKey]) || (legacy?.jid?.endsWith(`@${platform}`) ? legacy : null);
       if (cached) {
         activeFormData = {
           leadStatus: cached.leadStatus || 'UNASSIGNED',
@@ -521,7 +532,7 @@ console.log('[AI Vastra Social CRM Extension] Active on social media!');
         if (isPanelVisible) renderPanel(activeDisplayName, null);
       }
 
-      safeSendMessage({ action: 'FETCH_CONTACT_DATA', identifier: threadId || activeContactHandle }, (backendRes) => {
+      safeSendMessage({ action: 'FETCH_CONTACT_DATA', platform, identifier: platform === 'facebook' ? threadId : (activeContactHandle || threadId) }, (backendRes) => {
         if (generation !== fetchGeneration) return;
 
         if (backendRes && backendRes.success && backendRes.contact) {
@@ -567,7 +578,11 @@ console.log('[AI Vastra Social CRM Extension] Active on social media!');
       if (scraped.name) activeDisplayName = scraped.name;
     }
 
-    const canonicalJid = `${activeContactHandle || activeThreadId}@${currentPlatform}`;
+    if (currentPlatform === 'facebook' && !activeThreadId) {
+      alert('Open a Messenger conversation with a /t/ thread URL before saving.');
+      return;
+    }
+    const canonicalJid = `${currentPlatform === 'facebook' ? activeThreadId : (activeContactHandle || activeThreadId)}@${currentPlatform}`;
     const dateEl = panel ? panel.querySelector('#aivastra-followup-date') : null;
     const bdmEl = panel ? panel.querySelector('#aivastra-bdm-user') : null;
     const langEl = panel ? panel.querySelector('#aivastra-language') : null;
@@ -594,22 +609,20 @@ console.log('[AI Vastra Social CRM Extension] Active on social media!');
     };
 
     const saveObj = {};
-    if (activeThreadId) saveObj[`crm_social_thread_${activeThreadId}`] = payload;
+    if (activeThreadId) saveObj[`crm_social_thread_${currentPlatform}_${activeThreadId}`] = payload;
     if (activeContactHandle) saveObj[`crm_social_${activeContactHandle}@${currentPlatform}`] = payload;
     safeStorageSet(saveObj);
 
-    try {
-      fetch(`${DEFAULT_API_BASE}/api/crm/contact`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      }).catch(() => {});
-    } catch (e) {}
-
-    safeSendMessage({ action: 'UPDATE_CRM_METADATA', payload }, () => {});
-
-    isEditingProfile = false;
-    renderPanel(activeDisplayName, 'SAVED');
+    const savedGeneration = fetchGeneration;
+    safeSendMessage({ action: 'UPDATE_CRM_METADATA', payload }, (response) => {
+      if (savedGeneration !== fetchGeneration) return;
+      if (!response?.success) {
+        alert('CRM save failed. Local data is retained; retry after checking the connection.');
+        return;
+      }
+      isEditingProfile = false;
+      renderPanel(activeDisplayName, 'SAVED');
+    });
   }
 
   // ─── Confirm Modal ────────────────────────────────────────────────────────────
@@ -811,12 +824,12 @@ console.log('[AI Vastra Social CRM Extension] Active on social media!');
     if (clearBtn) {
       clearBtn.onclick = () => {
         showConfirmModal('Clear CRM Data', `Are you sure you want to clear CRM info for ${activeDisplayName || activeContactHandle || 'this contact'}?`, () => {
-          const canonicalJid = `${activeContactHandle || activeThreadId}@${currentPlatform}`;
+          const canonicalJid = `${currentPlatform === 'facebook' ? activeThreadId : (activeContactHandle || activeThreadId)}@${currentPlatform}`;
           const clearPayload = {
             jid: canonicalJid,
-            phone: activeContactHandle,
+            phone: currentPlatform === 'facebook' ? '' : activeContactHandle,
             name: activeDisplayName,
-            threadId: activeThreadId
+            threadId: currentPlatform === 'facebook' ? '' : activeThreadId
           };
 
           activeFormData = {
@@ -832,7 +845,7 @@ console.log('[AI Vastra Social CRM Extension] Active on social media!');
           isEditingProfile = false;
 
           const saveObj = {};
-          if (activeThreadId) saveObj[`crm_social_thread_${activeThreadId}`] = null;
+          if (activeThreadId) saveObj[`crm_social_thread_${currentPlatform}_${activeThreadId}`] = null;
           if (activeContactHandle) saveObj[`crm_social_${activeContactHandle}@${currentPlatform}`] = null;
           safeStorageSet(saveObj);
 

@@ -697,7 +697,7 @@ export function WhatsAppCrmModule() {
           </div>
         </header>
 
-        {(activeNav === 'whatsapp' || activeNav === 'instagram' || activeNav === 'linkedin') && (
+        {(activeNav === 'whatsapp' || activeNav === 'instagram' || activeNav === 'linkedin' || activeNav === 'facebook') && (
           <div className="flex-1 overflow-y-auto p-6 bg-zinc-50/50">
             <div className="bg-white p-6 rounded-2xl border border-zinc-200 shadow-sm space-y-5">
               <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -708,7 +708,7 @@ export function WhatsAppCrmModule() {
                       {activeNav === 'whatsapp' ? 'WhatsApp Contact Leads'
                         : activeNav === 'instagram' ? 'Instagram Contact Leads'
                         : activeNav === 'linkedin' ? 'LinkedIn Contact Leads'
-                        : 'Social Media Contacts'}
+                        : 'Facebook Contact Leads'}
                     </span>
                   </h3>
                 </div>
@@ -981,15 +981,6 @@ export function WhatsAppCrmModule() {
           <ColdCallsModule subPage={coldCallsSubPage} onSubPageChange={setColdCallsSubPage} />
         )}
 
-        {activeNav === 'facebook' && (
-          <div className="flex-1 overflow-y-auto p-10 bg-zinc-50/50 flex items-center justify-center">
-            <div className="p-12 text-center bg-white rounded-2xl border border-zinc-200 shadow-sm max-w-md w-full">
-              <span className="text-4xl mb-3 block">📘</span>
-              <h3 className="text-xl font-black text-black">Facebook Messenger CRM</h3>
-              <p className="text-xs text-zinc-500 font-semibold mt-1">Facebook Messenger CRM integration is set up and will be enabled soon.</p>
-            </div>
-          </div>
-        )}
 
         {activeNav === 'settings' && (
           <SettingsModule chats={chats} />

@@ -81,12 +81,17 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       }
       const data = await safeFetchJson(`${baseUrl}/api/chats`);
       if (data && Array.isArray(data)) {
-        const found = data.find(c => 
+        const platform = request.platform;
+        if (!['instagram', 'linkedin', 'facebook'].includes(platform)) {
+          sendResponse({ success: false, contact: null });
+          return;
+        }
+        const found = data.find(c => c.jid?.endsWith(`@${platform}`) && (
           (c.jid && c.jid === identifier) || 
           (c.phone && c.phone === identifier) || 
           (c.threadId && String(c.threadId) === String(identifier)) ||
-          (c.name && c.name.toLowerCase() === identifier.toLowerCase())
-        );
+          (c.jid === `${identifier}@${platform}`)
+        ));
         sendResponse({ success: true, contact: found || null });
       } else {
         sendResponse({ success: false, contact: null });
@@ -95,4 +100,3 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     return true;
   }
 });
-

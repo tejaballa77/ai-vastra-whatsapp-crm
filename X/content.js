@@ -62,26 +62,38 @@ let activeFormData = {
 let isPanelVisible = true;
 let chatsMetadataMap = {};
 let indexedDbContactMap = new Map();
+let contactBookRefreshPending = false;
+let lastContactBookRefresh = 0;
 
 async function syncContactsFromIndexedDb() {
+  if (contactBookRefreshPending || Date.now() - lastContactBookRefresh < 500) return;
+  contactBookRefreshPending = true;
+  lastContactBookRefresh = Date.now();
+  const finish = () => { contactBookRefreshPending = false; };
   try {
-    if (typeof indexedDB === 'undefined' || !indexedDB.databases) return;
+    if (typeof indexedDB === 'undefined' || !indexedDB.databases) { finish(); return; }
     const dbs = await indexedDB.databases();
     const waDb = dbs.find((d) => d.name && (d.name.includes('model') || d.name.includes('wawc') || d.name.includes('whatsapp')));
-    if (!waDb || !waDb.name) return;
+    if (!waDb || !waDb.name) { finish(); return; }
 
     const req = indexedDB.open(waDb.name);
+    req.onerror = finish;
+    req.onblocked = finish;
     req.onsuccess = (evt) => {
       try {
         const db = evt.target.result;
         const storeName = Array.from(db.objectStoreNames).find((s) => s === 'contact' || s === 'contacts');
-        if (!storeName) return;
+        if (!storeName) { db.close(); finish(); return; }
 
         const tx = db.transaction([storeName], 'readonly');
         const store = tx.objectStore(storeName);
         const getAllReq = store.getAll();
+        tx.oncomplete = () => { db.close(); finish(); };
+        tx.onabort = () => { db.close(); finish(); };
+        getAllReq.onerror = finish;
         getAllReq.onsuccess = (ev) => {
           const list = ev.target.result || [];
+          const refreshedContacts = new Map();
           for (const c of list) {
             if (!c) continue;
             const rawId = typeof c.id === 'object' ? String(c.id?._serialized || c.id?.user || '') : String(c.id || '');
@@ -101,14 +113,18 @@ async function syncContactsFromIndexedDb() {
             const name = (c.name || c.formattedName || c.displayName || c.verifiedName || '').trim();
             if (name && phoneNum && phoneNum.length >= 10) {
               const key = name.toLowerCase();
-              if (!indexedDbContactMap.has(key)) indexedDbContactMap.set(key, phoneNum);
-              else if (indexedDbContactMap.get(key) !== phoneNum) indexedDbContactMap.set(key, '');
+              if (!refreshedContacts.has(key)) refreshedContacts.set(key, phoneNum);
+              else if (refreshedContacts.get(key) !== phoneNum) refreshedContacts.set(key, '');
             }
           }
+          indexedDbContactMap = refreshedContacts;
+          // Resolve the current header immediately after address-book refresh,
+          // instead of waiting for the next 20-second background cycle.
+          if (!activePhoneClean) detectActiveContact();
         };
-      } catch (e) {}
+      } catch (e) { finish(); }
     };
-  } catch (e) {}
+  } catch (e) { finish(); }
 }
 
 function findPhoneInCacheByName(name) {
@@ -328,7 +344,7 @@ function startChatObserver() {
     }, 300);
   });
 
-  observer.observe(document.body, { childList: true, subtree: true });
+  observer.observe(document.body, { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ['title', 'aria-selected'] });
 }
 
 // Detect WhatsApp profile display name (e.g., "~Parth" -> "Parth") from Contact Info panel or DOM (targeted)
@@ -619,10 +635,12 @@ function detectActiveContact(force = false) {
       // Schedule phone-extraction retries AFTER generation is bumped,
       // so they use the CORRECT generation to check against.
       if (cleanDigits.length < 10) {
+        syncContactsFromIndexedDb();
         const snapGen = fetchRequestGeneration;
-        [200, 500, 1000, 2000].forEach((delay) => {
+        [200, 600, 1200, 2000, 3000, 5000, 8000, 12000].forEach((delay) => {
           setTimeout(() => {
             if (snapGen !== fetchRequestGeneration) return;
+            if (!activePhoneClean) syncContactsFromIndexedDb();
             const retryPhone = extractPhoneNumberFromDom() || findPhoneInCacheByName(targetTitle);
             if (retryPhone && retryPhone.length >= 10 && activePhoneClean !== retryPhone) {
               detectActiveContact(true);

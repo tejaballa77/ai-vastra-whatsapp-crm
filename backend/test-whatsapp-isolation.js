@@ -118,3 +118,22 @@ test('selected sidebar extraction cannot climb into another contact in its paren
   assert.equal(vm.runInContext('extractPhoneNumberFromDom()', context), '');
 });
 console.log(`${passed} isolation regression tests passed. No real database was accessed.`);
+async function testRenameRefresh() {
+  const openRequest = {};
+  const readRequest = {};
+  const transaction = { objectStore: () => ({ getAll: () => readRequest }) };
+  const context = { console, setTimeout: () => {}, setInterval: () => {}, detections: 0,
+    indexedDB: { databases: async () => [{ name: 'model-storage' }], open: () => openRequest } };
+  vm.createContext(context);
+  vm.runInContext(fs.readFileSync(path.join(root, 'X/content.js'), 'utf8'), context);
+  vm.runInContext("detectActiveContact = () => { detections++; }; indexedDbContactMap.set('old name', '918471058274');", context);
+  await vm.runInContext('syncContactsFromIndexedDb()', context);
+  openRequest.onsuccess({ target: { result: { objectStoreNames: ['contact'], transaction: () => transaction, close: () => {} } } });
+  readRequest.onsuccess({ target: { result: [{ id: '918471058274@c.us', name: 'New Name' }] } });
+  assert.equal(context.detections, 1);
+  assert.equal(vm.runInContext("findPhoneInCacheByName('New Name')", context), '918471058274');
+  assert.equal(vm.runInContext("findPhoneInCacheByName('Old Name')", context), '');
+  transaction.oncomplete();
+  console.log('PASS: refreshed WhatsApp address book resolves renamed contact immediately and removes stale name mappings.');
+}
+testRenameRefresh().catch(error => { console.error(error); process.exitCode = 1; });

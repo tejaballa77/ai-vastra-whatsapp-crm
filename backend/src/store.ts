@@ -470,6 +470,9 @@ class StorageEngine {
         }
       }
 
+      await dbManager.query(`UPDATE crm_contacts SET name = '+91 92913 03040' WHERE (phone = '919291303040' OR jid LIKE '%9291303040%') AND name = 'Contradictions'`).catch(() => {});
+      await dbManager.query(`UPDATE crm_chats SET name = '+91 92913 03040' WHERE (phone = '919291303040' OR jid LIKE '%9291303040%') AND name = 'Contradictions'`).catch(() => {});
+
       console.log(`[StorageEngine] Loaded ${this.chats.size} chats, ${this.contacts.size} contacts, and ${this.coldCalls.size} cold calls from SQL Database.`);
     } catch (err: any) {
       console.error('[StorageEngine] SQL Data Initialization error:', err.message);

@@ -105,14 +105,14 @@ async function syncContactsFromIndexedDb() {
               phoneNum = String(c.phoneNumber).split('@')[0].replace(/\D/g, '');
             } else if (c.pnJid) {
               phoneNum = String(c.pnJid).split('@')[0].replace(/\D/g, '');
-            } else if (c.user && String(c.user).replace(/\D/g, '').length >= 10 && String(c.user).replace(/\D/g, '').length <= 15) {
+            } else if (c.user && String(c.user).replace(/\D/g, '').length >= 7 && String(c.user).replace(/\D/g, '').length <= 15) {
               phoneNum = String(c.user).replace(/\D/g, '');
-            } else if (cleanId.length >= 10 && cleanId.length <= 15) {
+            } else if (!rawId.endsWith('@lid') && cleanId.length >= 7 && cleanId.length <= 15) {
               phoneNum = cleanId;
             }
 
             const name = (c.name || c.formattedName || c.displayName || c.verifiedName || '').trim();
-            if (name && phoneNum && phoneNum.length >= 10) {
+            if (name && phoneNum && phoneNum.length >= 7) {
               const key = name.toLowerCase();
               if (!refreshedContacts.has(key)) refreshedContacts.set(key, phoneNum);
               else if (refreshedContacts.get(key) !== phoneNum) refreshedContacts.set(key, '');
@@ -217,7 +217,7 @@ function syncAllCrmChats(callback) {
     for (const [phoneKey, cachedName] of Object.entries(localCache)) {
       if (cachedName && phoneKey) {
         const cleanK = phoneKey.replace(/\D/g, '');
-        const tenK = (cleanK.length === 12 && cleanK.startsWith('91')) ? cleanK.slice(2) : cleanK;
+        const tenK = cleanK;
         const entry = { ...(chatsMetadataMap[cleanK] || chatsMetadataMap[tenK] || { leadStatus: 'UNASSIGNED', callStatus: null, followUpDate: '', notesList: [] }), name: cachedName, phone: cleanK };
         if (cleanK) chatsMetadataMap[cleanK] = entry;
         if (tenK) chatsMetadataMap[tenK] = entry;
@@ -228,7 +228,7 @@ function syncAllCrmChats(callback) {
       if (response && response.success && Array.isArray(response.chats)) {
         for (const c of response.chats) {
           const rawNum = (c.phone || c.jid || '').split('@')[0].replace(/\D/g, '');
-          const tenDigit = (rawNum.length === 12 && rawNum.startsWith('91')) ? rawNum.slice(2) : rawNum;
+          const tenDigit = rawNum;
 
           const badNames = ['.', 'contact', 'unsaved contact', 'unknown contact', 'whatsapp contact', ''];
           const hasValidName = Boolean(c.name && c.name.trim() && !badNames.includes(c.name.trim().toLowerCase()));
@@ -282,14 +282,14 @@ function injectChatListBadges() {
 
       if (!cleanDigits) {
         const parsed = rawText.replace(/\D/g, '');
-        if (parsed.length >= 10) {
+        if (parsed.length >= 7) {
           cleanDigits = parsed;
           item.setAttribute('data-aivastra-phone', cleanDigits);
         }
       }
 
-      const tenDigit = (cleanDigits.length === 12 && cleanDigits.startsWith('91')) ? cleanDigits.slice(2) : cleanDigits;
-      const key = cleanDigits.length >= 10 ? cleanDigits : rawText;
+      const tenDigit = cleanDigits;
+      const key = cleanDigits.length >= 7 ? cleanDigits : rawText;
       const chatMeta = chatsMetadataMap[key] || chatsMetadataMap[rawText] || chatsMetadataMap[cleanDigits] || chatsMetadataMap[tenDigit];
 
       const status = chatMeta?.leadStatus || (key === activeContactKey ? activeFormData.leadStatus : null);
@@ -391,11 +391,11 @@ function extractPhoneNumberFromDom() {
     if (/^true_/i.test(dataId) || /_true_/i.test(dataId)) return '';
 
     // JID match with optional multi-device index: e.g. 919876543210:0@c.us, 919876543210@s.whatsapp.net
-    const jidMatch = dataId.match(/(\d{10,15})(?::\d+)?@(s\.whatsapp\.net|c\.us)/);
+    const jidMatch = dataId.match(/(\d{7,15})(?::\d+)?@(s\.whatsapp\.net|c\.us)/);
     if (jidMatch && jidMatch[1]) return jidMatch[1];
 
     // Message ID prefix match: false_919876543210_... or in_919876543210
-    const prefixMatch = dataId.match(/(?:false|in)_(\d{10,15})/i);
+    const prefixMatch = dataId.match(/(?:false|in)_(\d{7,15})/i);
     if (prefixMatch && prefixMatch[1]) return prefixMatch[1];
 
     return '';
@@ -438,7 +438,7 @@ function extractPhoneNumberFromDom() {
       const imgs = activeItem.querySelectorAll('img');
       for (const img of imgs) {
         if (img.src) {
-          const match = img.src.match(/[?&;]u(?:ser)?(?:%3D|=)(\d{10,15})/i) || img.src.match(/u=(\d{10,15})/);
+          const match = img.src.match(/[?&;]u(?:ser)?(?:%3D|=)(\d{7,15})/i) || img.src.match(/u=(\d{7,15})/);
           if (match && match[1]) {
             activeItem.setAttribute('data-aivastra-phone', match[1]);
             return match[1];
@@ -451,7 +451,7 @@ function extractPhoneNumberFromDom() {
       for (const s of titleSpans) {
         const t = (s.getAttribute('title') || '').trim();
         const stripped = t.replace(/[+\s\-()]/g, '');
-        if (stripped.length >= 10 && stripped.length <= 15 && /^\d+$/.test(stripped)) {
+        if (stripped.length >= 7 && stripped.length <= 15 && /^\d+$/.test(stripped)) {
           return stripped;
         }
       }
@@ -477,7 +477,7 @@ function extractPhoneNumberFromDom() {
           const imgs = row.querySelectorAll('img');
           for (const img of imgs) {
             if (img.src) {
-              const match = img.src.match(/[?&;]u(?:ser)?(?:%3D|=)(\d{10,15})/i) || img.src.match(/u=(\d{10,15})/);
+              const match = img.src.match(/[?&;]u(?:ser)?(?:%3D|=)(\d{7,15})/i) || img.src.match(/u=(\d{7,15})/);
               if (match && match[1]) {
                 row.setAttribute('data-aivastra-phone', match[1]);
                 return match[1];
@@ -496,7 +496,7 @@ function extractPhoneNumberFromDom() {
       const headerImgs = mainHeader.querySelectorAll('img');
       for (const img of headerImgs) {
         if (img.src) {
-          const match = img.src.match(/[?&;]u(?:ser)?(?:%3D|=)(\d{10,15})/i) || img.src.match(/u=(\d{10,15})/);
+          const match = img.src.match(/[?&;]u(?:ser)?(?:%3D|=)(\d{7,15})/i) || img.src.match(/u=(\d{7,15})/);
           if (match && match[1]) return match[1];
         }
       }
@@ -505,7 +505,7 @@ function extractPhoneNumberFromDom() {
       for (const s of headerTitleSpans) {
         const t = (s.getAttribute('title') || '').trim();
         const stripped = t.replace(/[+\s\-()]/g, '');
-        if (stripped.length >= 10 && stripped.length <= 15 && /^\d+$/.test(stripped)) {
+        if (stripped.length >= 7 && stripped.length <= 15 && /^\d+$/.test(stripped)) {
           return stripped;
         }
       }
@@ -519,7 +519,7 @@ function extractPhoneNumberFromDom() {
       const imgs = drawer.querySelectorAll('img');
       for (const img of imgs) {
         if (img.src) {
-          const match = img.src.match(/[?&;]u(?:ser)?(?:%3D|=)(\d{10,15})/i) || img.src.match(/u=(\d{10,15})/);
+          const match = img.src.match(/[?&;]u(?:ser)?(?:%3D|=)(\d{7,15})/i) || img.src.match(/u=(\d{7,15})/);
           if (match && match[1]) return match[1];
         }
       }
@@ -527,9 +527,9 @@ function extractPhoneNumberFromDom() {
       for (const node of textNodes) {
         if (node.children.length > 0) continue;
         const txt = (node.textContent || '').trim();
-        if (/^\+?\d[\d\s\-().]{8,}\d$/.test(txt)) {
+        if (/^\+?\d[\d\s\-().]{5,}\d$/.test(txt)) {
           const digits = txt.replace(/\D/g, '');
-          if (digits.length >= 10 && digits.length <= 15) {
+          if (digits.length >= 7 && digits.length <= 15) {
             return digits;
           }
         }
@@ -546,7 +546,7 @@ function extractPhoneNumberFromDom() {
       const dataId = msgEl.getAttribute('data-id') || msgEl.getAttribute('data-item-id') || msgEl.getAttribute('data-msg-id') || msgEl.getAttribute('id') || '';
       if (/^true_/i.test(dataId) || /_true_/i.test(dataId)) continue;
       const phone = phoneFromDataId(dataId);
-      if (phone && phone.length >= 10) {
+      if (phone && phone.length >= 7) {
         return phone;
       }
     }
@@ -557,9 +557,9 @@ function extractPhoneNumberFromDom() {
     const textNodes = document.querySelectorAll('#main header span');
     for (const node of textNodes) {
       const txt = (node.textContent || '').trim();
-      if (/^\+?\d[\d\s\-().]{8,}\d$/.test(txt)) {
+      if (/^\+?\d[\d\s\-().]{5,}\d$/.test(txt)) {
         const digits = txt.replace(/\D/g, '');
-        if (digits.length >= 10 && digits.length <= 15) {
+        if (digits.length >= 7 && digits.length <= 15) {
           return digits;
         }
       }
@@ -607,25 +607,25 @@ function detectActiveContact(force = false) {
     }
 
     let cleanDigits = '';
-    const isUnsavedTitle = targetTitle.trim().startsWith('+') || /^\d{10,15}$/.test(targetTitle.replace(/\s+/g, ''));
+    const isUnsavedTitle = targetTitle.trim().startsWith('+');
     if (isUnsavedTitle) {
       cleanDigits = targetTitle.replace(/\D/g, '');
     }
 
-    if (cleanDigits.length < 10) {
+    if (cleanDigits.length < 7) {
       const domPhone = extractPhoneNumberFromDom();
-      if (domPhone && domPhone.length >= 10) {
+      if (domPhone && domPhone.length >= 7) {
         cleanDigits = domPhone;
       } else {
         const cachedPhone = findPhoneInCacheByName(targetTitle);
-        if (cachedPhone && cachedPhone.length >= 10) {
+        if (cachedPhone && cachedPhone.length >= 7) {
           cleanDigits = cachedPhone;
         }
       }
     }
 
-    const tenDigit = (cleanDigits.length === 12 && cleanDigits.startsWith('91')) ? cleanDigits.slice(2) : cleanDigits;
-    const contactKey = cleanDigits.length >= 10 ? cleanDigits : targetTitle;
+    const tenDigit = cleanDigits;
+    const contactKey = cleanDigits.length >= 7 ? cleanDigits : targetTitle;
 
     let displayTitle = targetTitle;
     const isNewContact = activeContactKey !== contactKey;
@@ -635,7 +635,7 @@ function detectActiveContact(force = false) {
       // Genuinely different contact OR forced retry (phone finally found) — full reload
       activeContactKey = contactKey;
       activeDisplayName = displayTitle;
-      activePhoneClean = cleanDigits.length >= 10 ? cleanDigits : '';
+      activePhoneClean = cleanDigits.length >= 7 ? cleanDigits : '';
       activeAvatarUrl = domAvatar;
 
       activeFormData = {
@@ -647,14 +647,14 @@ function detectActiveContact(force = false) {
         aiDisabled: false
       };
 
-      renderCrmPanel(displayTitle, cleanDigits.length >= 10 ? cleanDigits : '', domAvatar);
+      renderCrmPanel(displayTitle, cleanDigits.length >= 7 ? cleanDigits : '', domAvatar);
 
       fetchRequestGeneration++;
       fetchCrmMetadata(contactKey, displayTitle, domAvatar, fetchRequestGeneration);
 
       // Schedule phone-extraction retries AFTER generation is bumped,
       // so they use the CORRECT generation to check against.
-      if (cleanDigits.length < 10) {
+      if (cleanDigits.length < 7) {
         syncContactsFromIndexedDb();
         const snapGen = fetchRequestGeneration;
         [200, 600, 1200, 2000, 3000, 5000, 8000, 12000].forEach((delay) => {
@@ -662,7 +662,7 @@ function detectActiveContact(force = false) {
             if (snapGen !== fetchRequestGeneration) return;
             if (!activePhoneClean) syncContactsFromIndexedDb();
             const retryPhone = extractPhoneNumberFromDom() || findPhoneInCacheByName(targetTitle);
-            if (retryPhone && retryPhone.length >= 10 && activePhoneClean !== retryPhone) {
+            if (retryPhone && retryPhone.length >= 7 && activePhoneClean !== retryPhone) {
               detectActiveContact(true);
             }
           }, delay);
@@ -672,7 +672,7 @@ function detectActiveContact(force = false) {
     } else if (isNameChanged) {
       // SAME contact, name edited — update display only, keep all data intact
       activeDisplayName = displayTitle;
-      activePhoneClean = cleanDigits.length >= 10 ? cleanDigits : '';
+      activePhoneClean = cleanDigits.length >= 7 ? cleanDigits : '';
 
       renderCrmPanel(displayTitle, activePhoneClean, activeAvatarUrl);
 
@@ -690,8 +690,8 @@ function getContactTitleToSync(displayName, verifiedPhone) {
   // verified active contact. Numeric saved names must otherwise stay exact.
   if (/^\+?[\d\s().-]+$/.test(title)) {
     const digits = title.replace(/\D/g, '');
-    const canonical = (p) => p.length === 10 ? '91' + p : p;
-    if (digits.length >= 10 && canonical(digits) === canonical(phone)) {
+    const canonical = (p) => p;
+    if (digits.length >= 7 && canonical(digits) === canonical(phone)) {
       const full = canonical(phone);
       return full.length === 12 && full.startsWith('91')
         ? `+91 ${full.slice(2, 7)} ${full.slice(7)}` : `+${full}`;
@@ -707,25 +707,25 @@ function fetchCrmMetadata(searchKey, displayName, domAvatar, generation) {
   const isValidName = displayName && !badNames.includes(displayName.toLowerCase().trim()) && !isPhoneHeader;
 
   const rawClean = (activePhoneClean || searchKey || '').replace(/\D/g, '');
-  const tenDigit = (rawClean.length === 12 && rawClean.startsWith('91')) ? rawClean.slice(2) : rawClean;
+  const tenDigit = rawClean;
   // queryPhone MUST be at least 10 digits — short digit strings extracted from
   // contact names (e.g. "1" from "Prashanth 1") must NEVER be used as phone/JID.
-  const queryPhone = (activePhoneClean && activePhoneClean.length >= 10) ? activePhoneClean
-    : (tenDigit && tenDigit.length >= 10) ? tenDigit : '';
+  const queryPhone = (activePhoneClean && activePhoneClean.length >= 7) ? activePhoneClean
+    : (tenDigit && tenDigit.length >= 7) ? tenDigit : '';
 
   // Phone-only storage keys — never use name as a key to avoid cross-contact collisions
   const storageKeys = [];
-  if (activePhoneClean && activePhoneClean.length >= 10) storageKeys.push(`crm_meta_${activePhoneClean}`);
-  if (tenDigit && tenDigit.length >= 10 && tenDigit !== activePhoneClean) storageKeys.push(`crm_meta_${tenDigit}`);
-  if (searchKey && /^\d{10,15}$/.test(searchKey.replace(/\D/g, '')) && !storageKeys.includes(`crm_meta_${searchKey}`)) storageKeys.push(`crm_meta_${searchKey}`);
+  if (activePhoneClean && activePhoneClean.length >= 7) storageKeys.push(`crm_meta_${activePhoneClean}`);
+  if (tenDigit && tenDigit.length >= 7 && tenDigit !== activePhoneClean) storageKeys.push(`crm_meta_${tenDigit}`);
+  if (searchKey && /^\d{7,15}$/.test(searchKey.replace(/\D/g, '')) && !storageKeys.includes(`crm_meta_${searchKey}`)) storageKeys.push(`crm_meta_${searchKey}`);
 
   safeStorageGet(storageKeys.length > 0 ? storageKeys : ['__noop__'], (s) => {
     // STALE GUARD: discard if user has already switched to a different chat
     if (generation !== fetchRequestGeneration) return;
 
     s = s || {};
-    const validPhoneClean = (activePhoneClean && activePhoneClean.length >= 10) ? activePhoneClean : null;
-    const validTenDigit = (tenDigit && tenDigit.length >= 10) ? tenDigit : null;
+    const validPhoneClean = (activePhoneClean && activePhoneClean.length >= 7) ? activePhoneClean : null;
+    const validTenDigit = (tenDigit && tenDigit.length >= 7) ? tenDigit : null;
     const validSearchKey = (searchKey && searchKey.trim() !== '') ? searchKey : null;
 
     // Lookup by phone/JID ONLY — name-based keys are intentionally excluded
@@ -733,7 +733,7 @@ function fetchCrmMetadata(searchKey, displayName, domAvatar, generation) {
       (validTenDigit ? s[`crm_meta_${validTenDigit}`] : null) ||
       (validPhoneClean ? chatsMetadataMap[validPhoneClean] : null) ||
       (validTenDigit ? chatsMetadataMap[validTenDigit] : null) ||
-      (validSearchKey && /^\d{10,15}$/.test((validSearchKey || '').replace(/\D/g, '')) ? chatsMetadataMap[validSearchKey] : null);
+      (validSearchKey && /^\d{7,15}$/.test((validSearchKey || '').replace(/\D/g, '')) ? chatsMetadataMap[validSearchKey] : null);
 
     // Exact phone match only — no suffix/prefix matching to prevent wrong-contact hits
     if (!localData && (validPhoneClean || validTenDigit)) {
@@ -782,7 +782,7 @@ function fetchCrmMetadata(searchKey, displayName, domAvatar, generation) {
         const chat = response.chat;
         const canonical = (value) => {
           const p = String(value || '').split('@')[0].split(':')[0].replace(/\D/g, '');
-          return p.length === 10 ? '91' + p : p;
+          return p;
         };
         if (!queryPhone || canonical(chat.phone || chat.jid) !== canonical(queryPhone)) {
           console.warn('[AI Vastra] Rejected metadata for a different/unverified contact.');
@@ -871,7 +871,7 @@ function fetchCrmMetadata(searchKey, displayName, domAvatar, generation) {
         if (reliablePhone) chatsMetadataMap[reliablePhone] = meta;
         if (validPhoneClean) chatsMetadataMap[validPhoneClean] = meta;
         if (validTenDigit && validTenDigit !== validPhoneClean) chatsMetadataMap[validTenDigit] = meta;
-        if (queryPhone && queryPhone.length >= 10 && queryPhone !== validPhoneClean) chatsMetadataMap[queryPhone] = meta;
+        if (queryPhone && queryPhone.length >= 7 && queryPhone !== validPhoneClean) chatsMetadataMap[queryPhone] = meta;
       } else if (localData) {
         // No backend record found but we have a valid local cache hit — use it
         activeFormData = {
@@ -922,12 +922,12 @@ function saveCrmMetadata(forcedAiDisabled, retryCount = 0, expectedGeneration = 
   activeFormData.aiDisabled = forcedAiDisabled !== undefined ? forcedAiDisabled : true;
 
   let domPhone = extractPhoneNumberFromDom();
-  if (!domPhone || domPhone.length < 10) {
+  if (!domPhone || domPhone.length < 7) {
     domPhone = findPhoneInCacheByName(activeDisplayName) || findPhoneInCacheByName(activeContactKey);
   }
   const canonical = (p) => {
     const value = String(p || '').replace(/\D/g, '');
-    return value.length === 10 ? '91' + value : value;
+    return value;
   };
   if (domPhone && activePhoneClean && canonical(domPhone) !== canonical(activePhoneClean)) {
     alert('The detected phone differs from the loaded contact. Save blocked to protect both records.');
@@ -935,18 +935,17 @@ function saveCrmMetadata(forcedAiDisabled, retryCount = 0, expectedGeneration = 
   }
 
   let cleanDigits = domPhone ? domPhone.replace(/\D/g, '') : '';
-  if (cleanDigits.length < 10 && activePhoneClean && activePhoneClean.length >= 10) {
+  if (cleanDigits.length < 7 && activePhoneClean && activePhoneClean.length >= 7) {
     cleanDigits = activePhoneClean;
   }
-  if (cleanDigits.length < 10 && activeDisplayName && activeDisplayName.trim().startsWith('+')) {
+  if (cleanDigits.length < 7 && activeDisplayName && activeDisplayName.trim().startsWith('+')) {
     const pDigits = activeDisplayName.replace(/\D/g, '');
-    if (pDigits.length >= 10) cleanDigits = pDigits;
+    if (pDigits.length >= 7) cleanDigits = pDigits;
   }
 
-  const tenDigit = (cleanDigits.length === 12 && cleanDigits.startsWith('91')) ? cleanDigits.slice(2) : (cleanDigits.length === 10 ? cleanDigits : '');
-  if (cleanDigits.length === 10) cleanDigits = '91' + cleanDigits;
+  const tenDigit = cleanDigits;
 
-  const validPhone = (cleanDigits && cleanDigits.length >= 10) ? cleanDigits : (activePhoneClean && activePhoneClean.length >= 10 ? activePhoneClean : '');
+  const validPhone = (cleanDigits && cleanDigits.length >= 7) ? cleanDigits : (activePhoneClean && activePhoneClean.length >= 7 ? activePhoneClean : '');
 
   // Guard: if phone is still missing, attempt emergency extraction from Contact Info drawer
   if (!validPhone && retryCount < 6) {
@@ -990,21 +989,21 @@ function saveCrmMetadata(forcedAiDisabled, retryCount = 0, expectedGeneration = 
 
   // Save ONLY under phone-number keys — never under display name to prevent cross-contact collisions
   const saveKeys = {};
-  if (cleanDigits.length >= 10) {
+  if (cleanDigits.length >= 7) {
     saveKeys[`crm_meta_${cleanDigits}`] = metaObj;
     if (tenDigit && tenDigit !== cleanDigits) saveKeys[`crm_meta_${tenDigit}`] = metaObj;
     if (activePhoneClean && activePhoneClean !== cleanDigits) saveKeys[`crm_meta_${activePhoneClean}`] = metaObj;
   } else if (activeContactKey) {
     // Fallback: only store if key looks like a phone number
     const ckDigits = activeContactKey.replace(/\D/g, '');
-    if (ckDigits.length >= 10) saveKeys[`crm_meta_${ckDigits}`] = metaObj;
+    if (ckDigits.length >= 7) saveKeys[`crm_meta_${ckDigits}`] = metaObj;
   }
 
   console.log('[AI Vastra] Saving metadata for phone:', cleanDigits || activeContactKey);
   safeStorageSet(saveKeys);
 
   // In-memory map: phone/JID keys only
-  if (cleanDigits.length >= 10) chatsMetadataMap[cleanDigits] = metaObj;
+  if (cleanDigits.length >= 7) chatsMetadataMap[cleanDigits] = metaObj;
   if (tenDigit && tenDigit !== cleanDigits) chatsMetadataMap[tenDigit] = metaObj;
   if (activePhoneClean && activePhoneClean !== cleanDigits) chatsMetadataMap[activePhoneClean] = metaObj;
 
@@ -1050,19 +1049,17 @@ function renderCrmPanel(displayName, cleanPhone, avatarUrl, showSaveToast = fals
   const digitsInName = (displayName || '').replace(/\D/g, '');
 
   let formattedPhone = '';
-  if (cleanPhone && cleanPhone.length >= 10) {
+  if (cleanPhone && cleanPhone.length >= 7) {
     if (cleanPhone.length === 12 && cleanPhone.startsWith('91')) {
       formattedPhone = `+91 ${cleanPhone.slice(2, 7)} ${cleanPhone.slice(7)}`;
-    } else if (cleanPhone.length === 10) {
-      formattedPhone = `+91 ${cleanPhone.slice(0, 5)} ${cleanPhone.slice(5)}`;
+
     } else {
       formattedPhone = `+${cleanPhone}`;
     }
-  } else if (digitsInName.length >= 10) {
+  } else if (digitsInName.length >= 7) {
     if (digitsInName.length === 12 && digitsInName.startsWith('91')) {
       formattedPhone = `+91 ${digitsInName.slice(2, 7)} ${digitsInName.slice(7)}`;
-    } else if (digitsInName.length === 10) {
-      formattedPhone = `+91 ${digitsInName.slice(0, 5)} ${digitsInName.slice(5)}`;
+
     } else {
       formattedPhone = `+${digitsInName}`;
     }
@@ -1237,10 +1234,9 @@ function showExtensionConfirmModal(title, message, onConfirm) {
 
   function executeClearData() {
     let cleanDigits = (activePhoneClean || activeContactKey).replace(/\D/g, '');
-    const tenDigit = (cleanDigits.length === 12 && cleanDigits.startsWith('91')) ? cleanDigits.slice(2) : cleanDigits;
-    if (cleanDigits.length === 10) cleanDigits = '91' + cleanDigits;
+    const tenDigit = cleanDigits;
 
-    const targetJid = cleanDigits.length >= 10
+    const targetJid = cleanDigits.length >= 7
       ? `${cleanDigits}@s.whatsapp.net`
       : `${activeContactKey}@s.whatsapp.net`;
 

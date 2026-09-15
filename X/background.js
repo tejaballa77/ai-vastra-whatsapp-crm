@@ -44,18 +44,18 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
       // STEP 1: Phone / JID lookup (exact match)
       const rawSearch = (request.phoneClean || request.searchKey || '').replace(/\D/g, '');
-      if (rawSearch.length >= 10) {
+      if (/^[1-9]\d{6,14}$/.test(rawSearch)) {
         const tenDigit = (rawSearch.length === 12 && rawSearch.startsWith('91'))
           ? rawSearch.slice(2)
           : rawSearch;
-        const full12 = tenDigit.length === 10 ? '91' + tenDigit : rawSearch;
+        const full12 = rawSearch;
 
         const byPhone = allChats.find((c) => {
-          const jidNum = (c.jid || '').split('@')[0].replace(/\D/g, '');
+          if (!/^[1-9]\d{6,14}(?::\d+)?@(?:s\.whatsapp\.net|c\.us)$/.test(c.jid || '')) return false;
+          const jidNum = (c.jid || '').split('@')[0].split(':')[0];
           const pNum   = (c.phone || '').replace(/\D/g, '');
           return (
-            jidNum === full12 || jidNum === tenDigit ||
-            pNum   === full12 || pNum   === tenDigit
+            jidNum === full12
           );
         });
 

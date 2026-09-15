@@ -370,7 +370,7 @@ export class WhatsAppEngine {
       !badNames.has(lower) &&
       !cleanName.includes('@') &&
       !cleanName.startsWith('~') &&
-      nameDigits.length < 10 &&
+      !(nameDigits === jidDigits && /^[+\d\s().-]+$/.test(cleanName)) &&
       cleanName !== jidDigits;
   }
 

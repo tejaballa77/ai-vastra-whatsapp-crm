@@ -243,7 +243,7 @@ app.post('/api/chats/create', (req, res) => {
     return res.status(400).json({ error: 'Invalid phone number' });
   }
 
-  const fullNum = cleanDigits.length === 10 ? `91${cleanDigits}` : cleanDigits;
+  const fullNum = phone.trim().startsWith('+') ? cleanDigits : (cleanDigits.length === 10 ? `91${cleanDigits}` : cleanDigits);
   const jid = `${fullNum}@s.whatsapp.net`;
   const contactName = name || db.formatPhoneFallback(fullNum);
 

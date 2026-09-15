@@ -108,6 +108,36 @@ test('contact drawer fallback accepts only the matching labelled WhatsApp panel'
   panel.id = 'aivastra-crm-panel';
   assert.equal(vm.runInContext('findActiveContactInfoDrawer()', context), null);
 });
+test('international phone JIDs retain full country codes and do not merge across countries', () => {
+  const db = makeStore();
+  const numbers = ['923128304098', '14155552671', '447911123456', '971501234567', '6591234567', '3545551234', '918471058274', '8471058274'];
+  for (const phone of numbers) {
+    const jid = `${phone}@s.whatsapp.net`;
+    db.updateCrmMetadata(jid, { phone, name: `Contact ${phone}`, notesList: [`private ${phone}`], leadStatus: 'INTERESTED' });
+    assert.equal(db.resolveJid(jid), jid);
+    assert.equal(db.chats.get(jid).phone, phone);
+    assert.equal(db.contacts.get(jid).phone, phone);
+    assert.equal(db.formatPhoneFallback(phone).replace(/\D/g, ''), phone);
+  }
+  assert.equal(db.chats.size, numbers.length);
+  assert.throws(() => db.updateCrmMetadata('8471058274@s.whatsapp.net', { phone: '918471058274' }), /does not match/);
+  const context = { console, setTimeout: () => {}, setInterval: () => {} };
+  vm.createContext(context);
+  vm.runInContext(fs.readFileSync(path.join(root, 'X/content.js'), 'utf8'), context);
+  for (const phone of numbers) assert.equal(vm.runInContext(`getContactTitleToSync('+${phone}', '${phone}')`, context).replace(/\D/g, ''), phone);
+});
+test('extension save preserves a ten-digit international number instead of prepending India', () => {
+  const sent = [];
+  const span = { getAttribute: () => '+65 9123 4567' };
+  const document = { querySelector: () => ({ querySelectorAll: () => [span] }) };
+  const context = { document, console, alert: message => { throw Error(message); }, setTimeout: () => {}, setInterval: () => {} };
+  vm.createContext(context);
+  vm.runInContext(fs.readFileSync(path.join(root, 'X/content.js'), 'utf8'), context);
+  context.sent = sent;
+  vm.runInContext("activePhoneClean = '6591234567'; activeDisplayName = '+65 9123 4567'; extractPhoneNumberFromDom = () => '6591234567'; safeStorageSet = () => {}; safeSendMessage = message => sent.push(message); injectChatListBadges = () => {}; activeFormData.notesList = ['keep']; saveCrmMetadata();", context);
+  assert.equal(sent[0].jid, '6591234567@s.whatsapp.net');
+  assert.equal(sent[0].data.phone, '6591234567');
+});
 test('extension cache cannot use corrupted CRM names to guess another phone', () => {
   const context = { console, setTimeout: () => {}, setInterval: () => {} };
   vm.createContext(context);

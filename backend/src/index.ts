@@ -149,7 +149,9 @@ const handleCrmUpdate = (req: express.Request, res: express.Response) => {
     return res.status(400).json({ success: false, error: 'Missing contact identifier or phone number' });
   }
 
-  const updatedChat = db.updateCrmMetadata(targetJid, {
+  let updatedChat;
+  try {
+    updatedChat = db.updateCrmMetadata(targetJid, {
     name,
     phone,
     leadStatus,
@@ -166,7 +168,10 @@ const handleCrmUpdate = (req: express.Request, res: express.Response) => {
     calledBy: calledBy || assignedUser,
     clientLanguage: clientLanguage || language,
     language: language || clientLanguage,
-  } as any);
+    } as any);
+  } catch (err: any) {
+    return res.status(400).json({ success: false, error: err.message });
+  }
 
   // Broadcast update to all connected clients
   io.emit('chats_updated', db.getAllChatsSorted());

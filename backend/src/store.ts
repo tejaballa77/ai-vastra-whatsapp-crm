@@ -1459,7 +1459,17 @@ class StorageEngine {
       ? incomingNameClean.toLowerCase().replace(/\+?\d+/g, '').replace(/[^a-z0-9]/g, '').trim()
       : '';
 
-    let rawDigits = (!isSocialJid && hasExplicitPhone) ? metadata.phone!.replace(/\D/g, '') : ((!isSocialJid && rawJid.replace(/\D/g, '').length >= 10) ? rawJid.replace(/\D/g, '') : '');
+    const jidDigits = jid.split('@')[0].split(':')[0].replace(/\D/g, '');
+    const explicitDigits = (metadata.phone || '').replace(/\D/g, '');
+    if (!isSocialJid && !jid.endsWith('@g.us')) {
+      if (!/^\d{10,15}@(?:s\.whatsapp\.net|c\.us)$/.test(jid)) {
+        throw new Error('A verified WhatsApp phone JID is required; name-based identity is not allowed.');
+      }
+      if (hasExplicitPhone && this.canonicalPhone(explicitDigits) !== this.canonicalPhone(jidDigits)) {
+        throw new Error('Contact phone does not match its WhatsApp JID. Save rejected.');
+      }
+    }
+    let rawDigits = (!isSocialJid && hasExplicitPhone) ? explicitDigits : ((!isSocialJid && jidDigits.length >= 10) ? jidDigits : '');
     let tenDigit = isSocialJid ? '' : this.canonicalPhone(rawDigits);
 
     // GUARD: Reject garbage short-digit JIDs (e.g. "1@s.whatsapp.net" created when
@@ -1469,20 +1479,6 @@ class StorageEngine {
       return; // Silently discard — not a real contact
     }
 
-    if (!isSocialJid && !tenDigit && incomingNameIsValid) {
-      for (const [ck, cObj] of this.contacts.entries()) {
-        const cPhoneDigits = (cObj.phone || ck.split('@')[0]).replace(/\D/g, '');
-        const cTen = this.canonicalPhone(cPhoneDigits);
-        if (cTen && cTen.length >= 7) {
-          const cNameClean = (cObj.name || '').toLowerCase().trim();
-          if (cNameClean === incomingNameClean.toLowerCase() || (searchAlphaName && cNameClean.replace(/\+?\d+/g, '').replace(/[^a-z0-9]/g, '') === searchAlphaName)) {
-            tenDigit = cTen;
-            rawDigits = cTen.length === 10 ? `91${cTen}` : cTen;
-            break;
-          }
-        }
-      }
-    }
 
     // SECOND GUARD: After name resolution attempt, if we STILL can't resolve to a
     // valid phone (>= 7 digits) and the raw JID digits are < 7, reject unconditionally.
@@ -1668,7 +1664,7 @@ class StorageEngine {
       if (metadata.assignedUser || metadata.calledBy) (chat as any).assignedUser = metadata.assignedUser || metadata.calledBy;
       if (metadata.clientLanguage || metadata.language) (chat as any).clientLanguage = metadata.clientLanguage || metadata.language;
       chat.jid = canonicalJid;
-      if (tenDigit) chat.phone = `91${tenDigit}`;
+      if (tenDigit) chat.phone = tenDigit.length === 10 ? `91${tenDigit}` : tenDigit;
       chat.updatedAt = nowTimestamp;
     }
 

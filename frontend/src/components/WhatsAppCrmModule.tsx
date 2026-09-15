@@ -187,7 +187,6 @@ export function WhatsAppCrmModule() {
   };
 
   const phoneToKey = new Map<string, string>();
-  const nameToKey = new Map<string, string>();
 
   const chatsMap = new Map<string, (typeof rawChats)[0]>();
   for (const c of rawChats) {
@@ -213,16 +212,13 @@ export function WhatsAppCrmModule() {
       dedupeKey = phoneToKey.get(tenDigit)!;
     } else if (phoneDigits && phoneDigits.length >= 7 && phoneToKey.has(phoneDigits)) {
       dedupeKey = phoneToKey.get(phoneDigits)!;
-    } else if (cleanName && cleanName.length >= 2 && nameToKey.has(cleanName)) {
-      dedupeKey = nameToKey.get(cleanName)!;
     } else {
       dedupeKey = (tenDigit && tenDigit.length === 10)
         ? `phone_${tenDigit}`
-        : ((phoneDigits && phoneDigits.length >= 7) ? `phone_${phoneDigits}` : (cleanName && cleanName.length >= 2 ? `name_${cleanName}` : `jid_${c.jid.toLowerCase()}`));
+        : ((phoneDigits && phoneDigits.length >= 7) ? `phone_${phoneDigits}` : `jid_${c.jid.toLowerCase()}`);
 
       if (tenDigit && tenDigit.length === 10) phoneToKey.set(tenDigit, dedupeKey);
       if (phoneDigits && phoneDigits.length >= 7) phoneToKey.set(phoneDigits, dedupeKey);
-      if (cleanName && cleanName.length >= 2) nameToKey.set(cleanName, dedupeKey);
     }
 
     if (!chatsMap.has(dedupeKey)) {

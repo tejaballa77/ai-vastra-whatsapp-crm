@@ -100,9 +100,9 @@ async function syncContactsFromIndexedDb() {
 
             const name = (c.name || c.formattedName || c.displayName || c.verifiedName || '').trim();
             if (name && phoneNum && phoneNum.length >= 10) {
-              indexedDbContactMap.set(name.toLowerCase(), phoneNum);
-              const alpha = name.toLowerCase().replace(/[^a-z0-9]/g, '');
-              if (alpha.length >= 2) indexedDbContactMap.set(alpha, phoneNum);
+              const key = name.toLowerCase();
+              if (!indexedDbContactMap.has(key)) indexedDbContactMap.set(key, phoneNum);
+              else if (indexedDbContactMap.get(key) !== phoneNum) indexedDbContactMap.set(key, '');
             }
           }
         };
@@ -117,41 +117,10 @@ function findPhoneInCacheByName(name) {
   const badNames = ['.', 'contact', 'unsaved contact', 'unknown contact', 'whatsapp contact', ''];
   if (!searchName || badNames.includes(searchName)) return '';
 
-  const searchAlpha = searchName.replace(/[^a-z0-9]/g, '');
-  const searchLetters = searchName.replace(/[^a-z]/g, '');
-
-  // 1. IndexedDB contact address book check
-  if (indexedDbContactMap.has(searchName)) {
-    return indexedDbContactMap.get(searchName);
-  }
-  if (searchAlpha && indexedDbContactMap.has(searchAlpha)) {
-    return indexedDbContactMap.get(searchAlpha);
-  }
-
-  // 2. Search in-memory chatsMetadataMap entries
-  for (const entry of Object.values(chatsMetadataMap)) {
-    if (!entry || !entry.phone) continue;
-    const p = entry.phone.replace(/\D/g, '');
-    if (p.length < 10) continue;
-
-    const entryName = (entry.name || '').trim().toLowerCase();
-    if (!entryName) continue;
-
-    if (entryName === searchName) return p;
-
-    const entryAlpha = entryName.replace(/[^a-z0-9]/g, '');
-    if (searchAlpha.length >= 2 && entryAlpha === searchAlpha) {
-      return p;
-    }
-
-    // Common root letter match (e.g. "Prashanth" matches "Prashanth 1" or "Prashanth 1 Contradiction")
-    const entryLetters = entryName.replace(/[^a-z]/g, '');
-    if (searchLetters && entryLetters && searchLetters.length >= 3 && (searchLetters === entryLetters || searchLetters.startsWith(entryLetters) || entryLetters.startsWith(searchLetters))) {
-      return p;
-    }
-  }
-
-  return '';
+  // Only the actual WhatsApp address book can establish this mapping.
+  // CRM display names are mutable and may already be wrong; never trust them
+  // to select another contact's phone. Duplicate address-book names fail closed.
+  return indexedDbContactMap.get(searchName) || '';
 }
 
 // Generation counter — incremented on every chat switch.
@@ -397,6 +366,7 @@ function extractPhoneNumberFromDom() {
   }
 
   function phoneFromElement(element) {
+    const row = element.closest?.('[role="row"], [role="listitem"]') || element;
     let node = element;
     while (node && node.id !== 'pane-side' && node !== document.body) {
       const directPhone = phoneFromDataId(node.getAttribute?.('data-id') || node.getAttribute?.('data-item-id') || node.getAttribute?.('id') || '');
@@ -406,6 +376,7 @@ function extractPhoneNumberFromDom() {
         const childPhone = phoneFromDataId(childWithId.getAttribute?.('data-id') || childWithId.getAttribute?.('data-item-id') || childWithId.getAttribute?.('id') || '');
         if (childPhone) return childPhone;
       }
+      if (node === row) break;
       node = node.parentElement;
     }
     return '';
@@ -416,14 +387,12 @@ function extractPhoneNumberFromDom() {
     const activeItem =
       document.querySelector('#pane-side [aria-selected="true"]') ||
       document.querySelector('#pane-side [data-selected="true"]') ||
-      document.querySelector('#pane-side [tabindex="0"]') ||
       document.querySelector('#pane-side .active') ||
       document.querySelector('#pane-side li[class*="active"]');
 
-    if (activeItem) {
-      const cachedPhone = activeItem.getAttribute('data-aivastra-phone');
-      if (cachedPhone && cachedPhone.length >= 10) return cachedPhone;
-
+    const headerTitle = document.querySelector('#main header span[title]')?.getAttribute('title');
+    const selectedTitle = activeItem?.querySelector('span[title]')?.getAttribute('title');
+    if (activeItem && headerTitle && selectedTitle === headerTitle) {
       const activePhone = phoneFromElement(activeItem);
       if (activePhone) {
         activeItem.setAttribute('data-aivastra-phone', activePhone);
@@ -463,9 +432,6 @@ function extractPhoneNumberFromDom() {
         const titleSpan = row.querySelector('span[title], span[dir="auto"]');
         const rTitle = (titleSpan?.getAttribute('title') || titleSpan?.textContent || '').trim();
         if (rTitle && rTitle === mainTitle) {
-          const cached = row.getAttribute('data-aivastra-phone');
-          if (cached && cached.length >= 10) return cached;
-
           const phone = phoneFromElement(row);
           if (phone) {
             row.setAttribute('data-aivastra-phone', phone);
@@ -512,7 +478,7 @@ function extractPhoneNumberFromDom() {
 
   // Step 3: Contact Info drawer (if open)
   try {
-    const drawer = document.querySelector('[role="region"], [data-testid="contact-info-drawer"]');
+    const drawer = document.querySelector('[data-testid="contact-info-drawer"]');
     if (drawer) {
       const imgs = drawer.querySelectorAll('img');
       for (const img of imgs) {
@@ -547,21 +513,12 @@ function extractPhoneNumberFromDom() {
       if (phone && phone.length >= 10) {
         return phone;
       }
-      const copyable = msgEl.querySelector?.('.copyable-text');
-      if (copyable) {
-        const pre = copyable.getAttribute('data-pre-plain-text') || '';
-        const match = pre.match(/\+?(\d{1,4})?[\s\-.]?(\d{10})/);
-        if (match) {
-          const clean = (match[1] || '') + match[2];
-          if (clean.length >= 10 && clean.length <= 15) return clean;
-        }
-      }
     }
   } catch (e) {}
 
   // Step 5: Check header subtitle or info text for formatted phone numbers (e.g. +91 98765 43210)
   try {
-    const textNodes = document.querySelectorAll('#main header span, [role="region"] span');
+    const textNodes = document.querySelectorAll('#main header span');
     for (const node of textNodes) {
       const txt = (node.textContent || '').trim();
       if (/^\+?\d[\d\s\-().]{8,}\d$/.test(txt)) {
@@ -762,6 +719,14 @@ function fetchCrmMetadata(searchKey, displayName, domAvatar, generation) {
 
       if (response && response.success && response.chat) {
         const chat = response.chat;
+        const canonical = (value) => {
+          const p = String(value || '').split('@')[0].split(':')[0].replace(/\D/g, '');
+          return p.length === 10 ? '91' + p : p;
+        };
+        if (!queryPhone || canonical(chat.phone || chat.jid) !== canonical(queryPhone)) {
+          console.warn('[AI Vastra] Rejected metadata for a different/unverified contact.');
+          return;
+        }
         // Backend is the authoritative source — use backend data directly,
         // fall back to local cache only if backend field is empty/unassigned.
         const backendNotes = parseNotesList(chat.notes, chat.notesList);
@@ -842,7 +807,6 @@ function fetchCrmMetadata(searchKey, displayName, domAvatar, generation) {
         if (validPhoneClean) chatsMetadataMap[validPhoneClean] = meta;
         if (validTenDigit && validTenDigit !== validPhoneClean) chatsMetadataMap[validTenDigit] = meta;
         if (queryPhone && queryPhone.length >= 10 && queryPhone !== validPhoneClean) chatsMetadataMap[queryPhone] = meta;
-        if (displayName) chatsMetadataMap[displayName] = meta;
       } else if (localData) {
         // No backend record found but we have a valid local cache hit — use it
         activeFormData = {
@@ -877,13 +841,32 @@ function fetchCrmMetadata(searchKey, displayName, domAvatar, generation) {
   });
 }
 
-function saveCrmMetadata(forcedAiDisabled, retryCount = 0) {
+function saveCrmMetadata(forcedAiDisabled, retryCount = 0, expectedGeneration = fetchRequestGeneration) {
+  if (expectedGeneration !== fetchRequestGeneration) return;
+  const saveGeneration = fetchRequestGeneration;
+  const header = document.querySelector('#main header');
+  const title = Array.from(header?.querySelectorAll('span[title], span[dir="auto"]') || [])
+    .map((span) => (span.getAttribute('title') || span.textContent || '').trim())
+    .find((value) => value && !/last seen|online|typing|click here|group|members/i.test(value) && value !== '⚡ AI CRM');
+  if (!title || title !== activeDisplayName) {
+    detectActiveContact(true);
+    alert('The chat changed. Wait for this contact\'s data to load before saving.');
+    return;
+  }
   // Normal CRM saves stop AI; the toggle passes an explicit state in either direction.
   activeFormData.aiDisabled = forcedAiDisabled !== undefined ? forcedAiDisabled : true;
 
   let domPhone = extractPhoneNumberFromDom();
   if (!domPhone || domPhone.length < 10) {
     domPhone = findPhoneInCacheByName(activeDisplayName) || findPhoneInCacheByName(activeContactKey);
+  }
+  const canonical = (p) => {
+    const value = String(p || '').replace(/\D/g, '');
+    return value.length === 10 ? '91' + value : value;
+  };
+  if (domPhone && activePhoneClean && canonical(domPhone) !== canonical(activePhoneClean)) {
+    alert('The detected phone differs from the loaded contact. Save blocked to protect both records.');
+    return;
   }
 
   let cleanDigits = domPhone ? domPhone.replace(/\D/g, '') : '';
@@ -906,7 +889,7 @@ function saveCrmMetadata(forcedAiDisabled, retryCount = 0) {
     if (headerEl) {
       headerEl.click();
       setTimeout(() => {
-        saveCrmMetadata(forcedAiDisabled, retryCount + 1);
+        saveCrmMetadata(forcedAiDisabled, retryCount + 1, saveGeneration);
       }, 250);
       return;
     }
@@ -920,19 +903,6 @@ function saveCrmMetadata(forcedAiDisabled, retryCount = 0) {
     targetJid = activeContactKey;
   } else if (contactKeyDigits.length >= 7 && contactKeyDigits !== '1') {
     targetJid = `${contactKeyDigits}@s.whatsapp.net`;
-  } else if (activeDisplayName) {
-    safeSendMessage({ action: 'FETCH_CRM_METADATA', displayName: activeDisplayName, searchKey: activeDisplayName }, (res) => {
-      if (res && res.success && res.chat && (res.chat.phone || res.chat.jid)) {
-        const p = (res.chat.phone || res.chat.jid.split('@')[0]).replace(/\D/g, '');
-        if (p.length >= 7) {
-          activePhoneClean = p;
-          saveCrmMetadata(forcedAiDisabled, 99);
-          return;
-        }
-      }
-      console.warn('[AI Vastra] Cannot determine valid phone JID for save, aborting save to prevent garbage entry.');
-    });
-    return;
   } else {
     console.warn('[AI Vastra] Cannot determine valid phone JID for save, aborting save to prevent garbage entry.');
     return;
@@ -988,25 +958,16 @@ function saveCrmMetadata(forcedAiDisabled, retryCount = 0) {
     updatedAt: Date.now(),
   };
 
-  // 1. Direct fetch to backend CRM API
-  try {
-    fetch(`${DEFAULT_API_BASE}/api/crm/contact`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    })
-      .then((res) => res.json())
-      .then((data) => {
-        console.log('[AI Vastra Extension] Direct sync success:', data);
-        fetchRequestGeneration++;
-        fetchCrmMetadata(validPhone || targetJid || activeContactKey, effectiveName, activeAvatarUrl, fetchRequestGeneration);
-      })
-      .catch((e) => console.warn('[AI Vastra Extension] Direct sync fallback:', e));
-  } catch (e) {}
-
-  // 2. Background message worker sync
+  // One transport, one immutable payload; a late save must not reload another chat.
   safeSendMessage({ action: 'UPDATE_CRM_METADATA', jid: targetJid, data: payload }, (response) => {
+    if (saveGeneration !== fetchRequestGeneration) return;
     console.log('[AI Vastra Extension] Background save response:', response);
+    if (response?.success) {
+      fetchRequestGeneration++;
+      fetchCrmMetadata(targetJid, effectiveName, activeAvatarUrl, fetchRequestGeneration);
+    } else {
+      alert('CRM save failed. Your local data is preserved; please do not save other contacts yet.');
+    }
   });
 
   injectChatListBadges();

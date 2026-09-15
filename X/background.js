@@ -52,26 +52,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         if (byPhone) return sendResponse({ success: true, chat: byPhone });
       }
 
-      // STEP 2: Display-name lookup (exact, normalized, or base-letter match)
-      const searchName = (request.displayName || request.searchKey || '').toLowerCase().trim();
-      const searchAlpha = searchName.replace(/[^a-z0-9]/g, '');
-      const searchLetters = searchName.replace(/[^a-z]/g, '');
-      const nameIsValid = searchName && !badNames.includes(searchName);
-
-      if (nameIsValid) {
-        const byName = allChats.find((c) => {
-          const cName = (c.name || '').toLowerCase().trim();
-          if (!cName || badNames.includes(cName)) return false;
-          if (cName === searchName) return true;
-
-          const cAlpha = cName.replace(/[^a-z0-9]/g, '');
-          if (searchAlpha && cAlpha && cAlpha === searchAlpha) return true;
-
-          return false;
-        });
-        if (byName) return sendResponse({ success: true, chat: byName });
-      }
-
+      // A missing/mismatched phone must never fall back to a mutable display name.
       sendResponse({ success: true, chat: null });
     });
     return true;

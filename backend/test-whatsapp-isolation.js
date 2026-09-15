@@ -138,6 +138,37 @@ test('extension save preserves a ten-digit international number instead of prepe
   assert.equal(sent[0].jid, '6591234567@s.whatsapp.net');
   assert.equal(sent[0].data.phone, '6591234567');
 });
+test('business contact phone extraction handles typed JIDs, nested number text and ambiguity safely', () => {
+  const context = { console, setTimeout: () => {}, setInterval: () => {} };
+  vm.createContext(context);
+  vm.runInContext(fs.readFileSync(path.join(root, 'X/content.js'), 'utf8'), context);
+  assert.equal(vm.runInContext("contactRecordPhone({id: {user: '123456789012345', server:'lid'}, pnJid: {user:'923128304098',server:'s.whatsapp.net'}})", context), '923128304098');
+  assert.equal(vm.runInContext("contactRecordPhone({id: {user:'123456789012345',server:'lid'}})", context), '');
+  assert.equal(vm.runInContext("contactRecordPhone({id:'6591234567:12@c.us'})", context), '6591234567');
+  const node = text => ({ children: [{}], textContent: text, closest: () => null });
+  context.drawer = { querySelectorAll: selector => selector.startsWith('a[href') ? [] : [node('+92 312 8304098'), node('123455'), node('10:00 AM - 6:00 PM')] };
+  assert.equal(vm.runInContext('extractContactInfoPhone(drawer)', context), '923128304098');
+  context.drawer = { querySelectorAll: selector => selector.startsWith('a[href') ? [] : [node('+92 312 8304098'), node('+91 84710 58274')] };
+  assert.equal(vm.runInContext('extractContactInfoPhone(drawer)', context), '');
+});
+test('unlabelled business info pane is bounded to the active contact, not the app or CRM', () => {
+  const title = { textContent: 'Business Contact', children: [], getAttribute: () => '' };
+  const header = { getAttribute: () => 'Business Contact' };
+  const panel = { id: 'business-pane', querySelector: () => null, querySelectorAll: () => [title], parentElement: null };
+  const marker = { textContent: 'Contact info', children: [], closest: () => null, parentElement: panel };
+  const document = { body: {}, querySelector: selector => selector.includes('#main') ? header : null, querySelectorAll: selector => selector.includes('[role="dialog"]') ? [] : [marker] };
+  const context = { document, console, setTimeout: () => {}, setInterval: () => {} };
+  vm.createContext(context);
+  vm.runInContext(fs.readFileSync(path.join(root, 'X/content.js'), 'utf8'), context);
+  assert.equal(vm.runInContext('findActiveContactInfoDrawer()', context), panel);
+  panel.id = 'app';
+  assert.equal(vm.runInContext('findActiveContactInfoDrawer()', context), null);
+});
+test('Save click does not claim success before server confirmation', () => {
+  const source = fs.readFileSync(path.join(root, 'X/content.js'), 'utf8');
+  const handler = source.slice(source.indexOf("document.getElementById('aivastra-save-main-btn').onclick"), source.indexOf('// Dustbin delete buttons'));
+  assert.equal(handler.includes('avatarUrl, true'), false);
+});
 test('extension cache cannot use corrupted CRM names to guess another phone', () => {
   const context = { console, setTimeout: () => {}, setInterval: () => {} };
   vm.createContext(context);

@@ -97,6 +97,17 @@ test('unsaving a contact syncs its verified formatted phone without damaging num
   assert.equal(vm.runInContext("getContactTitleToSync('Teja 1', '918471058274')", context), 'Teja 1');
   assert.equal(vm.runInContext("getContactTitleToSync('123455', '918471058274')", context), '123455');
 });
+test('contact drawer fallback accepts only the matching labelled WhatsApp panel', () => {
+  const title = { getAttribute: () => 'Google Maps India', textContent: 'Google Maps India' };
+  const panel = { id: 'wa-info', closest: () => null, getAttribute: () => 'Contact info', querySelectorAll: (q) => q.includes('span') ? [title] : [] };
+  const document = { querySelector: (q) => q.includes('#main') ? title : null, querySelectorAll: () => [panel] };
+  const context = { document, console, setTimeout: () => {}, setInterval: () => {} };
+  vm.createContext(context);
+  vm.runInContext(fs.readFileSync(path.join(root, 'X/content.js'), 'utf8'), context);
+  assert.equal(vm.runInContext('findActiveContactInfoDrawer()', context), panel);
+  panel.id = 'aivastra-crm-panel';
+  assert.equal(vm.runInContext('findActiveContactInfoDrawer()', context), null);
+});
 test('extension cache cannot use corrupted CRM names to guess another phone', () => {
   const context = { console, setTimeout: () => {}, setInterval: () => {} };
   vm.createContext(context);

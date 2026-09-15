@@ -64,6 +64,7 @@ let chatsMetadataMap = {};
 let indexedDbContactMap = new Map();
 let contactBookRefreshPending = false;
 let lastContactBookRefresh = 0;
+let pendingPhoneSaveGeneration = null;
 
 async function syncContactsFromIndexedDb() {
   if (contactBookRefreshPending || Date.now() - lastContactBookRefresh < 500) return;
@@ -120,7 +121,7 @@ async function syncContactsFromIndexedDb() {
           indexedDbContactMap = refreshedContacts;
           // Resolve the current header immediately after address-book refresh,
           // instead of waiting for the next 20-second background cycle.
-          if (!activePhoneClean) detectActiveContact();
+          if (!activePhoneClean && pendingPhoneSaveGeneration !== fetchRequestGeneration) detectActiveContact();
         };
       } catch (e) { finish(); }
     };
@@ -364,6 +365,25 @@ function extractProfileNameFromDom() {
   return null;
 }
 
+function findActiveContactInfoDrawer() {
+  const explicit = document.querySelector('[data-testid="contact-info-drawer"]');
+  if (explicit) return explicit;
+  // WhatsApp versions without the old test ID expose a labelled info panel.
+  // Never search arbitrary regions (including our own CRM panel) for digits.
+  const candidates = document.querySelectorAll('[role="dialog"], [role="region"], [aria-label="Contact info"], [aria-label="Contact Info"]');
+  const header = document.querySelector('#main header span[title]');
+  const title = (header?.getAttribute('title') || header?.textContent || '').trim();
+  for (const panel of candidates) {
+    if (panel.id?.startsWith('aivastra') || panel.closest?.('[id^="aivastra"]')) continue;
+    const label = panel.getAttribute?.('aria-label') || '';
+    const heading = Array.from(panel.querySelectorAll('h1, h2, [role="heading"]')).some(node => /^contact info$/i.test((node.textContent || '').trim()));
+    if (!/^contact info$/i.test(label) && !heading) continue;
+    const matchesTitle = title && Array.from(panel.querySelectorAll('span[title], span[dir="auto"]')).some(node => (node.getAttribute('title') || node.textContent || '').trim() === title);
+    if (matchesTitle) return panel;
+  }
+  return null;
+}
+
 function extractPhoneNumberFromDom() {
   function phoneFromDataId(dataId) {
     if (!dataId || typeof dataId !== 'string') return '';
@@ -494,7 +514,7 @@ function extractPhoneNumberFromDom() {
 
   // Step 3: Contact Info drawer (if open)
   try {
-    const drawer = document.querySelector('[data-testid="contact-info-drawer"]');
+    const drawer = findActiveContactInfoDrawer();
     if (drawer) {
       const imgs = drawer.querySelectorAll('img');
       for (const img of imgs) {
@@ -929,13 +949,18 @@ function saveCrmMetadata(forcedAiDisabled, retryCount = 0, expectedGeneration = 
   const validPhone = (cleanDigits && cleanDigits.length >= 10) ? cleanDigits : (activePhoneClean && activePhoneClean.length >= 10 ? activePhoneClean : '');
 
   // Guard: if phone is still missing, attempt emergency extraction from Contact Info drawer
-  if (!validPhone && retryCount < 2) {
-    const headerEl = document.querySelector('#main header div[role="button"], #main header span[title]');
-    if (headerEl) {
-      headerEl.click();
+  if (!validPhone && retryCount < 6) {
+    pendingPhoneSaveGeneration = saveGeneration;
+    syncContactsFromIndexedDb();
+    const titleEl = document.querySelector('#main header span[title]');
+    const headerEl = titleEl?.closest('[role="button"]') || titleEl;
+    if (headerEl || findActiveContactInfoDrawer()) {
+      // Open once, then wait for WhatsApp to render. Repeated clicks used to
+      // close/toggle the drawer before its phone number became available.
+      if (retryCount === 0 && !findActiveContactInfoDrawer()) headerEl?.click();
       setTimeout(() => {
         saveCrmMetadata(forcedAiDisabled, retryCount + 1, saveGeneration);
-      }, 250);
+      }, 500);
       return;
     }
   }
@@ -943,13 +968,12 @@ function saveCrmMetadata(forcedAiDisabled, retryCount = 0, expectedGeneration = 
   const contactKeyDigits = (activeContactKey || '').replace(/\D/g, '');
   let targetJid = '';
   if (validPhone) {
+    pendingPhoneSaveGeneration = null;
     targetJid = `${validPhone}@s.whatsapp.net`;
-  } else if (activeContactKey && activeContactKey.includes('@') && !activeContactKey.startsWith('1@')) {
-    targetJid = activeContactKey;
-  } else if (contactKeyDigits.length >= 7 && contactKeyDigits !== '1') {
-    targetJid = `${contactKeyDigits}@s.whatsapp.net`;
   } else {
+    pendingPhoneSaveGeneration = null;
     console.warn('[AI Vastra] Cannot determine valid phone JID for save, aborting save to prevent garbage entry.');
+    alert('Not saved to CRM: WhatsApp has not exposed this contact’s phone number. Open WhatsApp Contact info so its phone number is visible, then click Save again. Your form data has not been cleared.');
     return;
   }
 

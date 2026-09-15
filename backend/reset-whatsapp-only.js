@@ -17,7 +17,12 @@ function run(db, sql, params = []) {
 function digest(rows) { return crypto.createHash('sha256').update(JSON.stringify(rows)).digest('hex'); }
 function quote(value) { return '"' + value.replace(/"/g, '""') + '"'; }
 
-async function resetWhatsApp(dataDir) {
+async function resetWhatsApp(dataDir, allWhatsAppBlock = false) {
+  // Explicit full-block mode matches the dashboard's non-social partition,
+  // including legacy malformed identities the strict reset intentionally kept.
+  const targetRow = (row, field) => allWhatsAppBlock
+    ? !/instagram|linkedin|facebook/i.test(String(row[field] || '') + ' ' + String(row.phone || ''))
+    : isWhatsApp(row[field]);
   const filename = path.join(dataDir, 'crm_database.sqlite3');
   if (!fs.existsSync(filename)) throw new Error('Existing SQLite database not found; refusing to create one.');
   const db = await new Promise((resolve, reject) => {
@@ -41,7 +46,7 @@ async function resetWhatsApp(dataDir) {
       before[table] = await query(db, 'SELECT * FROM ' + quote(table) + ' ORDER BY rowid');
       const field = table === 'crm_messages' ? 'chat_jid' : 'jid';
       targets[table] = ['crm_contacts', 'crm_chats', 'crm_messages'].includes(table)
-        ? before[table].filter((row) => isWhatsApp(row[field])) : [];
+        ? before[table].filter((row) => targetRow(row, field)) : [];
     }
     for (const file of ['db.json', 'db.json.bak']) {
       const fullPath = path.join(dataDir, file);
@@ -53,7 +58,7 @@ async function resetWhatsApp(dataDir) {
         if (entries == null) continue;
         if (typeof entries !== 'object' || Array.isArray(entries)) throw new Error('Unsupported legacy JSON section: ' + section);
         for (const [key, value] of Object.entries(entries)) {
-          if (isWhatsApp(key) || isWhatsApp(value?.jid) || (section === 'messages' && Array.isArray(value) && value.length && value.every((message) => isWhatsApp(message.chatJid)))) delete entries[key];
+          if (allWhatsAppBlock ? targetRow({ jid: value?.jid || key, phone: value?.phone }, 'jid') : (isWhatsApp(key) || isWhatsApp(value?.jid) || (section === 'messages' && Array.isArray(value) && value.length && value.every((message) => isWhatsApp(message.chatJid))))) delete entries[key];
         }
       }
       jsonPlans.push({ fullPath, file, original, replacement: JSON.stringify(parsed, null, 2) });
@@ -73,7 +78,7 @@ async function resetWhatsApp(dataDir) {
     for (const table of tables) {
       const field = table === 'crm_messages' ? 'chat_jid' : 'jid';
       const expected = ['crm_contacts', 'crm_chats', 'crm_messages'].includes(table)
-        ? before[table].filter((row) => !isWhatsApp(row[field])) : before[table];
+        ? before[table].filter((row) => !targetRow(row, field)) : before[table];
       const actual = await query(db, 'SELECT * FROM ' + quote(table) + ' ORDER BY rowid');
       if (digest(actual) !== digest(expected)) throw new Error('Preservation check failed: ' + table);
     }
@@ -109,7 +114,7 @@ async function main() {
     socket.on('timeout', () => { socket.destroy(); resolve(true); });
   });
   if (listening) throw new Error('Stop crm-backend before resetting. Backend port is still active.');
-  console.log(JSON.stringify(await resetWhatsApp(path.join(__dirname, 'data')), null, 2));
+  console.log(JSON.stringify(await resetWhatsApp(path.join(__dirname, 'data'), process.argv.includes('--all-whatsapp-block')), null, 2));
 }
 module.exports = { resetWhatsApp, isWhatsApp };
 if (require.main === module) main().catch((error) => { console.error('RESET FAILED:', error.message); process.exitCode = 1; });

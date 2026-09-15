@@ -48,6 +48,16 @@ async function main() {
   assert.equal(isWhatsApp('global@instagram'), false);
   assert.equal(isWhatsApp('1234567890@linkedin'), false);
   assert.equal(isWhatsApp('unknown-entry'), false);
+  const legacyDb = new sqlite3.Database(filename);
+  await run(legacyDb, "INSERT INTO crm_chats VALUES ('legacy-name','old remaining note'); INSERT INTO crm_contacts VALUES ('123:99@lid','Legacy');");
+  await close(legacyDb);
+  const fullReport = await resetWhatsApp(directory, true);
+  assert.equal(fullReport.deleted.crm_chats, 1);
+  assert.equal(fullReport.deleted.crm_contacts, 1);
+  const afterFull = new sqlite3.Database(filename);
+  assert.equal((await all(afterFull, 'SELECT * FROM crm_chats')).length, 3);
+  assert.equal((await all(afterFull, 'SELECT * FROM cold_calls')).length, 1);
+  await close(afterFull);
   console.log('PASS: WhatsApp rows cleared; social/cold-call/archive rows unchanged; SQLite and legacy JSON backups verified.');
   console.log('Disposable fixture retained at:', directory);
 }

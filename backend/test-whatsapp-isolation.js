@@ -88,6 +88,15 @@ test('phone-keyed extension data renders before a slow server responds, but stal
   vm.runInContext("fetchCrmMetadata('918471058274', 'Old Chat', '', 3);", context);
   assert.equal(context.rendered.length, 1);
 });
+test('unsaving a contact syncs its verified formatted phone without damaging numeric names', () => {
+  const context = { console, setTimeout: () => {}, setInterval: () => {} };
+  vm.createContext(context);
+  vm.runInContext(fs.readFileSync(path.join(root, 'X/content.js'), 'utf8'), context);
+  assert.equal(vm.runInContext("getContactTitleToSync('+91 84710 58274', '918471058274')", context), '+91 84710 58274');
+  assert.equal(vm.runInContext("getContactTitleToSync('+91 90000 00001', '918471058274')", context), '');
+  assert.equal(vm.runInContext("getContactTitleToSync('Teja 1', '918471058274')", context), 'Teja 1');
+  assert.equal(vm.runInContext("getContactTitleToSync('123455', '918471058274')", context), '123455');
+});
 test('extension cache cannot use corrupted CRM names to guess another phone', () => {
   const context = { console, setTimeout: () => {}, setInterval: () => {} };
   vm.createContext(context);

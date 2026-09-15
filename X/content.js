@@ -644,6 +644,25 @@ function detectActiveContact(force = false) {
   } catch (e) {}
 }
 
+function getContactTitleToSync(displayName, verifiedPhone) {
+  const title = String(displayName || '').trim();
+  const phone = String(verifiedPhone || '').split('@')[0].split(':')[0].replace(/\D/g, '');
+  if (!title || !phone || ['.', 'contact', 'unsaved contact', 'unknown contact', 'whatsapp contact'].includes(title.toLowerCase())) return '';
+  // A phone-only header may replace a saved name only when it matches the
+  // verified active contact. Numeric saved names must otherwise stay exact.
+  if (/^\+?[\d\s().-]+$/.test(title)) {
+    const digits = title.replace(/\D/g, '');
+    const canonical = (p) => p.length === 10 ? '91' + p : p;
+    if (digits.length >= 10 && canonical(digits) === canonical(phone)) {
+      const full = canonical(phone);
+      return full.length === 12 && full.startsWith('91')
+        ? `+91 ${full.slice(2, 7)} ${full.slice(7)}` : `+${full}`;
+    }
+    if (title.startsWith('+')) return '';
+  }
+  return title;
+}
+
 function fetchCrmMetadata(searchKey, displayName, domAvatar, generation) {
   const badNames = ['.', 'contact', 'unsaved contact', 'unknown contact', 'whatsapp contact', ''];
   const isPhoneHeader = displayName && (displayName.trim().startsWith('+') || (activePhoneClean && displayName.replace(/\D/g, '') === activePhoneClean));
@@ -769,8 +788,9 @@ function fetchCrmMetadata(searchKey, displayName, domAvatar, generation) {
         if (!resolvedAvatar && chat.avatarUrl) resolvedAvatar = chat.avatarUrl;
 
         const currentNameIsValid = displayName && !badNames.includes(displayName.toLowerCase().trim()) && !isPhoneHeader;
-        const isNameDifferent = currentNameIsValid && (displayName.trim() !== (chat.name || '').trim());
-        const effectiveDisplayName = currentNameIsValid ? displayName : chat.name;
+        const titleToSync = getContactTitleToSync(displayName, queryPhone);
+        const isNameDifferent = Boolean(titleToSync && titleToSync !== (chat.name || '').trim());
+        const effectiveDisplayName = titleToSync || chat.name;
 
         // Auto-sync contact name to backend whenever WhatsApp Web display name changes or is saved
         const chatPhoneDigits = (chat.phone || (chat.jid || '').split('@')[0]).replace(/\D/g, '');
@@ -796,7 +816,7 @@ function fetchCrmMetadata(searchKey, displayName, domAvatar, generation) {
             updatedAt: chat.updatedAt || 0
           };
 
-          safeSendMessage({ action: 'SYNC_CONTACT_NAME', jid: reliableJid, name: displayName }, () => {});
+          safeSendMessage({ action: 'SYNC_CONTACT_NAME', jid: reliableJid, name: titleToSync }, () => {});
         }
 
         // If the backend has a verified phone for this chat, bind it to activePhoneClean

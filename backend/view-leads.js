@@ -30,8 +30,13 @@ async function main() {
                     OR LOWER(name) LIKE '%sai durga%' 
                     OR LOWER(name) LIKE '%durga rao%'`,
                 () => {
-                  dbConn.close();
-                  resolve();
+                  dbConn.run(
+                    `UPDATE crm_contacts SET name = '+91 92913 03040' WHERE (phone = '919291303040' OR jid LIKE '%9291303040%') AND name = 'Contradictions'`,
+                    () => {
+                      dbConn.close();
+                      resolve();
+                    }
+                  );
                 }
               );
             }

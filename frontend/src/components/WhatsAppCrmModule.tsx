@@ -206,23 +206,20 @@ export function WhatsAppCrmModule() {
       ? c.name.toLowerCase().trim().replace(/[^a-z0-9]/g, '')
       : '';
 
-    let dedupeKey = `jid_${c.jid}`;
+    let dedupeKey = `jid_${c.jid.toLowerCase()}`;
     if (isSocial) {
       dedupeKey = `social_${c.jid.toLowerCase()}`;
     } else if (tenDigit && tenDigit.length === 10 && phoneToKey.has(tenDigit)) {
       dedupeKey = phoneToKey.get(tenDigit)!;
     } else if (phoneDigits && phoneDigits.length >= 7 && phoneToKey.has(phoneDigits)) {
       dedupeKey = phoneToKey.get(phoneDigits)!;
-    } else if (cleanName && cleanName.length >= 3 && nameToKey.has(cleanName)) {
-      dedupeKey = nameToKey.get(cleanName)!;
     } else {
       dedupeKey = (tenDigit && tenDigit.length === 10)
         ? `phone_${tenDigit}`
-        : ((phoneDigits && phoneDigits.length >= 7) ? `phone_${phoneDigits}` : ((cleanName && cleanName.length >= 3) ? `name_${cleanName}` : `jid_${c.jid}`));
+        : ((phoneDigits && phoneDigits.length >= 7) ? `phone_${phoneDigits}` : `jid_${c.jid.toLowerCase()}`);
 
       if (tenDigit && tenDigit.length === 10) phoneToKey.set(tenDigit, dedupeKey);
       if (phoneDigits && phoneDigits.length >= 7) phoneToKey.set(phoneDigits, dedupeKey);
-      if (cleanName && cleanName.length >= 3) nameToKey.set(cleanName, dedupeKey);
     }
 
     if (!chatsMap.has(dedupeKey)) {
@@ -809,11 +806,7 @@ export function WhatsAppCrmModule() {
                           <tr key={chat.jid} className="hover:bg-zinc-50 transition-colors border-b border-zinc-100">
                             <td className="p-4 align-middle">
                               <div className="font-extrabold text-black text-sm leading-tight">{displayName}</div>
-                              {activeNav === 'whatsapp' ? (
-                                (hasSavedName && formattedPhone && formattedPhone !== displayName && formattedPhone !== 'Social Contact') ? (
-                                  <div className="text-xs font-semibold text-zinc-500 font-mono mt-0.5">📞 {formattedPhone}</div>
-                                ) : null
-                              ) : (
+                              {activeNav === 'whatsapp' ? null : (
                                 displayUserStr && (
                                   <div className="flex items-center gap-1.5 mt-1 flex-wrap">
                                     <span className="text-xs font-bold text-zinc-700 font-mono bg-zinc-100 px-1.5 py-0.5 rounded border border-zinc-200">

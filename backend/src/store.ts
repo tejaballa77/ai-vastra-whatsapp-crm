@@ -1130,9 +1130,8 @@ class StorageEngine {
     const BAD_NAMES = new Set(['.', 'contact', 'unsaved contact', 'unknown contact', 'ai vastra sales agent', 'ai sales agent', 'ai vastra', 'me', '']);
 
     const phoneToKey = new Map<string, string>();
-    const nameToKey = new Map<string, string>();
 
-    const getOrAssignDedupeKey = (validTen: string, rawDigits: string, resolvedKey: string, cleanName: string): string => {
+    const getOrAssignDedupeKey = (validTen: string, rawDigits: string, resolvedKey: string): string => {
       if (resolvedKey.endsWith('@instagram') || resolvedKey.endsWith('@linkedin') || resolvedKey.endsWith('@facebook')) {
         return `social_${resolvedKey.toLowerCase()}`;
       }
@@ -1142,17 +1141,13 @@ class StorageEngine {
       if (rawDigits && rawDigits.length >= 7 && phoneToKey.has(rawDigits)) {
         return phoneToKey.get(rawDigits)!;
       }
-      if (cleanName && cleanName.length >= 3 && nameToKey.has(cleanName)) {
-        return nameToKey.get(cleanName)!;
-      }
 
       const newKey = (validTen && validTen.length === 10)
         ? `phone_${validTen}`
-        : ((rawDigits && rawDigits.length >= 7) ? `phone_${rawDigits}` : ((cleanName && cleanName.length >= 3) ? `name_${cleanName}` : `jid_${resolvedKey}`));
+        : ((rawDigits && rawDigits.length >= 7) ? `phone_${rawDigits}` : `jid_${resolvedKey.toLowerCase()}`);
 
       if (validTen && validTen.length === 10) phoneToKey.set(validTen, newKey);
       if (rawDigits && rawDigits.length >= 7) phoneToKey.set(rawDigits, newKey);
-      if (cleanName && cleanName.length >= 3) nameToKey.set(cleanName, newKey);
 
       return newKey;
     };
@@ -1193,7 +1188,7 @@ class StorageEngine {
         continue;
       }
 
-      const dedupeKey = getOrAssignDedupeKey(validTen, rawDigits, resolvedKey, cleanName);
+      const dedupeKey = getOrAssignDedupeKey(validTen, rawDigits, resolvedKey);
 
       const avatarUrl = this.contacts.get(resolvedKey)?.avatarUrl || c.avatarUrl;
       const msgs = this.getMessagesForChat(c.jid);
@@ -1328,7 +1323,7 @@ class StorageEngine {
         continue;
       }
 
-      const dedupeKey = getOrAssignDedupeKey(validTen, rawDigits, resolvedKey, cNameClean);
+      const dedupeKey = getOrAssignDedupeKey(validTen, rawDigits, resolvedKey);
 
       if (!uniqueMap.has(dedupeKey)) {
         const contactChat: CRMChat = {

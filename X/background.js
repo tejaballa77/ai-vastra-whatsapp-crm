@@ -67,11 +67,6 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
           const cAlpha = cName.replace(/[^a-z0-9]/g, '');
           if (searchAlpha && cAlpha && cAlpha === searchAlpha) return true;
 
-          // Match base letter identity (e.g. "Prashanth" matches "Prashanth 1" or "Prashanth 1 Contradiction")
-          const cLetters = cName.replace(/[^a-z]/g, '');
-          if (searchLetters && cLetters && searchLetters.length >= 3 && (cLetters === searchLetters || cLetters.startsWith(searchLetters) || searchLetters.startsWith(cLetters))) {
-            return true;
-          }
           return false;
         });
         if (byName) return sendResponse({ success: true, chat: byName });

@@ -811,7 +811,7 @@ function fetchCrmMetadata(searchKey, displayName, domAvatar, generation) {
             previousFollowUpDate: activeFormData.previousFollowUpDate,
             notesList: activeFormData.notesList,
             manuallySaved: true,
-            updatedAt: Date.now()
+            updatedAt: chat.updatedAt || 0
           };
 
           try {

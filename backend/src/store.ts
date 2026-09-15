@@ -866,8 +866,10 @@ class StorageEngine {
     return matchCount;
   }
 
-  public updateContactName(rawJid: string, name: string, saveNow: boolean = false) {
+  public async updateContactName(rawJid: string, name: string, saveNow: boolean = false) {
     const jid = this.resolveJid(rawJid);
+    await dbManager.query('UPDATE crm_contacts SET name = ? WHERE jid = ?', [name, jid]);
+    await dbManager.query('UPDATE crm_chats SET name = ? WHERE jid = ?', [name, jid]);
     const contact = this.contacts.get(jid);
     if (contact) {
       contact.name = name;
@@ -882,7 +884,7 @@ class StorageEngine {
       this.chats.set(jid, chat);
     }
 
-    if (saveNow) this.saveData();
+    this.saveData();
     return this.chats.get(jid);
   }
 
@@ -1960,15 +1962,7 @@ class StorageEngine {
   }
 
   public clearAllWhatsAppCrmData() {
-    this.chats.clear();
-    this.contacts.clear();
-    this.messages.clear();
-
-    dbManager.query('DELETE FROM crm_chats').catch(() => {});
-    dbManager.query('DELETE FROM crm_contacts').catch(() => {});
-    dbManager.query('DELETE FROM crm_messages').catch(() => {});
-
-    this.saveData();
+    throw new Error('Shared-table clearing is disabled. Use the offline WhatsApp-only reset script.');
   }
 
   public getArchivedClearedLeads(): ArchivedClearedLead[] {

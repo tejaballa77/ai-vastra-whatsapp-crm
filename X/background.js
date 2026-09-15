@@ -18,6 +18,16 @@ async function safeFetchJson(url, options = {}) {
 
 // Listen for messages from content script injected on web.whatsapp.com
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  if (request.action === 'SYNC_CONTACT_NAME') {
+    getApiUrl().then(async (baseUrl) => {
+      const data = await safeFetchJson(`${baseUrl}/api/contacts/name`, {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ jid: request.jid, name: request.name })
+      });
+      sendResponse({ success: Boolean(data?.success), data });
+    });
+    return true;
+  }
   if (request.action === 'FETCH_ALL_CRM_CHATS') {
     getApiUrl().then(async (baseUrl) => {
       const chats = await safeFetchJson(`${baseUrl}/api/chats`);

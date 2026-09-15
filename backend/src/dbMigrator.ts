@@ -7,6 +7,13 @@ export class DbMigrator {
   public static async runAutoMigration() {
     try {
       await dbManager.initTables();
+      const existing = await dbManager.query(`SELECT
+        (SELECT COUNT(*) FROM crm_contacts) + (SELECT COUNT(*) FROM crm_chats) +
+        (SELECT COUNT(*) FROM crm_messages) + (SELECT COUNT(*) FROM cold_calls) AS total`);
+      if (Number(existing[0]?.total || 0) > 0) {
+        console.log('[DbMigrator] Existing SQL business data found; legacy JSON import skipped to preserve authoritative records.');
+        return;
+      }
 
       const dataDir = path.join(__dirname, '../data');
       const jsonFile = path.join(dataDir, 'db.json');

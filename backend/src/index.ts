@@ -214,13 +214,18 @@ app.post('/api/contacts/import', (req, res) => {
 });
 
 // 9. Manually update a contact's display name
-app.put('/api/contacts/name', (req, res) => {
+app.put('/api/contacts/name', async (req, res) => {
   const { jid, name } = req.body;
   if (!jid || !name) {
     return res.status(400).json({ error: 'jid and name are required' });
   }
 
-  const updated = db.updateContactName(jid, name);
+  let updated;
+  try {
+    updated = await db.updateContactName(jid, name);
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
   io.emit('chats_updated', db.getAllChatsSorted());
 
   res.json({ success: true, chat: updated });
@@ -274,9 +279,7 @@ app.post('/api/crm/contact/clear', (req, res) => {
 
 // 11b. Clear All WhatsApp CRM Data (Fresh Start)
 app.post('/api/crm/clear-all-whatsapp-data', (req, res) => {
-  db.clearAllWhatsAppCrmData();
-  io.emit('chats_updated', []);
-  res.json({ success: true, message: 'All WhatsApp CRM database data cleared cleanly' });
+  res.status(409).json({ success: false, message: 'Use the offline backed-up reset-whatsapp-only.js command. Shared-table clearing is disabled.' });
 });
 
 // 12. Mark a chat as read

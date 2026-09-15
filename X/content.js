@@ -727,15 +727,26 @@ function fetchCrmMetadata(searchKey, displayName, domAvatar, generation) {
           console.warn('[AI Vastra] Rejected metadata for a different/unverified contact.');
           return;
         }
+        const backendHasCrmData = Boolean(chat.manuallySaved ||
+          (chat.leadStatus && chat.leadStatus !== 'UNASSIGNED') || chat.callStatus ||
+          chat.followUpDate || chat.notes || chat.notesList?.length);
+        // After a deliberate server reset, WhatsApp may resynchronize a bare
+        // address-book entry. That is not a saved CRM record and must not erase
+        // the existing phone-keyed extension data the owner wants to restore.
+        if (!backendHasCrmData && localData) {
+          activeFormData = {
+            ...localData,
+            notesList: parseNotesList(localData.notes, localData.notesList),
+          };
+          renderCrmPanel(activeDisplayName || displayName, activePhoneClean, domAvatar);
+          return;
+        }
         // Backend is the authoritative source — use backend data directly,
         // fall back to local cache only if backend field is empty/unassigned.
         const backendNotes = parseNotesList(chat.notes, chat.notesList);
-        const localNotes = parseNotesList(localData?.notes, localData?.notesList);
-        // Prefer backend notes; add any local-only notes that aren't already there
+        // An existing backend record is authoritative, including deleted notes.
+        // Local cache is used only if no backend record exists.
         const mergedNotes = [...backendNotes];
-        for (const n of localNotes) {
-          if (n && !mergedNotes.includes(n)) mergedNotes.push(n);
-        }
 
         const bLead = (chat.leadStatus && chat.leadStatus !== 'UNASSIGNED') ? chat.leadStatus : (localData?.leadStatus || 'UNASSIGNED');
         const bCall = (chat.callStatus !== undefined && chat.callStatus !== null) ? chat.callStatus : (localData?.callStatus || null);
@@ -781,15 +792,7 @@ function fetchCrmMetadata(searchKey, displayName, domAvatar, generation) {
             updatedAt: chat.updatedAt || 0
           };
 
-          try {
-            fetch(`${DEFAULT_API_BASE}/api/crm/contact`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(updatePayload)
-            }).catch(() => {});
-          } catch (e) {}
-
-          safeSendMessage({ action: 'UPDATE_CRM_METADATA', jid: reliableJid, data: updatePayload }, () => {});
+          safeSendMessage({ action: 'SYNC_CONTACT_NAME', jid: reliableJid, name: displayName }, () => {});
         }
 
         // If the backend has a verified phone for this chat, bind it to activePhoneClean

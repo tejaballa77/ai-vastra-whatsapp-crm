@@ -71,6 +71,12 @@ test('CRM shows phone-JID aliases once despite stale phone columns and device su
   const db = makeStore();
   assert.equal(db.resolveJid('918471058274:12@c.us'), '918471058274@s.whatsapp.net');
 });
+test('startup does not delete saved leads or apply hardcoded contact corrections', () => {
+  const source = fs.readFileSync(path.join(__dirname, 'src/store.ts'), 'utf8');
+  const startup = source.slice(0, source.indexOf('  public saveData()'));
+  assert.equal(/DELETE FROM crm_(?:chats|contacts)/i.test(startup), false);
+  assert.equal(startup.includes('Contradictions'), false);
+});
 test('extension cache cannot use corrupted CRM names to guess another phone', () => {
   const context = { console, setTimeout: () => {}, setInterval: () => {} };
   vm.createContext(context);

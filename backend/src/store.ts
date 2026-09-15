@@ -436,42 +436,8 @@ class StorageEngine {
         this.activeUsers.add(row.username);
       }
 
-      // Purge old orphan text-JID test records and blank empty chats completely
-      const testJidsToPurge = [
-        'client new@s.whatsapp.net',
-        'sai durga digital@s.whatsapp.net',
-        'durga rao sir@s.whatsapp.net',
-        'client new',
-        'sai durga digital',
-        'durga rao sir'
-      ];
-      for (const [k, c] of Array.from(this.chats.entries())) {
-        const jidLower = (c.jid || '').toLowerCase().trim();
-        const nameLower = (c.name || '').toLowerCase().trim();
-        const phoneDigits = (c.phone || jidLower.split('@')[0]).replace(/\D/g, '');
-        const isSocial = jidLower.endsWith('@instagram') || jidLower.endsWith('@linkedin') || jidLower.endsWith('@facebook');
-
-        const notesStr = (c.notes || '').trim();
-        const hasNotesList = Boolean(c.notesList && Array.isArray(c.notesList) && c.notesList.length > 0);
-        const hasLeadStatus = Boolean(c.leadStatus && c.leadStatus !== 'UNASSIGNED');
-        const hasFollowUp = Boolean(c.followUpDate && c.followUpDate.trim() !== '' && c.followUpDate !== '—');
-        const hasRealData = notesStr.length > 0 || hasNotesList || hasLeadStatus || hasFollowUp;
-
-        const isTestJid = testJidsToPurge.includes(jidLower) || testJidsToPurge.includes(nameLower) || (phoneDigits.length < 7 && !isSocial && (jidLower.includes('client new') || jidLower.includes('sai durga') || jidLower.includes('durga rao')));
-        const isEmptyRow = !isSocial && !hasRealData;
-        // Purge garbage JIDs: phone part has 1-6 digits (e.g. "1@s.whatsapp.net" or "1" created by appended digit to name)
-        const isGarbageJid = !isSocial && !jidLower.endsWith('@g.us') && phoneDigits.length > 0 && phoneDigits.length < 7;
-
-        if (isTestJid || isEmptyRow || isGarbageJid) {
-          this.chats.delete(k);
-          this.contacts.delete(k);
-          await dbManager.query(`DELETE FROM crm_chats WHERE jid = ? OR LOWER(name) = ?`, [c.jid, nameLower]).catch(() => {});
-          await dbManager.query(`DELETE FROM crm_contacts WHERE jid = ? OR LOWER(name) = ?`, [c.jid, nameLower]).catch(() => {});
-        }
-      }
-
-      await dbManager.query(`UPDATE crm_contacts SET name = '+91 92913 03040' WHERE (phone = '919291303040' OR jid LIKE '%9291303040%') AND name = 'Contradictions'`).catch(() => {});
-      await dbManager.query(`UPDATE crm_chats SET name = '+91 92913 03040' WHERE (phone = '919291303040' OR jid LIKE '%9291303040%') AND name = 'Contradictions'`).catch(() => {});
+      // Loading must never purge CRM records or rewrite contact names.
+      // Deletion belongs to explicit user clear/reset operations only.
 
       console.log(`[StorageEngine] Loaded ${this.chats.size} chats, ${this.contacts.size} contacts, and ${this.coldCalls.size} cold calls from SQL Database.`);
     } catch (err: any) {

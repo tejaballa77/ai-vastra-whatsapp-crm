@@ -4,10 +4,7 @@ const DEFAULT_API_URL = 'https://crm.nicedigitalsgroup.com';
 async function safeFetchJson(url, options = {}) {
   try {
     const res = await fetch(url, options);
-    if (!res.ok) {
-      console.warn('[AI Vastra CRM request failed]', res.status, new URL(url).pathname);
-      return null;
-    }
+    if (!res.ok) return null;
     const text = await res.text();
     try {
       return JSON.parse(text);
@@ -21,13 +18,6 @@ async function safeFetchJson(url, options = {}) {
 
 // Listen for messages from content script injected on web.whatsapp.com
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-  if (request.action === 'RESOLVE_WHATSAPP_LID') {
-    getApiUrl().then(async baseUrl => {
-      const result = await safeFetchJson(`${baseUrl}/api/contacts/resolve-lid?lid=${encodeURIComponent(request.lid || '')}`);
-      sendResponse(result || { success: false });
-    });
-    return true;
-  }
   if (request.action === 'SYNC_CONTACT_NAME') {
     getApiUrl().then(async (baseUrl) => {
       const data = await safeFetchJson(`${baseUrl}/api/contacts/name`, {
@@ -41,7 +31,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === 'FETCH_ALL_CRM_CHATS') {
     getApiUrl().then(async (baseUrl) => {
       const chats = await safeFetchJson(`${baseUrl}/api/chats`);
-      sendResponse({ success: Array.isArray(chats), chats: Array.isArray(chats) ? chats : [] });
+      sendResponse({ success: true, chats: Array.isArray(chats) ? chats : [] });
     });
     return true;
   }
@@ -50,7 +40,6 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     getApiUrl().then(async (baseUrl) => {
       const chats = await safeFetchJson(`${baseUrl}/api/chats`);
       const allChats = Array.isArray(chats) ? chats : [];
-      if (!Array.isArray(chats)) { sendResponse({ success: false, chat: null }); return; }
       const badNames = ['.', 'contact', 'unsaved contact', 'unknown contact', 'whatsapp contact', ''];
 
       // STEP 1: Phone / JID lookup (exact match)
@@ -116,7 +105,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         });
       }
 
-      sendResponse({ success: Boolean(data?.success), data });
+      sendResponse({ success: Boolean(data), data });
     });
     return true;
   }

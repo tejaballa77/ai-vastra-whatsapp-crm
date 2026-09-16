@@ -65,61 +65,6 @@ let indexedDbContactMap = new Map();
 let contactBookRefreshPending = false;
 let lastContactBookRefresh = 0;
 let pendingPhoneSaveGeneration = null;
-const resolvedLidPhones = new Map();
-const pendingLidRequests = new Set();
-
-function extractActiveChatLid() {
-  const lids = new Set();
-  const header = document.querySelector('#main header span[title]');
-  const title = header?.getAttribute('title');
-  const selected = document.querySelector('#pane-side [aria-selected="true"]');
-  const nodes = Array.from(document.querySelectorAll('#main .message-in[data-id], #main .message-in [data-id], #main [data-id*="false_"]'));
-  if (title && selected?.querySelector('span[title]')?.getAttribute('title') === title) nodes.push(selected);
-  for (const node of nodes) {
-    const value = node.getAttribute('data-id') || node.getAttribute('data-item-id') || '';
-    if (/^true_/i.test(value) || /_true_/i.test(value)) continue;
-    const match = value.match(/(?:^|[_\s])(\d{7,20})(?::\d+)?@lid(?=$|[_\s])/);
-    if (match) lids.add(`${match[1]}@lid`);
-  }
-  return lids.size === 1 ? [...lids][0] : '';
-}
-
-function resolveActiveChatLid(generation) {
-  const lid = extractActiveChatLid();
-  const title = activeDisplayName;
-  const key = `${generation}:${lid}`;
-  if (!lid || resolvedLidPhones.has(lid) || pendingLidRequests.has(key)) return;
-  pendingLidRequests.add(key);
-  safeSendMessage({ action: 'RESOLVE_WHATSAPP_LID', lid }, response => {
-    pendingLidRequests.delete(key);
-    if (generation !== fetchRequestGeneration || title !== activeDisplayName || extractActiveChatLid() !== lid) return;
-    if (!response?.success || response.lid !== lid || !/^[1-9]\d{6,14}@s\.whatsapp\.net$/.test(response.jid || '')) return;
-    const phone = response.jid.split('@')[0];
-    resolvedLidPhones.set(lid, phone);
-    if (pendingPhoneSaveGeneration === generation) {
-      // Preserve entered draft data; the scheduled Save retry uses this phone.
-      activePhoneClean = phone;
-      activeContactKey = phone;
-    } else {
-      detectActiveContact(true);
-    }
-  });
-}
-
-function contactRecordPhone(contact) {
-  const serialized = value => typeof value === 'object' && value
-    ? String(value._serialized || (value.user ? value.user + (value.server ? '@' + value.server : '') : '')) : String(value || '');
-  for (const value of [contact.phoneNumber, contact.pnJid]) {
-    const raw = serialized(value);
-    if (/@lid\b/i.test(raw)) continue;
-    const phone = raw.split('@')[0].split(':')[0].replace(/\D/g, '');
-    if (/^[1-9]\d{6,14}$/.test(phone)) return phone;
-  }
-  const id = serialized(contact.id);
-  if (/@lid\b/i.test(id)) return '';
-  const phone = id.split('@')[0].split(':')[0].replace(/\D/g, '');
-  return /^[1-9]\d{6,14}$/.test(phone) ? phone : '';
-}
 
 async function syncContactsFromIndexedDb() {
   if (contactBookRefreshPending || Date.now() - lastContactBookRefresh < 500) return;
@@ -152,7 +97,19 @@ async function syncContactsFromIndexedDb() {
           const refreshedContacts = new Map();
           for (const c of list) {
             if (!c) continue;
-            const phoneNum = contactRecordPhone(c);
+            const rawId = typeof c.id === 'object' ? String(c.id?._serialized || c.id?.user || '') : String(c.id || '');
+            const cleanId = rawId.split('@')[0].replace(/\D/g, '');
+
+            let phoneNum = '';
+            if (c.phoneNumber) {
+              phoneNum = String(c.phoneNumber).split('@')[0].replace(/\D/g, '');
+            } else if (c.pnJid) {
+              phoneNum = String(c.pnJid).split('@')[0].replace(/\D/g, '');
+            } else if (c.user && String(c.user).replace(/\D/g, '').length >= 7 && String(c.user).replace(/\D/g, '').length <= 15) {
+              phoneNum = String(c.user).replace(/\D/g, '');
+            } else if (!rawId.endsWith('@lid') && cleanId.length >= 7 && cleanId.length <= 15) {
+              phoneNum = cleanId;
+            }
 
             const name = (c.name || c.formattedName || c.displayName || c.verifiedName || '').trim();
             if (name && phoneNum && phoneNum.length >= 7) {
@@ -415,7 +372,7 @@ function findActiveContactInfoDrawer() {
   // Never search arbitrary regions (including our own CRM panel) for digits.
   const candidates = document.querySelectorAll('[role="dialog"], [role="region"], [aria-label="Contact info"], [aria-label="Contact Info"]');
   const header = document.querySelector('#main header span[title]');
-  const title = (header?.getAttribute('title') || header?.textContent || activeDisplayName || '').trim();
+  const title = (header?.getAttribute('title') || header?.textContent || '').trim();
   for (const panel of candidates) {
     if (panel.id?.startsWith('aivastra') || panel.closest?.('[id^="aivastra"]')) continue;
     const label = panel.getAttribute?.('aria-label') || '';
@@ -424,44 +381,10 @@ function findActiveContactInfoDrawer() {
     const matchesTitle = title && Array.from(panel.querySelectorAll('span[title], span[dir="auto"]')).some(node => (node.getAttribute('title') || node.textContent || '').trim() === title);
     if (matchesTitle) return panel;
   }
-  // Business profiles may use plain div/span labels, without dialog/region
-  // roles. Find a bounded info pane that contains the active contact title,
-  // never an ancestor containing the conversation or sidebar.
-  if (title) for (const marker of document.querySelectorAll('header span, header div, h1, h2, [role="heading"], span, div')) {
-    if (marker.children?.length || !/^contact info$/i.test((marker.textContent || '').trim()) || marker.closest?.('[id^="aivastra"]')) continue;
-    let panel = marker.parentElement;
-    for (let depth = 0; panel && depth < 8; depth++, panel = panel.parentElement) {
-      if (panel === document.body || panel.id === 'app' || panel.id === 'main' || panel.querySelector?.('#main header, #pane-side, #aivastra-crm-panel')) break;
-      const matchesTitle = Array.from(panel.querySelectorAll('span, h1, h2, [role="heading"], div')).some(node => !node.children?.length && (node.getAttribute('title') || node.textContent || '').trim() === title);
-      if (matchesTitle) return panel;
-    }
-  }
   return null;
 }
 
-function extractContactInfoPhone(drawer) {
-  const phones = new Set();
-  for (const link of drawer.querySelectorAll('a[href^="tel:"]')) {
-    const raw = (link.getAttribute('href') || '').slice(4).split(/[;?]/)[0];
-    const digits = raw.replace(/\D/g, '');
-    if (/^[1-9]\d{6,14}$/.test(digits)) phones.add(digits);
-  }
-  for (const node of drawer.querySelectorAll('span, div, p, a')) {
-    if (node.closest?.('[id^="aivastra"]')) continue;
-    const text = (node.textContent || '').trim();
-    // Requiring an international '+' avoids treating a numeric contact name,
-    // business hours, address or a note as a phone number.
-    if (/^\+\d[\d\s\u00a0\u202f().-]*\d$/.test(text)) {
-      const digits = text.replace(/\D/g, '');
-      if (/^[1-9]\d{6,14}$/.test(digits)) phones.add(digits);
-    }
-  }
-  return phones.size === 1 ? [...phones][0] : '';
-}
-
 function extractPhoneNumberFromDom() {
-  const resolvedLidPhone = resolvedLidPhones.get(extractActiveChatLid());
-  if (resolvedLidPhone) return resolvedLidPhone;
   function phoneFromDataId(dataId) {
     if (!dataId || typeof dataId !== 'string') return '';
     // Skip outgoing messages (true_) — they contain the logged-in user's own phone number!
@@ -593,8 +516,24 @@ function extractPhoneNumberFromDom() {
   try {
     const drawer = findActiveContactInfoDrawer();
     if (drawer) {
-      const drawerPhone = extractContactInfoPhone(drawer);
-      if (drawerPhone) return drawerPhone;
+      const imgs = drawer.querySelectorAll('img');
+      for (const img of imgs) {
+        if (img.src) {
+          const match = img.src.match(/[?&;]u(?:ser)?(?:%3D|=)(\d{7,15})/i) || img.src.match(/u=(\d{7,15})/);
+          if (match && match[1]) return match[1];
+        }
+      }
+      const textNodes = drawer.querySelectorAll('span, div, p, a');
+      for (const node of textNodes) {
+        if (node.children.length > 0) continue;
+        const txt = (node.textContent || '').trim();
+        if (/^\+?\d[\d\s\-().]{5,}\d$/.test(txt)) {
+          const digits = txt.replace(/\D/g, '');
+          if (digits.length >= 7 && digits.length <= 15) {
+            return digits;
+          }
+        }
+      }
     }
   } catch (e) {}
 
@@ -657,9 +596,6 @@ function detectActiveContact(force = false) {
     }
 
     if (!targetTitle) return;
-    // Resolving the phone during a pending save must not reset the entered
-    // form or invalidate that save. A different title still triggers isolation.
-    if (pendingPhoneSaveGeneration === fetchRequestGeneration && targetTitle === activeDisplayName) return;
 
     let domAvatar = '';
     const headerImgs = Array.from(mainHeader.querySelectorAll('div[role="button"] img, header img'));
@@ -719,13 +655,11 @@ function detectActiveContact(force = false) {
       // Schedule phone-extraction retries AFTER generation is bumped,
       // so they use the CORRECT generation to check against.
       if (cleanDigits.length < 7) {
-        resolveActiveChatLid(fetchRequestGeneration);
         syncContactsFromIndexedDb();
         const snapGen = fetchRequestGeneration;
         [200, 600, 1200, 2000, 3000, 5000, 8000, 12000].forEach((delay) => {
           setTimeout(() => {
             if (snapGen !== fetchRequestGeneration) return;
-            if (!activePhoneClean) resolveActiveChatLid(snapGen);
             if (!activePhoneClean) syncContactsFromIndexedDb();
             const retryPhone = extractPhoneNumberFromDom() || findPhoneInCacheByName(targetTitle);
             if (retryPhone && retryPhone.length >= 7 && activePhoneClean !== retryPhone) {
@@ -772,8 +706,7 @@ function fetchCrmMetadata(searchKey, displayName, domAvatar, generation) {
   const isPhoneHeader = displayName && (displayName.trim().startsWith('+') || (activePhoneClean && displayName.replace(/\D/g, '') === activePhoneClean));
   const isValidName = displayName && !badNames.includes(displayName.toLowerCase().trim()) && !isPhoneHeader;
 
-  // Never turn digits embedded in a saved name into a metadata lookup key.
-  const rawClean = (activePhoneClean || '').replace(/\D/g, '');
+  const rawClean = (activePhoneClean || searchKey || '').replace(/\D/g, '');
   const tenDigit = rawClean;
   // queryPhone MUST be at least 10 digits — short digit strings extracted from
   // contact names (e.g. "1" from "Prashanth 1") must NEVER be used as phone/JID.
@@ -851,9 +784,7 @@ function fetchCrmMetadata(searchKey, displayName, domAvatar, generation) {
           const p = String(value || '').split('@')[0].split(':')[0].replace(/\D/g, '');
           return p;
         };
-        const recordPhone = /^[1-9]\d{6,14}(?::\d+)?@(?:s\.whatsapp\.net|c\.us)$/.test(chat.jid || '')
-          ? canonical(chat.jid) : canonical(chat.phone);
-        if (!queryPhone || recordPhone !== canonical(queryPhone)) {
+        if (!queryPhone || canonical(chat.phone || chat.jid) !== canonical(queryPhone)) {
           console.warn('[AI Vastra] Rejected metadata for a different/unverified contact.');
           return;
         }
@@ -900,7 +831,7 @@ function fetchCrmMetadata(searchKey, displayName, domAvatar, generation) {
         const effectiveDisplayName = titleToSync || chat.name;
 
         // Auto-sync contact name to backend whenever WhatsApp Web display name changes or is saved
-        const chatPhoneDigits = recordPhone;
+        const chatPhoneDigits = (chat.phone || (chat.jid || '').split('@')[0]).replace(/\D/g, '');
         const reliablePhone = (validPhoneClean && validPhoneClean.length >= 7) ? validPhoneClean
           : (queryPhone && queryPhone.length >= 7) ? queryPhone
           : (chatPhoneDigits.length >= 7 ? chatPhoneDigits : '');
@@ -1014,12 +945,11 @@ function saveCrmMetadata(forcedAiDisabled, retryCount = 0, expectedGeneration = 
 
   const tenDigit = cleanDigits;
 
-  const validPhone = /^[1-9]\d{6,14}$/.test(cleanDigits) ? cleanDigits : '';
+  const validPhone = (cleanDigits && cleanDigits.length >= 7) ? cleanDigits : (activePhoneClean && activePhoneClean.length >= 7 ? activePhoneClean : '');
 
   // Guard: if phone is still missing, attempt emergency extraction from Contact Info drawer
   if (!validPhone && retryCount < 6) {
     pendingPhoneSaveGeneration = saveGeneration;
-    resolveActiveChatLid(saveGeneration);
     syncContactsFromIndexedDb();
     const titleEl = document.querySelector('#main header span[title]');
     const headerEl = titleEl?.closest('[role="button"]') || titleEl;
@@ -1042,14 +972,6 @@ function saveCrmMetadata(forcedAiDisabled, retryCount = 0, expectedGeneration = 
   } else {
     pendingPhoneSaveGeneration = null;
     console.warn('[AI Vastra] Cannot determine valid phone JID for save, aborting save to prevent garbage entry.');
-    safeStorageSet({ crm_last_phone_resolution_failure: {
-      version: '1.2.7', time: new Date().toISOString(),
-      contactInfoDetected: Boolean(findActiveContactInfoDrawer()),
-      addressBookMatches: indexedDbContactMap.size,
-      indexedDbAvailable: typeof indexedDB !== 'undefined',
-      activeLidDetected: Boolean(extractActiveChatLid()),
-      visibleIncomingIds: document.querySelectorAll('#main [data-id*="false_"]').length
-    } });
     alert('Not saved to CRM: WhatsApp has not exposed this contact’s phone number. Open WhatsApp Contact info so its phone number is visible, then click Save again. Your form data has not been cleared.');
     return;
   }
@@ -1109,7 +1031,6 @@ function saveCrmMetadata(forcedAiDisabled, retryCount = 0, expectedGeneration = 
     if (saveGeneration !== fetchRequestGeneration) return;
     console.log('[AI Vastra Extension] Background save response:', response);
     if (response?.success) {
-      renderCrmPanel(activeDisplayName, activePhoneClean, activeAvatarUrl, true);
       fetchRequestGeneration++;
       fetchCrmMetadata(targetJid, effectiveName, activeAvatarUrl, fetchRequestGeneration);
     } else {
@@ -1429,8 +1350,7 @@ function showExtensionConfirmModal(title, message, onConfirm) {
       document.getElementById('aivastra-note-text').value = '';
     }
     saveCrmMetadata();
-    // Success is displayed only after the server acknowledges the save.
-    // Keep the existing form in place while identity resolution is pending.
+    renderCrmPanel(displayName, cleanPhone, avatarUrl, true);
   };
 
   // Dustbin delete buttons — one per saved note

@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "AI Vastra Social CRM (Instagram, LinkedIn, Facebook)",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Unified CRM Assistant for Instagram DMs, LinkedIn Messaging, and Facebook Messenger.",
   "permissions": [
     "activeTab",

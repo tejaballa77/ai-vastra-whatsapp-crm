@@ -28,6 +28,23 @@ console.log('[AI Vastra Social CRM Extension] Active on social media!');
     } catch (e) {}
   }
 
+  function safeStorageRemove(keys) {
+    try {
+      if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+        chrome.storage.local.remove(keys);
+      }
+    } catch (e) {}
+  }
+
+  function escapeHtml(value) {
+    return String(value ?? '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
   function safeSendMessage(msg, callback) {
     try {
       if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.sendMessage) {
@@ -471,7 +488,7 @@ console.log('[AI Vastra Social CRM Extension] Active on social media!');
     ensureHeaderButton();
     const platform = detectPlatform();
     const threadId = extractSocialThreadId(platform);
-    const isNewThread = Boolean(threadId && activeThreadId !== threadId);
+    const isNewThread = platform !== currentPlatform || threadId !== activeThreadId;
 
     if (isNewThread || force) {
       if (isNewThread) {
@@ -647,8 +664,8 @@ console.log('[AI Vastra Social CRM Extension] Active on social media!');
         <div style="width:44px;height:44px;border-radius:50%;background:#ffeef0;
           color:#e53935;display:flex;align-items:center;justify-content:center;
           margin:0 auto 12px;font-size:20px;font-weight:bold;">🧹</div>
-        <h3 style="font-size:16px;font-weight:800;color:#111b21;margin:0 0 6px;">${title}</h3>
-        <p style="font-size:12px;color:#667781;line-height:1.5;margin:0 0 18px;">${message}</p>
+        <h3 style="font-size:16px;font-weight:800;color:#111b21;margin:0 0 6px;">${escapeHtml(title)}</h3>
+        <p style="font-size:12px;color:#667781;line-height:1.5;margin:0 0 18px;">${escapeHtml(message)}</p>
         <div style="display:flex;gap:10px;justify-content:center;">
           <button id="aivastra-modal-cancel-btn" style="flex:1;padding:9px 12px;background:#f0f2f5;
             color:#111b21;border:1px solid #e9edef;border-radius:10px;font-size:12px;
@@ -694,18 +711,18 @@ console.log('[AI Vastra Social CRM Extension] Active on social media!');
           <input type="text" id="aivastra-contact-name-edit" class="aivastra-text-input"
             style="font-size:12px;font-weight:600;text-align:center;background:#ffffff;color:#6b7280;"
             placeholder="Account Name"
-            value="${activeDisplayName || ''}" />
+            value="${escapeHtml(activeDisplayName || '')}" />
           <input type="text" id="aivastra-contact-handle-edit" class="aivastra-text-input"
             style="font-size:11px;font-weight:600;text-align:center;background:#ffffff;color:#6b7280;"
             placeholder="Username (e.g. @username)"
-            value="${activeContactHandle ? '@' + activeContactHandle.replace(/^@/, '') : ''}" />
+            value="${escapeHtml(activeContactHandle ? '@' + activeContactHandle.replace(/^@/, '') : '')}" />
         </div>
       `;
     } else {
       cardContentHtml = `
         <div class="aivastra-avatar-circle">${initial}</div>
-        <div class="aivastra-contact-name">${activeDisplayName}</div>
-        <div class="aivastra-contact-handle">@${activeContactHandle}</div>
+        <div class="aivastra-contact-name">${escapeHtml(activeDisplayName)}</div>
+        <div class="aivastra-contact-handle">@${escapeHtml(activeContactHandle)}</div>
         <button id="aivastra-reedit-btn" style="background:none;border:none;color:#00a884;font-size:11px;
           font-weight:700;cursor:pointer;margin-top:4px;text-decoration:underline;">✏️ Re-drop / Edit Profile</button>
       `;
@@ -758,7 +775,7 @@ console.log('[AI Vastra Social CRM Extension] Active on social media!');
           <div style="display:flex;gap:8px;">
             <input type="text" id="aivastra-bdm-user" class="aivastra-text-input"
               style="flex:1;color:#6b7280;font-weight:600;" placeholder="BDM Name"
-              value="${activeFormData.assignedUser || ''}" />
+              value="${escapeHtml(activeFormData.assignedUser || '')}" />
             <select id="aivastra-language" class="aivastra-select-input" style="flex:1;color:#6b7280;font-weight:600;">
               <option value="">-- Language --</option>
               <option value="Telugu" ${activeFormData.clientLanguage === 'Telugu' ? 'selected' : ''}>Telugu</option>
@@ -775,7 +792,7 @@ console.log('[AI Vastra Social CRM Extension] Active on social media!');
           <div id="aivastra-notes-list" style="margin-top:8px;max-height:140px;overflow-y:auto;">
             ${(activeFormData.notesList || []).map((n, i) => `
               <div class="aivastra-note-item">
-                <span style="flex:1;word-break:break-word;font-size:12px;line-height:1.4;color:#111;">${i + 1}. ${n}</span>
+                <span style="flex:1;word-break:break-word;font-size:12px;line-height:1.4;color:#111;">${i + 1}. ${escapeHtml(n)}</span>
                 <button data-note-index="${i}" class="aivastra-note-delete" title="Delete note">🗑️</button>
               </div>
             `).join('')}
@@ -824,6 +841,8 @@ console.log('[AI Vastra Social CRM Extension] Active on social media!');
     if (clearBtn) {
       clearBtn.onclick = () => {
         showConfirmModal('Clear CRM Data', `Are you sure you want to clear CRM info for ${activeDisplayName || activeContactHandle || 'this contact'}?`, () => {
+          const clearedThreadId = activeThreadId;
+          const clearedHandle = activeContactHandle;
           const canonicalJid = `${currentPlatform === 'facebook' ? activeThreadId : (activeContactHandle || activeThreadId)}@${currentPlatform}`;
           const clearPayload = {
             jid: canonicalJid,
@@ -844,19 +863,10 @@ console.log('[AI Vastra Social CRM Extension] Active on social media!');
           activeDisplayName = '';
           isEditingProfile = false;
 
-          const saveObj = {};
-          if (activeThreadId) saveObj[`crm_social_thread_${currentPlatform}_${activeThreadId}`] = null;
-          if (activeContactHandle) saveObj[`crm_social_${activeContactHandle}@${currentPlatform}`] = null;
-          safeStorageSet(saveObj);
-
-          // Direct fetch + background message to clear CRM backend database automatically
-          try {
-            fetch(`${DEFAULT_API_BASE}/api/crm/contact/clear`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(clearPayload)
-            }).catch(() => {});
-          } catch (e) {}
+          const keysToRemove = [];
+          if (clearedThreadId) keysToRemove.push(`crm_social_thread_${currentPlatform}_${clearedThreadId}`);
+          if (clearedHandle) keysToRemove.push(`crm_social_${clearedHandle}@${currentPlatform}`);
+          if (keysToRemove.length) safeStorageRemove(keysToRemove);
 
           safeSendMessage({ action: 'CLEAR_CRM_CONTACT', payload: clearPayload }, () => {});
 

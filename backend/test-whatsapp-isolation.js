@@ -189,6 +189,24 @@ test('selected sidebar extraction cannot climb into another contact in its paren
   vm.runInContext(fs.readFileSync(path.join(root, 'X/content.js'), 'utf8'), context);
   assert.equal(vm.runInContext('extractPhoneNumberFromDom()', context), '');
 });
+test('opaque business LIDs require an explicit verified phone mapping', () => {
+  const db = makeStore();
+  const lid = '123456789012345@lid';
+  assert.equal(db.resolveJid(lid), lid);
+  assert.throws(() => db.updateCrmMetadata(lid, { name: 'Business' }), /verified WhatsApp/);
+  db.lidToJidMap.set(lid, '923128304098@s.whatsapp.net');
+  assert.equal(db.resolveJid(lid), '923128304098@s.whatsapp.net');
+});
+test('business LID extraction skips outgoing messages and refuses ambiguous peers', () => {
+  let ids = ['true_111111111111111@lid_message', 'false_222222222222222@lid_message'];
+  const document = { querySelector: () => null, querySelectorAll: () => ids.map(id => ({ getAttribute: () => id })) };
+  const context = { document, console, setTimeout: () => {}, setInterval: () => {} };
+  vm.createContext(context);
+  vm.runInContext(fs.readFileSync(path.join(root, 'X/content.js'), 'utf8'), context);
+  assert.equal(vm.runInContext('extractActiveChatLid()', context), '222222222222222@lid');
+  ids.push('false_333333333333333@lid_message');
+  assert.equal(vm.runInContext('extractActiveChatLid()', context), '');
+});
 console.log(`${passed} isolation regression tests passed. No real database was accessed.`);
 async function testRenameRefresh() {
   const openRequest = {};

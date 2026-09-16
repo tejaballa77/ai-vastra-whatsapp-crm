@@ -75,6 +75,18 @@ app.get('/api/session/status', (req, res) => {
 });
 
 // 2. Initialize / Reconnect session
+// Read-only resolution: return only an existing verified LID-to-phone mapping.
+app.get('/api/contacts/resolve-lid', (req, res) => {
+  const lid = String(req.query.lid || '');
+  if (!/^\d{7,20}@lid$/.test(lid)) return res.status(400).json({ success: false, error: 'Invalid LID' });
+  const mapped = db.lidToJidMap.get(lid) || db.lidToJidMap.get(lid.split('@')[0]);
+  const jid = mapped ? db.resolveJid(mapped) : '';
+  if (!/^[1-9]\d{6,14}@s\.whatsapp\.net$/.test(jid)) {
+    return res.json({ success: false, lid, error: 'No verified phone mapping available' });
+  }
+  return res.json({ success: true, lid, jid, phone: jid.split('@')[0] });
+});
+
 app.post('/api/session/connect', async (req, res) => {
   try {
     await waEngine.initialize();

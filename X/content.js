@@ -65,6 +65,46 @@ let indexedDbContactMap = new Map();
 let contactBookRefreshPending = false;
 let lastContactBookRefresh = 0;
 let pendingPhoneSaveGeneration = null;
+const resolvedLidPhones = new Map();
+const pendingLidRequests = new Set();
+
+function extractActiveChatLid() {
+  const lids = new Set();
+  const header = document.querySelector('#main header span[title]');
+  const title = header?.getAttribute('title');
+  const selected = document.querySelector('#pane-side [aria-selected="true"]');
+  const nodes = Array.from(document.querySelectorAll('#main .message-in[data-id], #main .message-in [data-id], #main [data-id*="false_"]'));
+  if (title && selected?.querySelector('span[title]')?.getAttribute('title') === title) nodes.push(selected);
+  for (const node of nodes) {
+    const value = node.getAttribute('data-id') || node.getAttribute('data-item-id') || '';
+    if (/^true_/i.test(value) || /_true_/i.test(value)) continue;
+    const match = value.match(/(?:^|[_\s])(\d{7,20})(?::\d+)?@lid(?=$|[_\s])/);
+    if (match) lids.add(`${match[1]}@lid`);
+  }
+  return lids.size === 1 ? [...lids][0] : '';
+}
+
+function resolveActiveChatLid(generation) {
+  const lid = extractActiveChatLid();
+  const title = activeDisplayName;
+  const key = `${generation}:${lid}`;
+  if (!lid || resolvedLidPhones.has(lid) || pendingLidRequests.has(key)) return;
+  pendingLidRequests.add(key);
+  safeSendMessage({ action: 'RESOLVE_WHATSAPP_LID', lid }, response => {
+    pendingLidRequests.delete(key);
+    if (generation !== fetchRequestGeneration || title !== activeDisplayName || extractActiveChatLid() !== lid) return;
+    if (!response?.success || response.lid !== lid || !/^[1-9]\d{6,14}@s\.whatsapp\.net$/.test(response.jid || '')) return;
+    const phone = response.jid.split('@')[0];
+    resolvedLidPhones.set(lid, phone);
+    if (pendingPhoneSaveGeneration === generation) {
+      // Preserve entered draft data; the scheduled Save retry uses this phone.
+      activePhoneClean = phone;
+      activeContactKey = phone;
+    } else {
+      detectActiveContact(true);
+    }
+  });
+}
 
 function contactRecordPhone(contact) {
   const serialized = value => typeof value === 'object' && value
@@ -420,6 +460,8 @@ function extractContactInfoPhone(drawer) {
 }
 
 function extractPhoneNumberFromDom() {
+  const resolvedLidPhone = resolvedLidPhones.get(extractActiveChatLid());
+  if (resolvedLidPhone) return resolvedLidPhone;
   function phoneFromDataId(dataId) {
     if (!dataId || typeof dataId !== 'string') return '';
     // Skip outgoing messages (true_) — they contain the logged-in user's own phone number!
@@ -677,11 +719,13 @@ function detectActiveContact(force = false) {
       // Schedule phone-extraction retries AFTER generation is bumped,
       // so they use the CORRECT generation to check against.
       if (cleanDigits.length < 7) {
+        resolveActiveChatLid(fetchRequestGeneration);
         syncContactsFromIndexedDb();
         const snapGen = fetchRequestGeneration;
         [200, 600, 1200, 2000, 3000, 5000, 8000, 12000].forEach((delay) => {
           setTimeout(() => {
             if (snapGen !== fetchRequestGeneration) return;
+            if (!activePhoneClean) resolveActiveChatLid(snapGen);
             if (!activePhoneClean) syncContactsFromIndexedDb();
             const retryPhone = extractPhoneNumberFromDom() || findPhoneInCacheByName(targetTitle);
             if (retryPhone && retryPhone.length >= 7 && activePhoneClean !== retryPhone) {
@@ -807,7 +851,9 @@ function fetchCrmMetadata(searchKey, displayName, domAvatar, generation) {
           const p = String(value || '').split('@')[0].split(':')[0].replace(/\D/g, '');
           return p;
         };
-        if (!queryPhone || canonical(chat.phone || chat.jid) !== canonical(queryPhone)) {
+        const recordPhone = /^[1-9]\d{6,14}(?::\d+)?@(?:s\.whatsapp\.net|c\.us)$/.test(chat.jid || '')
+          ? canonical(chat.jid) : canonical(chat.phone);
+        if (!queryPhone || recordPhone !== canonical(queryPhone)) {
           console.warn('[AI Vastra] Rejected metadata for a different/unverified contact.');
           return;
         }
@@ -854,7 +900,7 @@ function fetchCrmMetadata(searchKey, displayName, domAvatar, generation) {
         const effectiveDisplayName = titleToSync || chat.name;
 
         // Auto-sync contact name to backend whenever WhatsApp Web display name changes or is saved
-        const chatPhoneDigits = (chat.phone || (chat.jid || '').split('@')[0]).replace(/\D/g, '');
+        const chatPhoneDigits = recordPhone;
         const reliablePhone = (validPhoneClean && validPhoneClean.length >= 7) ? validPhoneClean
           : (queryPhone && queryPhone.length >= 7) ? queryPhone
           : (chatPhoneDigits.length >= 7 ? chatPhoneDigits : '');
@@ -973,6 +1019,7 @@ function saveCrmMetadata(forcedAiDisabled, retryCount = 0, expectedGeneration = 
   // Guard: if phone is still missing, attempt emergency extraction from Contact Info drawer
   if (!validPhone && retryCount < 6) {
     pendingPhoneSaveGeneration = saveGeneration;
+    resolveActiveChatLid(saveGeneration);
     syncContactsFromIndexedDb();
     const titleEl = document.querySelector('#main header span[title]');
     const headerEl = titleEl?.closest('[role="button"]') || titleEl;
@@ -996,10 +1043,11 @@ function saveCrmMetadata(forcedAiDisabled, retryCount = 0, expectedGeneration = 
     pendingPhoneSaveGeneration = null;
     console.warn('[AI Vastra] Cannot determine valid phone JID for save, aborting save to prevent garbage entry.');
     safeStorageSet({ crm_last_phone_resolution_failure: {
-      version: '1.2.6', time: new Date().toISOString(),
+      version: '1.2.7', time: new Date().toISOString(),
       contactInfoDetected: Boolean(findActiveContactInfoDrawer()),
       addressBookMatches: indexedDbContactMap.size,
       indexedDbAvailable: typeof indexedDB !== 'undefined',
+      activeLidDetected: Boolean(extractActiveChatLid()),
       visibleIncomingIds: document.querySelectorAll('#main [data-id*="false_"]').length
     } });
     alert('Not saved to CRM: WhatsApp has not exposed this contact’s phone number. Open WhatsApp Contact info so its phone number is visible, then click Save again. Your form data has not been cleared.');

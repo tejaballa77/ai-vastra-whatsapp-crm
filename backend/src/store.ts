@@ -614,6 +614,8 @@ class StorageEngine {
     const clean = jid.split('@')[0];
     const mapped = this.lidToJidMap.get(jid) || this.lidToJidMap.get(clean);
     const target = mapped || jid;
+    // LID digits are opaque identifiers, never phone numbers.
+    if (target.endsWith('@lid')) return target;
     // Device suffixes are not phone digits (e.g. 919876543210:12).
     const targetClean = target.split('@')[0].split(':')[0];
     if (target.endsWith('@g.us')) return `${targetClean}@g.us`;

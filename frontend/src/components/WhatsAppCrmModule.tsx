@@ -25,7 +25,9 @@ import {
   LogOut,
   User as UserIcon,
   Bot,
-  QrCode
+  QrCode,
+  Maximize2,
+  Minimize2
 } from 'lucide-react';
 import { useSocket } from '../context/SocketContext';
 import { Chat } from '../types/chat';
@@ -35,9 +37,25 @@ import { AdminProfileModal } from './AdminProfileModal';
 import { CustomModal } from './CustomModal';
 import { QrCodeModal } from './QrCodeModal';
 
+const formatPhoneForExport = (value: string): string => {
+  const digits = String(value || '').split('@')[0].split(':')[0].replace(/\D/g, '');
+  if (!digits) return String(value || '');
+  if (digits.length === 12 && digits.startsWith('91')) {
+    return `+91 ${digits.slice(2, 7)} ${digits.slice(7)}`;
+  }
+  return `+${digits}`;
+};
+
+const csvCell = (value: unknown): string => `"${String(value ?? '').replace(/"/g, '""')}"`;
+
+// Excel evaluates this controlled digits-only formula as text, preserving the
+// complete phone instead of converting a long number to scientific notation.
+const excelSafePhoneCell = (value: string): string => `="${formatPhoneForExport(value)}"`;
+
 export function WhatsAppCrmModule() {
   const [showAdminModal, setShowAdminModal] = useState<boolean>(false);
   const [showLogoutModal, setShowLogoutModal] = useState<boolean>(false);
+  const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
   const [adminDisplayName, setAdminDisplayName] = useState<string>(() => {
     if (typeof window !== 'undefined') {
       return localStorage.getItem('crm_user_name') || localStorage.getItem('crm_admin_display_name') || 'Executive User';
@@ -71,6 +89,25 @@ export function WhatsAppCrmModule() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username: user }),
       }).catch(() => {});
+    }
+  };
+
+  useEffect(() => {
+    const syncFullscreenState = () => setIsFullscreen(Boolean(document.fullscreenElement));
+    document.addEventListener('fullscreenchange', syncFullscreenState);
+    syncFullscreenState();
+    return () => document.removeEventListener('fullscreenchange', syncFullscreenState);
+  }, []);
+
+  const toggleFullscreen = async () => {
+    try {
+      if (document.fullscreenElement) {
+        await document.exitFullscreen();
+      } else {
+        await document.documentElement.requestFullscreen();
+      }
+    } catch (error) {
+      console.error('Unable to change fullscreen mode:', error);
     }
   };
 
@@ -449,7 +486,7 @@ export function WhatsAppCrmModule() {
   const handleExportCsv = () => {
     const exportData = navChats.map((c) => ({
       Name: c.name || 'Unsaved Contact',
-      Phone: c.phone || c.jid.split('@')[0],
+      Phone: excelSafePhoneCell(c.phone || c.jid.split('@')[0]),
       LeadStatus: c.leadStatus === 'INTERESTED' ? 'Interested' : c.leadStatus === 'WARM_INTERESTED' ? 'Warm' : c.leadStatus === 'NOT_INTERESTED' ? 'Not Interested' : 'Unassigned',
       CallStatus: c.callStatus || 'No Selection',
       FollowUpDate: c.followUpDate || 'None',
@@ -465,11 +502,11 @@ export function WhatsAppCrmModule() {
     const csvRows = [
       headers.join(','),
       ...exportData.map((row) =>
-        headers.map((field) => `"${(row as any)[field] || ''}"`).join(',')
+        headers.map((field) => csvCell((row as any)[field] || '')).join(',')
       ),
     ];
 
-    const blob = new Blob([csvRows.join('\n')], { type: 'text/csv' });
+    const blob = new Blob([`\uFEFF${csvRows.join('\r\n')}`], { type: 'text/csv;charset=utf-8' });
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -676,13 +713,24 @@ export function WhatsAppCrmModule() {
 
           <div className="flex items-center gap-3">
             {activeNav === 'whatsapp' && (
-              <button
-                onClick={() => handleOpenSpecificChat()}
-                className="px-4 py-2 bg-black hover:bg-zinc-800 text-white font-bold text-sm rounded-xl transition-all flex items-center gap-2 shadow-sm cursor-pointer"
-              >
-                <span>Launch WhatsApp Web</span>
-                <ExternalLink className="w-4 h-4" />
-              </button>
+              <>
+                <button
+                  onClick={() => handleOpenSpecificChat()}
+                  className="px-4 py-2 bg-black hover:bg-zinc-800 text-white font-bold text-sm rounded-xl transition-all flex items-center gap-2 shadow-sm cursor-pointer"
+                >
+                  <span>Launch WhatsApp Web</span>
+                  <ExternalLink className="w-4 h-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={toggleFullscreen}
+                  className="p-2 bg-zinc-100 hover:bg-zinc-200 text-black rounded-xl border border-zinc-300 transition-all shadow-sm cursor-pointer"
+                  title={isFullscreen ? 'Exit full screen' : 'Open CRM in full screen'}
+                  aria-label={isFullscreen ? 'Exit full screen' : 'Open CRM in full screen'}
+                >
+                  {isFullscreen ? <Minimize2 className="w-5 h-5" /> : <Maximize2 className="w-5 h-5" />}
+                </button>
+              </>
             )}
             {activeNav !== 'calls' && activeNav !== 'settings' && activeNav !== 'facebook' && (
               <button

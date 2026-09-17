@@ -466,8 +466,10 @@ export function WhatsAppCrmModule() {
   // Open specific WhatsApp Web chat using deep-link
   const handleOpenSpecificChat = (phoneNum?: string) => {
     if (phoneNum) {
-      const cleanDigits = phoneNum.replace(/\D/g, '');
-      if (cleanDigits.length >= 10) {
+      // Remove WhatsApp JID/device suffixes before extracting the phone. This
+      // supports international numbers without accidentally appending a device ID.
+      const cleanDigits = phoneNum.split('@')[0].split(':')[0].replace(/\D/g, '');
+      if (cleanDigits.length >= 7 && cleanDigits.length <= 15) {
         window.open(`https://web.whatsapp.com/send?phone=${cleanDigits}`, '_blank');
         return;
       }
@@ -1006,10 +1008,21 @@ export function WhatsAppCrmModule() {
                                     setSaveSuccessToast(false);
                                   }}
                                   className="px-3.5 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-extrabold text-xs rounded-xl border border-indigo-200 transition-all inline-flex items-center gap-1.5 shadow-sm active:scale-95 whitespace-nowrap"
-                                  title="Edit lead details or forward follow-up date"
+                                  title="Edit lead details"
                                 >
-                                  <span>Edit / Forward ⏩</span>
+                                  <span>Edit</span>
                                 </button>
+                                {activeNav === 'whatsapp' && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleOpenSpecificChat(chat.phone || chat.jid)}
+                                    className="px-3.5 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 font-extrabold text-xs rounded-xl border border-emerald-200 transition-all inline-flex items-center gap-1.5 shadow-sm active:scale-95 whitespace-nowrap"
+                                    title={`Open ${displayName} in WhatsApp Web`}
+                                  >
+                                    <span>Open chat</span>
+                                    <ExternalLink className="w-3.5 h-3.5" />
+                                  </button>
+                                )}
                               </div>
                             </td>
                           </tr>

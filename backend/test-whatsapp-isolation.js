@@ -166,6 +166,21 @@ test('a newly resolved phone still loads its prior name-fallback cache before mi
   vm.runInContext("renderCrmPanel = () => rendered.push([...activeFormData.notesList]); activePhoneClean = '919154334592'; activeDisplayName = 'Google Maps India'; fetchRequestGeneration = 7; fetchCrmMetadata('919154334592', 'Google Maps India', '', 7);", context);
   assert.deepEqual(Array.from(context.rendered[0]), ['preserved']);
 });
+test('temporary Contact info unmount does not downgrade the same chat from phone to name or blank its form', () => {
+  const title = { getAttribute: () => 'Madhav Blore Conqcore Solutions', textContent: 'Madhav Blore Conqcore Solutions' };
+  const header = { querySelectorAll: selector => selector.includes('span') ? [title] : [] };
+  const document = {
+    querySelector: selector => selector === '#main header' ? header : null,
+    getElementById: id => id === 'aivastra-toggle-btn' ? {} : null
+  };
+  const context = { document, console, setTimeout: () => {}, setInterval: () => {} };
+  vm.createContext(context);
+  vm.runInContext(fs.readFileSync(path.join(root, 'X/content.js'), 'utf8'), context);
+  vm.runInContext("activeContactKey = '918050439502'; activeDisplayName = 'Madhav Blore Conqcore Solutions'; activePhoneClean = '918050439502'; activeFormData.notesList = ['keep']; extractPhoneNumberFromDom = () => ''; findPhoneInCacheByName = () => ''; detectActiveContact();", context);
+  assert.equal(vm.runInContext('activeContactKey', context), '918050439502');
+  assert.equal(vm.runInContext('activePhoneClean', context), '918050439502');
+  assert.deepEqual(Array.from(vm.runInContext('activeFormData.notesList', context)), ['keep']);
+});
 test('international phone JIDs retain full country codes and do not merge across countries', () => {
   const db = makeStore();
   const numbers = ['923128304098', '14155552671', '447911123456', '971501234567', '6591234567', '3545551234', '918471058274', '8471058274'];

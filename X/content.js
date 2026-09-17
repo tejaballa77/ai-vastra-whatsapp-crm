@@ -703,6 +703,13 @@ function detectActiveContact(force = false) {
       }
     }
 
+    // WhatsApp frequently mounts/unmounts Contact info text while animating or
+    // virtualizing the drawer. Never downgrade the same visible chat from its
+    // already verified phone identity back to a name identity for one frame.
+    if (cleanDigits.length < 7 && activeDisplayName === targetTitle && activePhoneClean.length >= 7) {
+      cleanDigits = activePhoneClean;
+    }
+
     const tenDigit = cleanDigits;
     const contactKey = cleanDigits.length >= 7 ? cleanDigits : targetTitle;
 
@@ -1336,7 +1343,7 @@ function showExtensionConfirmModal(title, message, onConfirm) {
     let cleanDigits = (activePhoneClean || activeContactKey).replace(/\D/g, '');
     if (!activePhoneClean || activePhoneClean.length < 7) cleanDigits = '';
     const tenDigit = cleanDigits;
-    const fallbackJid = !cleanDigits ? makeNameFallbackJid(activeDisplayName) : '';
+    const fallbackJid = makeNameFallbackJid(activeDisplayName);
 
     const targetJid = cleanDigits.length >= 7
       ? `${cleanDigits}@s.whatsapp.net`
@@ -1390,11 +1397,11 @@ function showExtensionConfirmModal(title, message, onConfirm) {
       fetch(`${DEFAULT_API_BASE}/api/crm/contact/clear`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ jid: targetJid, phone: cleanDigits, name: activeDisplayName })
+        body: JSON.stringify({ jid: targetJid, phone: cleanDigits, name: activeDisplayName, threadId: fallbackJid && fallbackJid !== targetJid ? fallbackJid : '' })
       }).catch(() => {});
     } catch (e) {}
 
-    safeSendMessage({ action: 'CLEAR_CRM_METADATA', jid: targetJid, phone: cleanDigits }, (response) => {
+    safeSendMessage({ action: 'CLEAR_CRM_METADATA', jid: targetJid, phone: cleanDigits, fallbackJid }, (response) => {
       console.log('[AI Vastra Extension] Clear response:', response);
     });
 

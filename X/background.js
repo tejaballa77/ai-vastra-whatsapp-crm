@@ -80,11 +80,16 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       safeFetchJson(`${baseUrl}/api/chats/${encodeURIComponent(request.jid || request.phone)}`, {
         method: 'DELETE'
       });
+      if (request.fallbackJid && request.fallbackJid !== request.jid) {
+        safeFetchJson(`${baseUrl}/api/chats/${encodeURIComponent(request.fallbackJid)}`, {
+          method: 'DELETE'
+        });
+      }
 
       const data = await safeFetchJson(`${baseUrl}/api/crm/contact/clear`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ jid: request.jid, phone: request.phone })
+        body: JSON.stringify({ jid: request.jid, phone: request.phone, threadId: request.fallbackJid })
       });
       sendResponse({ success: true, data });
     });

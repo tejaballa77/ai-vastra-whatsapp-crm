@@ -132,6 +132,19 @@ export interface ArchivedClearedLead {
   clearedDate: string;
 }
 
+const normalizeNameIdentity = (name: string): string =>
+  String(name || '').normalize('NFKC').trim().replace(/\s+/g, ' ').toLowerCase();
+
+const makeNameFallbackJid = (name: string): string => {
+  const normalized = normalizeNameIdentity(name);
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < normalized.length; i++) {
+    hash ^= normalized.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193) >>> 0;
+  }
+  return `name_${hash.toString(16).padStart(8, '0')}@name.whatsapp`;
+};
+
 class StorageEngine {
   private dataFilePath: string;
   public contacts: Map<string, CRMContact> = new Map();
@@ -608,7 +621,7 @@ class StorageEngine {
 
   public resolveJid(jid: string): string {
     if (!jid) return jid;
-    if (jid.endsWith('@instagram') || jid.endsWith('@linkedin') || jid.endsWith('@facebook')) {
+    if (jid.endsWith('@instagram') || jid.endsWith('@linkedin') || jid.endsWith('@facebook') || jid.endsWith('@name.whatsapp')) {
       return jid;
     }
     const clean = jid.split('@')[0];
@@ -1130,7 +1143,8 @@ class StorageEngine {
 
     for (const c of list) {
       const resolvedKey = this.resolveJid(c.jid);
-      const rawDigits = (c.phone || resolvedKey.split('@')[0]).replace(/\D/g, '');
+      const isNameFallback = resolvedKey.endsWith('@name.whatsapp');
+      const rawDigits = isNameFallback ? '' : (c.phone || resolvedKey.split('@')[0]).replace(/\D/g, '');
       const validTen = this.canonicalPhone(rawDigits);
       const isJidEmail = (s: string) => s.endsWith('@s.whatsapp.net') || s.endsWith('@c.us') || s.endsWith('@lid') || s.includes('@g.us');
       let name = (c.name && c.name !== 'Unsaved Contact' && !isJidEmail(c.name) && !BAD_NAMES.has(c.name.toLowerCase().trim()))
@@ -1280,7 +1294,8 @@ class StorageEngine {
 
     for (const [contactJid, contact] of this.contacts.entries()) {
       const resolvedKey = this.resolveJid(contactJid);
-      const rawDigits = (contact.phone || resolvedKey.split('@')[0]).replace(/\D/g, '');
+      const isNameFallback = resolvedKey.endsWith('@name.whatsapp');
+      const rawDigits = isNameFallback ? '' : (contact.phone || resolvedKey.split('@')[0]).replace(/\D/g, '');
       const validTen = this.canonicalPhone(rawDigits);
       const cNameClean = (contact.name && !BAD_NAMES.has(contact.name.toLowerCase().trim()) && contact.name.replace(/\D/g, '').length < 10) ? contact.name.toLowerCase().trim().replace(/[^a-z0-9]/g, '') : '';
       const cAlphaName = (contact.name && !BAD_NAMES.has(contact.name.toLowerCase().trim())) ? contact.name.toLowerCase().trim().replace(/\+?\d+/g, '').replace(/[^a-z0-9]/g, '') : '';
@@ -1415,6 +1430,7 @@ class StorageEngine {
     language?: string;
   }) {
     const isSocialJid = rawJid.endsWith('@instagram') || rawJid.endsWith('@linkedin') || rawJid.endsWith('@facebook');
+    const isNameFallbackJid = rawJid.endsWith('@name.whatsapp');
     const jid = this.resolveJid(rawJid);
     const hasExplicitPhone = Boolean(metadata.phone && metadata.phone.replace(/\D/g, '').length >= 7);
     const BAD_NAMES = new Set(['.', 'contact', 'unsaved contact', 'unknown contact', 'ai vastra sales agent', 'ai sales agent', 'ai vastra', 'me', '']);
@@ -1428,7 +1444,11 @@ class StorageEngine {
 
     const jidDigits = jid.split('@')[0].split(':')[0].replace(/\D/g, '');
     const explicitDigits = (metadata.phone || '').replace(/\D/g, '');
-    if (!isSocialJid && !jid.endsWith('@g.us')) {
+    if (isNameFallbackJid) {
+      if (!incomingNameIsValid || rawJid !== makeNameFallbackJid(incomingNameClean) || hasExplicitPhone) {
+        throw new Error('Invalid saved-name fallback identity. Save rejected.');
+      }
+    } else if (!isSocialJid && !jid.endsWith('@g.us')) {
       if (!/^[1-9]\d{6,14}@(?:s\.whatsapp\.net|c\.us)$/.test(jid)) {
         throw new Error('A verified WhatsApp phone JID is required; name-based identity is not allowed.');
       }
@@ -1436,8 +1456,8 @@ class StorageEngine {
         throw new Error('Contact phone does not match its WhatsApp JID. Save rejected.');
       }
     }
-    let rawDigits = (!isSocialJid && hasExplicitPhone) ? explicitDigits : ((!isSocialJid && jidDigits.length >= 7) ? jidDigits : '');
-    let tenDigit = isSocialJid ? '' : this.canonicalPhone(rawDigits);
+    let rawDigits = (!isSocialJid && !isNameFallbackJid && hasExplicitPhone) ? explicitDigits : ((!isSocialJid && !isNameFallbackJid && jidDigits.length >= 7) ? jidDigits : '');
+    let tenDigit = (isSocialJid || isNameFallbackJid) ? '' : this.canonicalPhone(rawDigits);
 
     // GUARD: Reject garbage short-digit JIDs (e.g. "1@s.whatsapp.net" created when
     // a digit was appended to a contact name and the extension briefly used that digit as the JID.
@@ -1454,7 +1474,7 @@ class StorageEngine {
       return; // Cannot resolve to valid phone — discard
     }
 
-    const canonicalJid = isSocialJid ? rawJid : jid;
+    const canonicalJid = (isSocialJid || isNameFallbackJid) ? rawJid : jid;
 
     let platform = 'whatsapp';
     if (canonicalJid.endsWith('@instagram')) platform = 'instagram';
@@ -1481,6 +1501,9 @@ class StorageEngine {
     const matchingContactKeys: string[] = [];
     const matchingChatKeys: string[] = [];
     const oldNotesList: any[] = [];
+    // When a previously unresolved saved-name contact later exposes a real
+    // phone, migrate only its exact deterministic fallback record.
+    const exactNameFallbackKey = incomingNameIsValid ? makeNameFallbackJid(incomingNameClean) : '';
 
     for (const [ck, cObj] of this.contacts.entries()) {
       const cPhoneDigits = (cObj.phone || ck.split('@')[0]).replace(/\D/g, '');
@@ -1491,7 +1514,8 @@ class StorageEngine {
 
       const matchPhone = Boolean((tenDigit && tenDigit.length >= 7 && cTen === tenDigit) || (rawDigits && rawDigits.length >= 7 && cPhoneDigits === rawDigits));
 
-      if (ck === canonicalJid || ck === jid || matchPhone) {
+      const matchExactFallback = Boolean(!isNameFallbackJid && exactNameFallbackKey && ck === exactNameFallbackKey);
+      if (ck === canonicalJid || ck === jid || matchPhone || matchExactFallback) {
         matchingContactKeys.push(ck);
         const list: any[] = cObj.notesList || (cObj.notes ? [cObj.notes] : []);
         for (const n of list) {
@@ -1509,7 +1533,8 @@ class StorageEngine {
 
       const matchPhone = Boolean((tenDigit && tenDigit.length >= 7 && chTen === tenDigit) || (rawDigits && rawDigits.length >= 7 && chPhoneDigits === rawDigits));
 
-      if (chk === canonicalJid || chk === jid || matchPhone) {
+      const matchExactFallback = Boolean(!isNameFallbackJid && exactNameFallbackKey && chk === exactNameFallbackKey);
+      if (chk === canonicalJid || chk === jid || matchPhone || matchExactFallback) {
         matchingChatKeys.push(chk);
         const list: any[] = chObj.notesList || (chObj.notes ? [chObj.notes] : []);
         for (const n of list) {
@@ -1808,8 +1833,9 @@ class StorageEngine {
   public deleteChat(rawJid: string) {
     if (!rawJid) return;
     const jid = this.resolveJid(rawJid);
-    const cleanDigits = rawJid.replace(/\D/g, '');
-    const searchTargetClean = rawJid.toLowerCase().trim().replace(/[^a-z0-9]/g, '');
+    const isNameFallback = rawJid.endsWith('@name.whatsapp');
+    const cleanDigits = isNameFallback ? '' : rawJid.replace(/\D/g, '');
+    const searchTargetClean = isNameFallback ? '' : rawJid.toLowerCase().trim().replace(/[^a-z0-9]/g, '');
 
     let chat = this.chats.get(jid) || this.chats.get(rawJid);
     let contact = this.contacts.get(jid) || this.contacts.get(rawJid);

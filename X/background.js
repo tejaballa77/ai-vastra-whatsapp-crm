@@ -62,7 +62,14 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         if (byPhone) return sendResponse({ success: true, chat: byPhone });
       }
 
-      // A missing/mismatched phone must never fall back to a mutable display name.
+      // Controlled fallback: the content script generates this deterministic,
+      // namespaced identity from the exact saved WhatsApp contact name.
+      if (/^name_[0-9a-f]{8}@name\.whatsapp$/.test(request.fallbackJid || '')) {
+        const byFallback = allChats.find((c) => c.jid === request.fallbackJid);
+        if (byFallback) return sendResponse({ success: true, chat: byFallback });
+      }
+
+      // Never perform fuzzy or partial name matching.
       sendResponse({ success: true, chat: null });
     });
     return true;

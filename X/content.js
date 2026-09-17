@@ -66,6 +66,33 @@ let contactBookRefreshPending = false;
 let lastContactBookRefresh = 0;
 let pendingPhoneSaveGeneration = null;
 
+function normalizeNameIdentity(name) {
+  return String(name || '').normalize('NFKC').trim().replace(/\s+/g, ' ').toLowerCase();
+}
+
+function isValidNameIdentity(name) {
+  const normalized = normalizeNameIdentity(name);
+  const badNames = ['.', 'contact', 'unsaved contact', 'unknown contact', 'whatsapp contact', ''];
+  const numericLike = /^\+?[\d\s().-]+$/.test(normalized);
+  const digits = normalized.replace(/\D/g, '');
+  // Preserve legitimate short numeric saved names such as "123455". A
+  // numeric-looking value of phone length must be handled as a phone instead.
+  return normalized.length > 1 && !badNames.includes(normalized) && !(numericLike && digits.length >= 7);
+}
+
+// FNV-1a gives the extension and backend the same stable, non-phone key.
+// The original exact display name remains in the record for the CRM UI.
+function makeNameFallbackJid(name) {
+  const normalized = normalizeNameIdentity(name);
+  if (!isValidNameIdentity(normalized)) return '';
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < normalized.length; i++) {
+    hash ^= normalized.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193) >>> 0;
+  }
+  return `name_${hash.toString(16).padStart(8, '0')}@name.whatsapp`;
+}
+
 async function syncContactsFromIndexedDb() {
   if (contactBookRefreshPending || Date.now() - lastContactBookRefresh < 500) return;
   contactBookRefreshPending = true;
@@ -227,7 +254,8 @@ function syncAllCrmChats(callback) {
     safeSendMessage({ action: 'FETCH_ALL_CRM_CHATS' }, (response) => {
       if (response && response.success && Array.isArray(response.chats)) {
         for (const c of response.chats) {
-          const rawNum = (c.phone || c.jid || '').split('@')[0].replace(/\D/g, '');
+          const isNameFallback = Boolean(c.jid && c.jid.endsWith('@name.whatsapp'));
+          const rawNum = isNameFallback ? '' : (c.phone || c.jid || '').split('@')[0].replace(/\D/g, '');
           const tenDigit = rawNum;
 
           const badNames = ['.', 'contact', 'unsaved contact', 'unknown contact', 'whatsapp contact', ''];
@@ -254,8 +282,8 @@ function syncAllCrmChats(callback) {
               phone: c.phone || tenDigit
             };
             // Index ONLY by phone/JID — never by display name to prevent collision
-            if (tenDigit) chatsMetadataMap[tenDigit] = meta;
-            if (rawNum && rawNum !== tenDigit) chatsMetadataMap[rawNum] = meta;
+            if (!isNameFallback && tenDigit) chatsMetadataMap[tenDigit] = meta;
+            if (!isNameFallback && rawNum && rawNum !== tenDigit) chatsMetadataMap[rawNum] = meta;
             if (c.jid) chatsMetadataMap[c.jid] = meta;
           }
         }
@@ -366,11 +394,11 @@ function extractProfileNameFromDom() {
 }
 
 function findActiveContactInfoDrawer() {
-  const explicit = document.querySelector('[data-testid="contact-info-drawer"]');
+  const explicit = document.querySelector('[data-testid="contact-info-drawer"], [data-testid*="contact-info"]');
   if (explicit) return explicit;
   // WhatsApp versions without the old test ID expose a labelled info panel.
   // Never search arbitrary regions (including our own CRM panel) for digits.
-  const candidates = document.querySelectorAll('[role="dialog"], [role="region"], [aria-label="Contact info"], [aria-label="Contact Info"]');
+  const candidates = document.querySelectorAll('[role="dialog"], [role="region"], [aria-label="Contact info"], [aria-label="Contact Info"], [data-testid="drawer-right"]');
   const header = document.querySelector('#main header span[title]');
   const title = (header?.getAttribute('title') || header?.textContent || '').trim();
   for (const panel of candidates) {
@@ -381,7 +409,53 @@ function findActiveContactInfoDrawer() {
     const matchesTitle = title && Array.from(panel.querySelectorAll('span[title], span[dir="auto"]')).some(node => (node.getAttribute('title') || node.textContent || '').trim() === title);
     if (matchesTitle) return panel;
   }
+
+  // Current WhatsApp builds sometimes render the right drawer as unlabelled
+  // nested divs. Find the visible "Contact info" heading and walk up only
+  // within the right-hand side, never through the chat or our CRM panel.
+  const headingNodes = Array.from(document.querySelectorAll('h1, h2, [role="heading"], span, div'))
+    .filter(node => /^contact info$/i.test((node.textContent || '').trim()));
+  for (const headingNode of headingNodes) {
+    if (headingNode.closest?.('[id^="aivastra"]')) continue;
+    let panel = headingNode.parentElement;
+    for (let depth = 0; panel && depth < 8; depth++, panel = panel.parentElement) {
+      if (panel.id?.startsWith('aivastra') || panel.closest?.('[id^="aivastra"]')) break;
+      const rect = panel.getBoundingClientRect?.();
+      const isRightDrawer = !rect || rect.left >= Math.max(0, window.innerWidth * 0.35);
+      const hasActiveName = !title || Array.from(panel.querySelectorAll?.('span[title], span[dir="auto"], h1, h2') || [])
+        .some(node => (node.getAttribute?.('title') || node.textContent || '').trim() === title);
+      if (isRightDrawer && hasActiveName && panel.querySelectorAll?.('span, div, p, a').length > 3) return panel;
+    }
+  }
   return null;
+}
+
+function extractPhoneFromContactInfoDrawer() {
+  try {
+    const drawer = findActiveContactInfoDrawer();
+    if (!drawer) return '';
+
+    const candidates = [];
+    for (const node of drawer.querySelectorAll('a[href^="tel:"], [title], [aria-label], span, div, p')) {
+      if (node.closest?.('[id^="aivastra"]')) continue;
+      const values = [node.getAttribute?.('href'), node.getAttribute?.('title'), node.getAttribute?.('aria-label')];
+      if (!node.children || node.children.length === 0) values.push(node.textContent);
+      for (const raw of values) {
+        const value = String(raw || '').replace(/^tel:/i, '').trim();
+        // Require an explicit international + prefix in visible Contact info.
+        // This excludes business hours, dates, descriptions and other digits.
+        const matches = /^\+[1-9](?:[\s().-]*\d){6,14}$/.test(value) ? [value] : [];
+        for (const match of matches) {
+          const digits = match.replace(/\D/g, '');
+          if (/^[1-9]\d{6,14}$/.test(digits)) candidates.push(digits);
+        }
+      }
+    }
+    const unique = [...new Set(candidates)];
+    return unique.length === 1 ? unique[0] : '';
+  } catch (e) {
+    return '';
+  }
 }
 
 function extractPhoneNumberFromDom() {
@@ -418,7 +492,12 @@ function extractPhoneNumberFromDom() {
     return '';
   }
 
-  // Step 0: Active sidebar chat item — data-id, cached attribute, and img src
+  // Step 0: A visible number in the active Contact info drawer is the most
+  // direct verified source (top profile number or About and phone number).
+  const contactInfoPhone = extractPhoneFromContactInfoDrawer();
+  if (contactInfoPhone) return contactInfoPhone;
+
+  // Step 1: Active sidebar chat item — data-id, cached attribute, and img src
   try {
     const activeItem =
       document.querySelector('#pane-side [aria-selected="true"]') ||
@@ -706,18 +785,27 @@ function fetchCrmMetadata(searchKey, displayName, domAvatar, generation) {
   const isPhoneHeader = displayName && (displayName.trim().startsWith('+') || (activePhoneClean && displayName.replace(/\D/g, '') === activePhoneClean));
   const isValidName = displayName && !badNames.includes(displayName.toLowerCase().trim()) && !isPhoneHeader;
 
-  const rawClean = (activePhoneClean || searchKey || '').replace(/\D/g, '');
+  const searchKeyText = String(searchKey || '').trim();
+  const searchKeyDigits = searchKeyText.replace(/\D/g, '');
+  const searchKeyLooksLikePhone = /^\+?[\d\s().-]+$/.test(searchKeyText) && searchKeyDigits.length >= 7 && searchKeyDigits.length <= 15;
+  // Never interpret digits inside a name-fallback hash (or a contact name) as
+  // a phone number.
+  const rawClean = activePhoneClean || (searchKeyLooksLikePhone ? searchKeyDigits : '');
   const tenDigit = rawClean;
   // queryPhone MUST be at least 10 digits — short digit strings extracted from
   // contact names (e.g. "1" from "Prashanth 1") must NEVER be used as phone/JID.
   const queryPhone = (activePhoneClean && activePhoneClean.length >= 7) ? activePhoneClean
     : (tenDigit && tenDigit.length >= 7) ? tenDigit : '';
+  const fallbackJid = makeNameFallbackJid(displayName);
+  const fallbackStorageKey = fallbackJid ? `crm_meta_name_${fallbackJid.split('@')[0]}` : '';
 
-  // Phone-only storage keys — never use name as a key to avoid cross-contact collisions
+  // Phone keys remain primary. A deterministic, explicitly namespaced fallback
+  // is used only when WhatsApp exposes no phone/JID for a valid saved name.
   const storageKeys = [];
   if (activePhoneClean && activePhoneClean.length >= 7) storageKeys.push(`crm_meta_${activePhoneClean}`);
   if (tenDigit && tenDigit.length >= 7 && tenDigit !== activePhoneClean) storageKeys.push(`crm_meta_${tenDigit}`);
-  if (searchKey && /^\d{7,15}$/.test(searchKey.replace(/\D/g, '')) && !storageKeys.includes(`crm_meta_${searchKey}`)) storageKeys.push(`crm_meta_${searchKey}`);
+  if (searchKeyLooksLikePhone && !storageKeys.includes(`crm_meta_${searchKeyDigits}`)) storageKeys.push(`crm_meta_${searchKeyDigits}`);
+  if (fallbackStorageKey) storageKeys.push(fallbackStorageKey);
 
   safeStorageGet(storageKeys.length > 0 ? storageKeys : ['__noop__'], (s) => {
     // STALE GUARD: discard if user has already switched to a different chat
@@ -728,12 +816,14 @@ function fetchCrmMetadata(searchKey, displayName, domAvatar, generation) {
     const validTenDigit = (tenDigit && tenDigit.length >= 7) ? tenDigit : null;
     const validSearchKey = (searchKey && searchKey.trim() !== '') ? searchKey : null;
 
-    // Lookup by phone/JID ONLY — name-based keys are intentionally excluded
+    // Prefer phone/JID. Use the isolated name fallback only if no phone exists.
     let localData = (validPhoneClean ? s[`crm_meta_${validPhoneClean}`] : null) ||
       (validTenDigit ? s[`crm_meta_${validTenDigit}`] : null) ||
       (validPhoneClean ? chatsMetadataMap[validPhoneClean] : null) ||
       (validTenDigit ? chatsMetadataMap[validTenDigit] : null) ||
-      (validSearchKey && /^\d{7,15}$/.test((validSearchKey || '').replace(/\D/g, '')) ? chatsMetadataMap[validSearchKey] : null);
+      (validSearchKey && searchKeyLooksLikePhone ? chatsMetadataMap[searchKeyDigits] : null) ||
+      (fallbackStorageKey ? s[fallbackStorageKey] : null) ||
+      (fallbackJid ? chatsMetadataMap[fallbackJid] : null);
 
     // Exact phone match only — no suffix/prefix matching to prevent wrong-contact hits
     if (!localData && (validPhoneClean || validTenDigit)) {
@@ -772,7 +862,7 @@ function fetchCrmMetadata(searchKey, displayName, domAvatar, generation) {
       };
     }
 
-    safeSendMessage({ action: 'FETCH_CRM_METADATA', phoneClean: queryPhone, searchKey, displayName }, (response) => {
+    safeSendMessage({ action: 'FETCH_CRM_METADATA', phoneClean: queryPhone, searchKey, displayName, fallbackJid }, (response) => {
       // STALE GUARD: discard if user has already switched to a different chat
       if (generation !== fetchRequestGeneration) return;
 
@@ -784,7 +874,8 @@ function fetchCrmMetadata(searchKey, displayName, domAvatar, generation) {
           const p = String(value || '').split('@')[0].split(':')[0].replace(/\D/g, '');
           return p;
         };
-        if (!queryPhone || canonical(chat.phone || chat.jid) !== canonical(queryPhone)) {
+        const isExactFallback = Boolean(fallbackJid && chat.jid === fallbackJid);
+        if (!isExactFallback && (!queryPhone || canonical(chat.phone || chat.jid) !== canonical(queryPhone))) {
           console.warn('[AI Vastra] Rejected metadata for a different/unverified contact.');
           return;
         }
@@ -872,6 +963,7 @@ function fetchCrmMetadata(searchKey, displayName, domAvatar, generation) {
         if (validPhoneClean) chatsMetadataMap[validPhoneClean] = meta;
         if (validTenDigit && validTenDigit !== validPhoneClean) chatsMetadataMap[validTenDigit] = meta;
         if (queryPhone && queryPhone.length >= 7 && queryPhone !== validPhoneClean) chatsMetadataMap[queryPhone] = meta;
+        if (isExactFallback) chatsMetadataMap[fallbackJid] = meta;
       } else if (localData) {
         // No backend record found but we have a valid local cache hit — use it
         activeFormData = {
@@ -947,6 +1039,12 @@ function saveCrmMetadata(forcedAiDisabled, retryCount = 0, expectedGeneration = 
 
   const validPhone = (cleanDigits && cleanDigits.length >= 7) ? cleanDigits : (activePhoneClean && activePhoneClean.length >= 7 ? activePhoneClean : '');
 
+  // Use phone number as display name fallback if name is invalid.
+  const badNames = ['.', 'contact', 'unsaved contact', 'unknown contact', 'whatsapp contact', ''];
+  const effectiveName = (!activeDisplayName || badNames.includes(activeDisplayName.toLowerCase().trim()))
+    ? (cleanDigits || activeContactKey)
+    : activeDisplayName.trim();
+
   // Guard: if phone is still missing, attempt emergency extraction from Contact Info drawer
   if (!validPhone && retryCount < 6) {
     pendingPhoneSaveGeneration = saveGeneration;
@@ -966,26 +1064,25 @@ function saveCrmMetadata(forcedAiDisabled, retryCount = 0, expectedGeneration = 
 
   const contactKeyDigits = (activeContactKey || '').replace(/\D/g, '');
   let targetJid = '';
+  let fallbackJid = '';
   if (validPhone) {
     pendingPhoneSaveGeneration = null;
     targetJid = `${validPhone}@s.whatsapp.net`;
   } else {
     pendingPhoneSaveGeneration = null;
-    console.warn('[AI Vastra] Cannot determine valid phone JID for save, aborting save to prevent garbage entry.');
-    alert('Not saved to CRM: WhatsApp has not exposed this contact’s phone number. Open WhatsApp Contact info so its phone number is visible, then click Save again. Your form data has not been cleared.');
-    return;
+    fallbackJid = makeNameFallbackJid(effectiveName);
+    if (!fallbackJid) {
+      console.warn('[AI Vastra] Cannot determine a valid phone or saved-name identity for this contact.');
+      alert('Not saved to CRM: this contact has neither a verified phone number nor a valid saved contact name. Your form data has not been cleared.');
+      return;
+    }
+    targetJid = fallbackJid;
   }
 
   // Update activePhoneClean cache ONLY if valid 10+ digit phone belongs to this chat
   if (validPhone) activePhoneClean = validPhone;
 
-  // Use phone number as display name fallback if name is invalid (".", "Contact", empty)
-  const badNames = ['.', 'contact', 'unsaved contact', ''];
-  const effectiveName = (!activeDisplayName || badNames.includes(activeDisplayName.toLowerCase().trim()))
-    ? (cleanDigits || activeContactKey)
-    : activeDisplayName;
-
-  const metaObj = { ...activeFormData, name: effectiveName, phone: cleanDigits || activeContactKey };
+  const metaObj = { ...activeFormData, name: effectiveName, phone: validPhone || '' };
 
   // Save ONLY under phone-number keys — never under display name to prevent cross-contact collisions
   const saveKeys = {};
@@ -998,6 +1095,7 @@ function saveCrmMetadata(forcedAiDisabled, retryCount = 0, expectedGeneration = 
     const ckDigits = activeContactKey.replace(/\D/g, '');
     if (ckDigits.length >= 7) saveKeys[`crm_meta_${ckDigits}`] = metaObj;
   }
+  if (fallbackJid) saveKeys[`crm_meta_name_${fallbackJid.split('@')[0]}`] = metaObj;
 
   console.log('[AI Vastra] Saving metadata for phone:', cleanDigits || activeContactKey);
   safeStorageSet(saveKeys);
@@ -1006,11 +1104,13 @@ function saveCrmMetadata(forcedAiDisabled, retryCount = 0, expectedGeneration = 
   if (cleanDigits.length >= 7) chatsMetadataMap[cleanDigits] = metaObj;
   if (tenDigit && tenDigit !== cleanDigits) chatsMetadataMap[tenDigit] = metaObj;
   if (activePhoneClean && activePhoneClean !== cleanDigits) chatsMetadataMap[activePhoneClean] = metaObj;
+  if (fallbackJid) chatsMetadataMap[fallbackJid] = metaObj;
 
   const payload = {
     jid: targetJid,
     name: effectiveName,
-    phone: cleanDigits,
+    phone: validPhone || '',
+    identityType: fallbackJid ? 'NAME_FALLBACK' : 'PHONE',
     leadStatus: activeFormData.leadStatus,
     callStatus: activeFormData.callStatus,
     followUpDate: activeFormData.followUpDate || undefined,
@@ -1234,11 +1334,13 @@ function showExtensionConfirmModal(title, message, onConfirm) {
 
   function executeClearData() {
     let cleanDigits = (activePhoneClean || activeContactKey).replace(/\D/g, '');
+    if (!activePhoneClean || activePhoneClean.length < 7) cleanDigits = '';
     const tenDigit = cleanDigits;
+    const fallbackJid = !cleanDigits ? makeNameFallbackJid(activeDisplayName) : '';
 
     const targetJid = cleanDigits.length >= 7
       ? `${cleanDigits}@s.whatsapp.net`
-      : `${activeContactKey}@s.whatsapp.net`;
+      : fallbackJid;
 
     // 1. Reset in-memory form data
     activeFormData = {
@@ -1252,6 +1354,7 @@ function showExtensionConfirmModal(title, message, onConfirm) {
     const keysToRemove = [`crm_meta_${cleanDigits}`, `crm_meta_${tenDigit}`, `crm_meta_${activeContactKey}`];
     if (activePhoneClean) keysToRemove.push(`crm_meta_${activePhoneClean}`);
     if (activeDisplayName) keysToRemove.push(`crm_meta_${activeDisplayName}`);
+    if (fallbackJid) keysToRemove.push(`crm_meta_name_${fallbackJid.split('@')[0]}`);
     safeStorageRemove(keysToRemove);
 
     safeStorageGet(null, (stored) => {
@@ -1279,10 +1382,11 @@ function showExtensionConfirmModal(title, message, onConfirm) {
     delete chatsMetadataMap[activePhoneClean];
     delete chatsMetadataMap[activeDisplayName];
     delete chatsMetadataMap[activeContactKey];
+    if (fallbackJid) delete chatsMetadataMap[fallbackJid];
 
     // 4. Send delete request to CRM backend
     try {
-      fetch(`${DEFAULT_API_BASE}/api/chats/${encodeURIComponent(targetJid)}`, { method: 'DELETE' }).catch(() => {});
+      if (targetJid) fetch(`${DEFAULT_API_BASE}/api/chats/${encodeURIComponent(targetJid)}`, { method: 'DELETE' }).catch(() => {});
       fetch(`${DEFAULT_API_BASE}/api/crm/contact/clear`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

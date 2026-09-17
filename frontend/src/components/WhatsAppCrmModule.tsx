@@ -189,8 +189,9 @@ export function WhatsAppCrmModule() {
     const isLinkedIn = jid.includes('@linkedin') || jid.includes('linkedin');
     const isFacebook = jid.includes('@facebook') || jid.includes('facebook');
     const isSocial = isInstagram || isLinkedIn || isFacebook;
+    const isNameFallback = jid.endsWith('@name.whatsapp');
 
-    const rawNum = (chat.phone || chat.jid || '').split('@')[0].replace(/\D/g, '');
+    const rawNum = isNameFallback ? '' : (chat.phone || chat.jid || '').split('@')[0].replace(/\D/g, '');
     let tenDigit = rawNum;
     if (rawNum.length === 12 && rawNum.startsWith('91')) tenDigit = rawNum.slice(2);
     if (rawNum.length === 13 && rawNum.startsWith('091')) tenDigit = rawNum.slice(3);
@@ -228,11 +229,12 @@ export function WhatsAppCrmModule() {
     if (!c.jid || c.jid.endsWith('@lid')) continue;
 
     const isSocial = c.jid.includes('@instagram') || c.jid.includes('@linkedin') || c.jid.includes('@facebook');
+    const isNameFallback = c.jid.endsWith('@name.whatsapp');
 
     // Use the canonical chat identity, not a potentially stale phone column.
     // WhatsApp device suffixes must never become part of the phone number.
     const phoneJid = c.jid.trim().toLowerCase().match(/^(\d{7,15})(?::\d+)?@(?:s\.whatsapp\.net|c\.us)$/);
-    let phoneDigits = phoneJid ? phoneJid[1] : (c.phone || '').replace(/\D/g, '');
+    let phoneDigits = isNameFallback ? '' : (phoneJid ? phoneJid[1] : (c.phone || '').replace(/\D/g, ''));
     if (!phoneDigits && c.jid.endsWith('@s.whatsapp.net')) {
       phoneDigits = c.jid.split('@')[0].replace(/\D/g, '');
     }
@@ -246,6 +248,8 @@ export function WhatsAppCrmModule() {
     let dedupeKey = `jid_${c.jid.toLowerCase()}`;
     if (isSocial) {
       dedupeKey = `social_${c.jid.toLowerCase()}`;
+    } else if (isNameFallback) {
+      dedupeKey = `name_${c.jid.toLowerCase()}`;
     } else if (phoneJid) {
       dedupeKey = `phone_${tenDigit}`;
     } else if (tenDigit && tenDigit.length === 10 && phoneToKey.has(tenDigit)) {
@@ -317,9 +321,10 @@ export function WhatsAppCrmModule() {
   const allRawChats = Array.from(chatsMap.values()).filter(c => {
     const isSocial = c.jid?.includes('@instagram') || c.jid?.includes('@linkedin') || c.jid?.includes('@facebook');
     if (isSocial) return true;
+    const isNameFallback = c.jid?.endsWith('@name.whatsapp');
     const isGroup = c.jid?.endsWith('@g.us');
     if (isGroup) return false;
-    const phoneDigits = (c.phone || (c.jid || '').split('@')[0]).replace(/\D/g, '');
+    const phoneDigits = isNameFallback ? '' : (c.phone || (c.jid || '').split('@')[0]).replace(/\D/g, '');
     if (phoneDigits.length > 0 && phoneDigits.length < 7) {
       // Reject any garbage rows like "1@s.whatsapp.net" or phone "1"
       return false;
@@ -466,6 +471,10 @@ export function WhatsAppCrmModule() {
   // Open specific WhatsApp Web chat using deep-link
   const handleOpenSpecificChat = (phoneNum?: string) => {
     if (phoneNum) {
+      if (phoneNum.endsWith('@name.whatsapp')) {
+        window.open('https://web.whatsapp.com', '_blank');
+        return;
+      }
       // Remove WhatsApp JID/device suffixes before extracting the phone. This
       // supports international numbers without accidentally appending a device ID.
       const cleanDigits = phoneNum.split('@')[0].split(':')[0].replace(/\D/g, '');
@@ -488,7 +497,7 @@ export function WhatsAppCrmModule() {
   const handleExportCsv = () => {
     const exportData = navChats.map((c) => ({
       Name: c.name || 'Unsaved Contact',
-      Phone: excelSafePhoneCell(c.phone || c.jid.split('@')[0]),
+      Phone: c.jid.endsWith('@name.whatsapp') ? '' : excelSafePhoneCell(c.phone || c.jid.split('@')[0]),
       LeadStatus: c.leadStatus === 'INTERESTED' ? 'Interested' : c.leadStatus === 'WARM_INTERESTED' ? 'Warm' : c.leadStatus === 'NOT_INTERESTED' ? 'Not Interested' : 'Unassigned',
       CallStatus: c.callStatus || 'No Selection',
       FollowUpDate: c.followUpDate || 'None',

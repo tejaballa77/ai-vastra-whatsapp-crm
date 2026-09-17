@@ -108,6 +108,64 @@ test('contact drawer fallback accepts only the matching labelled WhatsApp panel'
   panel.id = 'aivastra-crm-panel';
   assert.equal(vm.runInContext('findActiveContactInfoDrawer()', context), null);
 });
+test('Contact info extracts the unique international number shown at the top or in About and phone number', () => {
+  const leaf = { children: [], textContent: '+91 91543 34592', getAttribute: () => '', closest: () => null };
+  const drawer = {
+    querySelectorAll(selector) {
+      if (selector === 'a[href^="tel:"], [title], [aria-label], span, div, p') return [leaf];
+      return [];
+    }
+  };
+  const context = { console, setTimeout: () => {}, setInterval: () => {} };
+  vm.createContext(context);
+  vm.runInContext(fs.readFileSync(path.join(root, 'X/content.js'), 'utf8'), context);
+  context.drawer = drawer;
+  vm.runInContext('findActiveContactInfoDrawer = () => drawer;', context);
+  assert.equal(vm.runInContext('extractPhoneFromContactInfoDrawer()', context), '919154334592');
+});
+test('name fallback saves independently and migrates into the later verified phone record', () => {
+  const context = { console, setTimeout: () => {}, setInterval: () => {} };
+  vm.createContext(context);
+  vm.runInContext(fs.readFileSync(path.join(root, 'X/content.js'), 'utf8'), context);
+  const firstJid = vm.runInContext("makeNameFallbackJid('Google Maps India')", context);
+  const secondJid = vm.runInContext("makeNameFallbackJid('Madhav Blore Conqcore Solutions')", context);
+  assert.match(firstJid, /^name_[0-9a-f]{8}@name\.whatsapp$/);
+  assert.notEqual(firstJid, secondJid);
+
+  const db = makeStore();
+  db.updateCrmMetadata(firstJid, { name: 'Google Maps India', notesList: ['maps note'], leadStatus: 'INTERESTED' });
+  db.updateCrmMetadata(secondJid, { name: 'Madhav Blore Conqcore Solutions', notesList: ['madhav note'], leadStatus: 'WARM' });
+  assert.equal(db.chats.size, 2);
+  db.updateCrmMetadata('919154334592@s.whatsapp.net', { phone: '919154334592', name: 'Google Maps India' });
+  assert.equal(db.chats.has(firstJid), false);
+  assert.deepEqual(Array.from(db.chats.get('919154334592@s.whatsapp.net').notesList), ['maps note']);
+  assert.deepEqual(Array.from(db.chats.get(secondJid).notesList), ['madhav note']);
+});
+test('extension uses the exact saved-name fallback only after phone retries are exhausted', () => {
+  const sent = [];
+  const span = { getAttribute: () => 'Google Maps India', textContent: 'Google Maps India' };
+  const header = { querySelectorAll: () => [span] };
+  const document = { querySelector: selector => selector === '#main header' ? header : null };
+  const context = { document, console, alert: message => { throw Error(message); }, setTimeout: () => {}, setInterval: () => {} };
+  vm.createContext(context);
+  vm.runInContext(fs.readFileSync(path.join(root, 'X/content.js'), 'utf8'), context);
+  context.sent = sent;
+  vm.runInContext("activeDisplayName = 'Google Maps India'; activeContactKey = 'Google Maps India'; fetchRequestGeneration = 2; extractPhoneNumberFromDom = () => ''; findPhoneInCacheByName = () => ''; safeStorageSet = () => {}; safeSendMessage = message => sent.push(message); injectChatListBadges = () => {}; activeFormData.notesList = ['keep']; saveCrmMetadata(undefined, 6, 2);", context);
+  assert.equal(sent[0].data.identityType, 'NAME_FALLBACK');
+  assert.match(sent[0].jid, /^name_[0-9a-f]{8}@name\.whatsapp$/);
+  assert.equal(sent[0].data.name, 'Google Maps India');
+});
+test('a newly resolved phone still loads its prior name-fallback cache before migration', () => {
+  const context = { console, setTimeout: () => {}, setInterval: () => {}, rendered: [],
+    chrome: { storage: { local: { get: (keys, cb) => {
+      const fallbackKey = keys.find(key => key.startsWith('crm_meta_name_'));
+      cb(fallbackKey ? { [fallbackKey]: { notesList: ['preserved'], leadStatus: 'INTERESTED' } } : {});
+    } } }, runtime: { sendMessage: () => {} } } };
+  vm.createContext(context);
+  vm.runInContext(fs.readFileSync(path.join(root, 'X/content.js'), 'utf8'), context);
+  vm.runInContext("renderCrmPanel = () => rendered.push([...activeFormData.notesList]); activePhoneClean = '919154334592'; activeDisplayName = 'Google Maps India'; fetchRequestGeneration = 7; fetchCrmMetadata('919154334592', 'Google Maps India', '', 7);", context);
+  assert.deepEqual(Array.from(context.rendered[0]), ['preserved']);
+});
 test('international phone JIDs retain full country codes and do not merge across countries', () => {
   const db = makeStore();
   const numbers = ['923128304098', '14155552671', '447911123456', '971501234567', '6591234567', '3545551234', '918471058274', '8471058274'];

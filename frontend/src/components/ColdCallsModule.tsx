@@ -2385,14 +2385,6 @@ export function ColdCallsModule({
                                   >
                                     <Pencil className="w-4 h-4" />
                                   </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => handleDeleteNoteEntry(nIdx)}
-                                    title="Delete this note"
-                                    className="text-zinc-500 hover:text-red-600 hover:bg-red-50 p-1.5 rounded-lg transition-colors cursor-pointer inline-flex items-center justify-center"
-                                  >
-                                    <Trash2 className="w-4 h-4" />
-                                  </button>
                                 </td>
                               </tr>
                             ))}

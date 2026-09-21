@@ -701,13 +701,17 @@ export function ColdCallsModule({
     return status === 'NOT_INTERESTED' || outcome === 'NOT_INTERESTED' || statusDisp === 'Not Interested';
   };
 
+  // The Follow ups tab is status-driven. A date by itself does not move a prospect.
   const isFollowUpLead = (l: ColdCallLead): boolean => {
-    return hasFollowUpDate(l) || l.callStatus === 'FOLLOW_UP' || getLeadStatusDisplay(l) === 'Follow up';
+    const rounds = getLeadFollowUps(l);
+    const status = rounds[0]?.callStatus || l.callStatus || l.callOutcome;
+    return status === 'FOLLOW_UP' || getLeadStatusDisplay(l) === 'Follow up';
   };
 
-  // Prospects are leads that are not Interested and not Not Interested (includes Call-No, Message, Not answered, Pending, and Follow-ups)
+  // Prospects include Pending, Call-No, Message and Not answered. Notes or a date
+  // alone do not remove a lead from Prospects. Explicit CRM status does.
   const isProspectLead = (l: ColdCallLead): boolean => {
-    return !isInterestedLead(l) && !isNotInterestedLead(l);
+    return !isInterestedLead(l) && !isNotInterestedLead(l) && !isFollowUpLead(l);
   };
 
   // ── Helper: Get Lead Notes Count ───────────────────────────────────────────
@@ -1556,10 +1560,10 @@ export function ColdCallsModule({
                   <thead>
                     <tr className="bg-[#f3f4f6] text-gray-700 font-bold border-b border-gray-300 text-xs uppercase tracking-wider select-none">
                       <th className="py-3 px-3 text-center w-[70px]">CHECK</th>
-                      <th className="py-3 px-4 w-[18%]">PHONE NUMBER</th>
-                      <th className="py-3 px-4 w-[31%]">NOTE</th>
-                      <th className="py-3 px-4 w-[16%]">BDM</th>
+                      <th className="py-3 px-4 w-[17%]">PHONE NUMBER</th>
                       <th className="py-3 px-4 w-[15%]">FOLLOW UP DATE</th>
+                      <th className="py-3 px-4 w-[30%]">NOTE</th>
+                      <th className="py-3 px-4 w-[16%]">BDM</th>
                       <th className="py-3 px-4 text-center w-[145px]">ACTION</th>
                     </tr>
                   </thead>
@@ -1567,6 +1571,7 @@ export function ColdCallsModule({
                     {sortedLeads.map((lead) => {
                       const statusText = getLeadStatusDisplay(lead);
                       const hasEnteredStatus = Boolean(statusText && statusText.trim());
+                      const hasConnectedStatus = isInterestedLead(lead) || isNotInterestedLead(lead) || isFollowUpLead(lead);
                       const isActiveInCall = activeSelectedLeadId === lead.id && !hasEnteredStatus;
                       const activeUnfinishedLead = leads.find(l =>
                         activeSelectedLeadId === l.id &&
@@ -1609,7 +1614,7 @@ export function ColdCallsModule({
                               className={`w-6 h-6 rounded-lg inline-flex items-center justify-center border transition-all ${
                                 isActiveInCall
                                   ? 'bg-white border-2 border-white text-red-600 ring-2 ring-white/60'
-                                  : hasEnteredStatus
+                                  : hasConnectedStatus
                                   ? 'bg-[#00a884] border-[#00a884] text-white'
                                   : 'bg-white border-zinc-300 text-transparent hover:border-black'
                               } ${isLocked ? 'opacity-30 cursor-not-allowed' : 'cursor-pointer active:scale-90'}`}
@@ -1634,6 +1639,20 @@ export function ColdCallsModule({
                                 <strong className="break-words">{lead.personName || lead.name || '—'}</strong>
                               </div>
                             </div>
+                          </td>
+
+                          <td className="py-4 px-4 align-top text-xs font-bold">
+                            {followUpDate ? (
+                              <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border ${
+                                hasEnteredStatus
+                                  ? 'bg-white/10 text-white border-white/30'
+                                  : 'bg-zinc-50 text-zinc-900 border-zinc-300'
+                              }`}>
+                                📅 {formatDateDDMMYYYY(followUpDate)}
+                              </span>
+                            ) : (
+                              <span className={(isActiveInCall || hasEnteredStatus) ? 'text-white/75' : 'text-zinc-400'}>—</span>
+                            )}
                           </td>
 
                           <td className="py-4 px-4 align-top">
@@ -1663,20 +1682,6 @@ export function ColdCallsModule({
                               bdmNames.join(', ')
                             ) : (
                               <span className={hasEnteredStatus ? 'text-white/75' : 'text-zinc-400'}>—</span>
-                            )}
-                          </td>
-
-                          <td className="py-4 px-4 align-top text-xs font-bold">
-                            {followUpDate ? (
-                              <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border ${
-                                hasEnteredStatus
-                                  ? 'bg-white/10 text-white border-white/30'
-                                  : 'bg-zinc-50 text-zinc-900 border-zinc-300'
-                              }`}>
-                                📅 {formatDateDDMMYYYY(followUpDate)}
-                              </span>
-                            ) : (
-                              <span className={(isActiveInCall || hasEnteredStatus) ? 'text-white/75' : 'text-zinc-400'}>—</span>
                             )}
                           </td>
 

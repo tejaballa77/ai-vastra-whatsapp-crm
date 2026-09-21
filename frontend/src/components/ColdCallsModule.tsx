@@ -1602,7 +1602,7 @@ export function ColdCallsModule({
                             isActiveInCall
                               ? 'bg-red-600 hover:bg-red-700 text-white border-red-700 font-extrabold'
                               : hasEnteredStatus
-                              ? 'bg-zinc-700 hover:bg-zinc-800 text-white border-zinc-800 font-semibold'
+                              ? 'bg-zinc-300 hover:bg-zinc-400 text-zinc-950 border-zinc-400 font-semibold'
                               : 'bg-white hover:bg-blue-50/40 text-zinc-900 border-gray-200'
                           }`}
                         >
@@ -1626,7 +1626,7 @@ export function ColdCallsModule({
 
                           <td className="py-4 px-4 align-top relative group/phone overflow-visible">
                             <span className={`font-black tracking-wide border-b border-dashed ${
-                              (isActiveInCall || hasEnteredStatus) ? 'text-white border-white/70' : 'text-black border-zinc-400'
+                              isActiveInCall ? 'text-white border-white/70' : 'text-black border-zinc-500'
                             }`}>
                               {lead.phone || '—'}
                             </span>
@@ -1645,13 +1645,13 @@ export function ColdCallsModule({
                             {followUpDate ? (
                               <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border ${
                                 hasEnteredStatus
-                                  ? 'bg-white/10 text-white border-white/30'
+                                  ? 'bg-zinc-100 text-zinc-950 border-zinc-500'
                                   : 'bg-zinc-50 text-zinc-900 border-zinc-300'
                               }`}>
                                 📅 {formatDateDDMMYYYY(followUpDate)}
                               </span>
                             ) : (
-                              <span className={(isActiveInCall || hasEnteredStatus) ? 'text-white/75' : 'text-zinc-400'}>—</span>
+                              <span className={isActiveInCall ? 'text-white/75' : 'text-zinc-500'}>—</span>
                             )}
                           </td>
 
@@ -1668,7 +1668,7 @@ export function ColdCallsModule({
                                 ))}
                               </ol>
                             ) : (
-                              <span className={(isActiveInCall || hasEnteredStatus) ? 'text-white/75' : 'text-zinc-400'}>—</span>
+                              <span className={isActiveInCall ? 'text-white/75' : 'text-zinc-500'}>—</span>
                             )}
                           </td>
 
@@ -1681,7 +1681,7 @@ export function ColdCallsModule({
                             ) : bdmNames.length > 0 ? (
                               bdmNames.join(', ')
                             ) : (
-                              <span className={hasEnteredStatus ? 'text-white/75' : 'text-zinc-400'}>—</span>
+                              <span className="text-zinc-500">—</span>
                             )}
                           </td>
 

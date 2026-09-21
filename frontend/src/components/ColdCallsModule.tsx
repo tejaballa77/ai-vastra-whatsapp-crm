@@ -41,6 +41,7 @@ export type CallStatusType = 'INTERESTED' | 'WARM' | 'NOT_INTERESTED' | 'NOT_CON
 export interface NoteEntry {
   text: string;
   date: string; // DD-MM-YYYY
+  author?: string;
 }
 
 export interface FollowUpRound {
@@ -961,7 +962,7 @@ export function ColdCallsModule({
       const next = [...prev];
       const target: FollowUpRound = { ...(next[0] || { roundNumber: 1, callChoice: 'PENDING', callStatus: 'PENDING' }) };
       const currentList = [...getRoundNotesList(target)];
-      const newEntry: NoteEntry = { text, date: getTodayDate() };
+      const newEntry: NoteEntry = { text, date: getTodayDate(), author: currentUserName };
       const updatedList = [newEntry, ...currentList];
       target.notesList = updatedList;
       target.note = updatedList[0]?.text || '';
@@ -1009,7 +1010,7 @@ export function ColdCallsModule({
       let round0 = { ...(infoPopupFollowUps[0] || { roundNumber: 1, callChoice: 'PENDING', callStatus: 'PENDING' }) };
       const pendingText = noteInputText.trim();
       if (pendingText) {
-        const newEntry: NoteEntry = { text: pendingText, date: getTodayDate() };
+        const newEntry: NoteEntry = { text: pendingText, date: getTodayDate(), author: currentUserName };
         const currentList = getRoundNotesList(round0);
         round0.notesList = [newEntry, ...currentList];
         round0.note = newEntry.text;
@@ -1069,9 +1070,75 @@ export function ColdCallsModule({
         .filter((name): name is string => Boolean(
           name && name.trim() && name !== 'Executive User' && name !== 'Staff' && !isAdminUser(name)
         ));
-      const nextBdmHistory = (!isAdminUser(currentUserName) && isOperationalChanged)
-        ? Array.from(new Set([currentUserName, ...previousBdmNames]))
-        : Array.from(new Set(previousBdmNames));
+      type BdmContribution = { updatedAt: number; fields: Record<string, string>; noteKeys: string[] };
+      const rawContributions = infoPopupLead.customFields?.bdmContributions;
+      const contributions: Record<string, BdmContribution> = (
+        rawContributions && typeof rawContributions === 'object' && !Array.isArray(rawContributions)
+      ) ? JSON.parse(JSON.stringify(rawContributions)) : {};
+      const noteKey = (note: NoteEntry) => `${(note.date || '').trim()}::${(note.text || '').trim()}`;
+      const currentFieldValues: Record<string, string> = {
+        businessName: (infoPopupLead.businessName || '').trim(),
+        personName: (infoPopupLead.personName || infoPopupLead.name || '').trim(),
+        phone: (infoPopupLead.phone || '').trim(),
+        businessWebsite: (infoPopupLead.businessWebsite || '').trim(),
+        role: (infoPopupLead.role || '').trim(),
+        email: (infoPopupLead.email || '').trim(),
+        linkedinProfile: (infoPopupLead.linkedinProfile || '').trim(),
+        facebookProfile: (infoPopupLead.facebookProfile || '').trim(),
+        instaProfile: (infoPopupLead.instaProfile || '').trim(),
+        clientLanguage: (infoPopupLead.clientLanguage || '').trim(),
+        callChoice: latestRound?.callChoice || 'PENDING',
+        callStatus: latestRound?.callStatus || 'PENDING',
+        followUpDate: latestRound?.followUpDate || '',
+      };
+      const initialFieldValues: Record<string, string> = {
+        businessName: initialRound0.businessName || '',
+        personName: initialRound0.personName || '',
+        phone: initialRound0.phone || '',
+        businessWebsite: initialRound0.businessWebsite || '',
+        role: initialRound0.role || '',
+        email: initialRound0.email || '',
+        linkedinProfile: initialRound0.linkedinProfile || '',
+        facebookProfile: initialRound0.facebookProfile || '',
+        instaProfile: initialRound0.instaProfile || '',
+        clientLanguage: initialRound0.clientLanguage || '',
+        callChoice: initialRound0.callChoice || 'PENDING',
+        callStatus: initialRound0.callStatus || 'PENDING',
+        followUpDate: initialRound0.followUpDate || '',
+      };
+
+      if (!isAdminUser(currentUserName) && isOperationalChanged) {
+        const own = contributions[currentUserName] || { updatedAt: now, fields: {}, noteKeys: [] };
+        Object.keys(currentFieldValues).forEach(field => {
+          if (currentFieldValues[field] !== initialFieldValues[field]) {
+            const value = currentFieldValues[field];
+            if (value && value !== 'PENDING') own.fields[field] = value;
+            else delete own.fields[field];
+          }
+        });
+        own.noteKeys = currentNotes.filter(note => note.author === currentUserName).map(noteKey);
+        own.updatedAt = now;
+        contributions[currentUserName] = own;
+      }
+
+      const liveNoteKeys = new Set(currentNotes.map(noteKey));
+      Object.values(contributions).forEach(contribution => {
+        contribution.fields = contribution.fields || {};
+        contribution.noteKeys = (contribution.noteKeys || []).filter(key => liveNoteKeys.has(key));
+        Object.entries(contribution.fields).forEach(([field, value]) => {
+          if (currentFieldValues[field] !== value) delete contribution.fields[field];
+        });
+      });
+      const contributionUsers = Object.entries(contributions)
+        .filter(([, contribution]) => Object.keys(contribution.fields).length > 0 || contribution.noteKeys.length > 0)
+        .sort(([, a], [, b]) => Number(b.updatedAt || 0) - Number(a.updatedAt || 0))
+        .map(([username]) => username);
+      const knownContributionUsers = new Set(Object.keys(contributions));
+      const legacyUsers = previousBdmNames.filter(name => !knownContributionUsers.has(name));
+      const nextBdmHistory = Array.from(new Set([...contributionUsers, ...legacyUsers]));
+      if (knownContributionUsers.has(currentUserName) && !nextBdmHistory.includes(currentUserName)) {
+        newCalledBy = nextBdmHistory[0] || undefined;
+      }
 
       const partial: Partial<ColdCallLead> = {
         businessName: infoPopupLead.businessName,
@@ -1094,6 +1161,7 @@ export function ColdCallsModule({
         customFields: {
           ...(infoPopupLead.customFields || {}),
           bdmHistory: nextBdmHistory,
+          bdmContributions: contributions,
         },
         callTimestamp: isOperationalChanged ? now : (infoPopupLead.callTimestamp || now),
         updatedAt: now,
@@ -1585,14 +1653,24 @@ export function ColdCallsModule({
                             typeof name === 'string' && Boolean(name.trim())
                           ))
                         : [];
-                      const bdmNames = Array.from(new Set(
-                        [...storedBdmHistory, lead.calledBy, ...[...rounds]
+                      const rawBdmContributions = lead.customFields?.bdmContributions;
+                      const bdmContributions = (
+                        rawBdmContributions && typeof rawBdmContributions === 'object' && !Array.isArray(rawBdmContributions)
+                      ) ? rawBdmContributions as Record<string, { updatedAt?: number; fields?: Record<string, string>; noteKeys?: string[] }> : {};
+                      const activeContributionUsers = Object.entries(bdmContributions)
+                        .filter(([, contribution]) => (
+                          Object.keys(contribution.fields || {}).length > 0 || (contribution.noteKeys || []).length > 0
+                        ))
+                        .sort(([, a], [, b]) => Number(b.updatedAt || 0) - Number(a.updatedAt || 0))
+                        .map(([username]) => username);
+                      const knownContributionUsers = new Set(Object.keys(bdmContributions));
+                      const legacyBdmNames = [lead.calledBy, ...storedBdmHistory, ...[...rounds]
                           .sort((a, b) => Number(b.updatedAt || 0) - Number(a.updatedAt || 0))
                           .map(r => r.calledBy)]
                           .filter((name): name is string => Boolean(
-                            name && name.trim() && name !== 'Executive User' && name !== 'Staff'
-                          ))
-                      ));
+                            name && name.trim() && name !== 'Executive User' && name !== 'Staff' && !knownContributionUsers.has(name)
+                          ));
+                      const bdmNames = Array.from(new Set([...activeContributionUsers, ...legacyBdmNames]));
                       const followUpDate = getLeadFollowUpDate(lead);
 
                       return (
@@ -2306,6 +2384,14 @@ export function ColdCallsModule({
                                     className="text-zinc-600 hover:text-[#00a884] hover:bg-emerald-50 p-1.5 rounded-lg transition-colors cursor-pointer inline-flex items-center justify-center"
                                   >
                                     <Pencil className="w-4 h-4" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDeleteNoteEntry(nIdx)}
+                                    title="Delete this note"
+                                    className="text-zinc-500 hover:text-red-600 hover:bg-red-50 p-1.5 rounded-lg transition-colors cursor-pointer inline-flex items-center justify-center"
+                                  >
+                                    <Trash2 className="w-4 h-4" />
                                   </button>
                                 </td>
                               </tr>

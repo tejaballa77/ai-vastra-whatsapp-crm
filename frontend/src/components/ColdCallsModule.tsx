@@ -2119,22 +2119,7 @@ export function ColdCallsModule({
                   )}
                 </div>
 
-                {/* Client Language Dropdown in Header Right Corner */}
-                <div className="flex items-center gap-3 flex-shrink-0">
-                  <div className="flex items-center gap-2 bg-white border border-zinc-300 rounded-xl px-3.5 py-2 shadow-xs">
-                    <span className="text-xs font-black text-zinc-600 uppercase tracking-wider">Client Language:</span>
-                    <select
-                      value={infoPopupLead.clientLanguage || ''}
-                      onChange={(e) => setInfoPopupLead(prev => prev ? { ...prev, clientLanguage: e.target.value } : null)}
-                      className="text-sm font-extrabold text-black bg-transparent outline-none cursor-pointer"
-                    >
-                      <option value="">-- Select Language --</option>
-                      <option value="Telugu">Telugu</option>
-                      <option value="Hindi">Hindi</option>
-                      <option value="English">English</option>
-                    </select>
-                  </div>
-
+                <div className="flex items-center flex-shrink-0">
                   <button
                     onClick={() => setInfoPopupLead(null)}
                     className="w-9 h-9 rounded-full bg-white hover:bg-gray-200 flex items-center justify-center text-gray-700 transition-all shadow-sm border border-gray-200 cursor-pointer"
@@ -2159,11 +2144,6 @@ export function ColdCallsModule({
                   <h4 className="text-sm font-black text-black uppercase tracking-wider">
                     Follow up
                   </h4>
-                  {round.calledBy && (
-                    <span className="text-xs font-bold text-zinc-400">
-                      by {round.calledBy}
-                    </span>
-                  )}
                 </div>
 
                 {/* Top Row: ACTION (Choice), STATUS (Conditional), FOLLOW UP DATE */}

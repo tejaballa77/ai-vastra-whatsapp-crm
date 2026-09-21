@@ -1506,8 +1506,155 @@ export function ColdCallsModule({
           </div>
         </div>
 
-          {/* EXACT EXCEL SPREADSHEET TABLE WITH LIVE EDITING & DYNAMIC SORTING */}
-          <div className="bg-white rounded-xl border border-gray-300 shadow-sm overflow-hidden font-sans">
+          {/* WhatsApp-style Cold Calls table. Existing filters, actions and popup logic are unchanged. */}
+          <div className="bg-white rounded-xl border border-gray-300 shadow-sm overflow-visible font-sans">
+            {loading ? (
+              <div className="p-16 text-center text-sm text-gray-500 font-semibold">Loading spreadsheet...</div>
+            ) : sortedLeads.length === 0 ? (
+              <div className="p-16 text-center space-y-3 bg-white rounded-xl">
+                <div className="w-12 h-12 rounded-2xl bg-gray-100 text-gray-500 flex items-center justify-center mx-auto border border-gray-300">
+                  <FileSpreadsheet className="w-6 h-6 text-gray-700" />
+                </div>
+                <p className="text-base font-extrabold text-black">No spreadsheet data</p>
+                <p className="text-xs text-gray-500 font-semibold">
+                  {leads.length === 0 ? 'Upload an Excel sheet to populate rows.' : 'No rows match your search.'}
+                </p>
+              </div>
+            ) : (
+              <div className="overflow-visible">
+                <table className="w-full text-left border-collapse text-sm table-fixed">
+                  <thead>
+                    <tr className="bg-[#f3f4f6] text-gray-700 font-bold border-b border-gray-300 text-xs uppercase tracking-wider select-none">
+                      <th className="py-3 px-3 text-center w-[70px]">CHECK</th>
+                      <th className="py-3 px-4 w-[22%]">PHONE NUMBER</th>
+                      <th className="py-3 px-4 w-[40%]">NOTE</th>
+                      <th className="py-3 px-4 w-[20%]">BDM</th>
+                      <th className="py-3 px-4 text-center w-[145px]">ACTION</th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white text-gray-900">
+                    {sortedLeads.map((lead) => {
+                      const statusText = getLeadStatusDisplay(lead);
+                      const hasEnteredStatus = Boolean(statusText && statusText.trim());
+                      const isActiveInCall = activeSelectedLeadId === lead.id && !hasEnteredStatus;
+                      const activeUnfinishedLead = leads.find(l =>
+                        activeSelectedLeadId === l.id &&
+                        (!getLeadStatusDisplay(l) || !getLeadStatusDisplay(l).trim())
+                      );
+                      const isLocked = Boolean(activeUnfinishedLead && activeUnfinishedLead.id !== lead.id);
+                      const rounds = getLeadFollowUps(lead);
+                      const notes = getRoundNotesList(rounds[0], lead.createdAt);
+                      const bdmNames = Array.from(new Set(
+                        [lead.calledBy, ...[...rounds]
+                          .sort((a, b) => Number(b.updatedAt || 0) - Number(a.updatedAt || 0))
+                          .map(r => r.calledBy)]
+                          .filter((name): name is string => Boolean(
+                            name && name.trim() && name !== 'Executive User' && name !== 'Staff'
+                          ))
+                      ));
+
+                      return (
+                        <tr
+                          key={lead.id}
+                          className={`border-b last:border-b-0 transition-colors ${
+                            isActiveInCall
+                              ? 'bg-red-600 hover:bg-red-700 text-white border-red-700 font-extrabold'
+                              : 'bg-white hover:bg-blue-50/40 text-zinc-900 border-gray-200'
+                          }`}
+                        >
+                          <td className="py-4 px-3 text-center align-top">
+                            <button
+                              type="button"
+                              disabled={isLocked}
+                              onClick={() => handleToggleContacted(lead)}
+                              className={`w-6 h-6 rounded-lg inline-flex items-center justify-center border transition-all ${
+                                isActiveInCall
+                                  ? 'bg-white border-2 border-white text-red-600 ring-2 ring-white/60'
+                                  : hasEnteredStatus
+                                  ? 'bg-[#00a884] border-[#00a884] text-white'
+                                  : 'bg-white border-zinc-300 text-transparent hover:border-black'
+                              } ${isLocked ? 'opacity-30 cursor-not-allowed' : 'cursor-pointer active:scale-90'}`}
+                              title={isLocked ? 'Enter STATUS for the active red row first' : 'Start this call'}
+                            >
+                              <Check className="w-3.5 h-3.5 stroke-[3]" />
+                            </button>
+                          </td>
+
+                          <td className="py-4 px-4 align-top relative group/phone overflow-visible">
+                            <span className={`font-black tracking-wide border-b border-dashed ${
+                              isActiveInCall ? 'text-white border-white/70' : 'text-black border-zinc-400'
+                            }`}>
+                              {lead.phone || '—'}
+                            </span>
+                            <div className="invisible opacity-0 group-hover/phone:visible group-hover/phone:opacity-100 absolute z-50 left-4 top-12 w-72 bg-white text-black border border-zinc-300 rounded-xl shadow-2xl p-4 transition-all">
+                              <div className="absolute -top-2 left-7 w-4 h-4 bg-white border-l border-t border-zinc-300 rotate-45" />
+                              <div className="relative grid grid-cols-[105px_1fr] gap-x-3 gap-y-3 text-xs">
+                                <span className="text-zinc-500 font-bold">Business name</span>
+                                <strong className="break-words">{lead.businessName || '—'}</strong>
+                                <span className="text-zinc-500 font-bold">Person name</span>
+                                <strong className="break-words">{lead.personName || lead.name || '—'}</strong>
+                              </div>
+                            </div>
+                          </td>
+
+                          <td className="py-4 px-4 align-top">
+                            {notes.length > 0 ? (
+                              <ol className="space-y-2">
+                                {notes.map((noteItem, index) => (
+                                  <li key={`${lead.id}-note-${index}`} className="grid grid-cols-[22px_1fr] gap-1 leading-relaxed">
+                                    <span className="font-black">{index + 1}.</span>
+                                    <span className="italic whitespace-pre-wrap break-words">
+                                      “{noteItem.text} ({noteItem.date ? noteItem.date.replace(/-/g, '/') : '—'})”
+                                    </span>
+                                  </li>
+                                ))}
+                              </ol>
+                            ) : (
+                              <span className={isActiveInCall ? 'text-white/75' : 'text-zinc-400'}>—</span>
+                            )}
+                          </td>
+
+                          <td className="py-4 px-4 align-top font-semibold text-xs leading-relaxed break-words">
+                            {bdmNames.length > 0
+                              ? bdmNames.join(', ')
+                              : <span className={isActiveInCall ? 'text-white/75' : 'text-zinc-400'}>—</span>}
+                          </td>
+
+                          <td className="py-4 px-4 text-center align-top">
+                            {isActiveInCall && (
+                              <span className="block text-[11px] font-black text-black mb-1 animate-bounce">
+                                Enter STATUS
+                              </span>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setShakingPromptLeadId(null);
+                                openInfoPopup(lead);
+                              }}
+                              title={hasEnteredStatus ? `Status: ${statusText} (Click to view/edit)` : 'Click to select action & status'}
+                              className={`inline-flex items-center justify-center px-3.5 py-1.5 rounded-xl text-xs transition-all shadow-xs active:scale-95 cursor-pointer ${
+                                isActiveInCall
+                                  ? 'bg-white text-black border border-white font-black shadow-md'
+                                  : hasEnteredStatus
+                                  ? 'bg-zinc-200 hover:bg-zinc-300 text-zinc-900 border border-zinc-400 font-bold'
+                                  : 'bg-zinc-100 hover:bg-zinc-200 text-black border border-zinc-300 font-bold'
+                              }`}
+                            >
+                              {hasEnteredStatus ? statusText : 'None'}
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+
+          {/* Legacy spreadsheet table retained but not rendered, for safe rollback during review. */}
+          <div className="hidden">
             {loading ? (
               <div className="p-16 text-center text-sm text-gray-500 font-semibold">Loading spreadsheet...</div>
             ) : sortedLeads.length === 0 ? (

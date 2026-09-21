@@ -702,17 +702,22 @@ export function ColdCallsModule({
     return status === 'NOT_INTERESTED' || outcome === 'NOT_INTERESTED' || statusDisp === 'Not Interested';
   };
 
-  // The Follow ups tab is status-driven. A date by itself does not move a prospect.
-  const isFollowUpLead = (l: ColdCallLead): boolean => {
+  const hasExplicitFollowUpStatus = (l: ColdCallLead): boolean => {
     const rounds = getLeadFollowUps(l);
     const status = rounds[0]?.callStatus || l.callStatus || l.callOutcome;
     return status === 'FOLLOW_UP' || getLeadStatusDisplay(l) === 'Follow up';
   };
 
+  // Follow ups is also a schedule view: every dated lead appears here while
+  // retaining membership in its primary status section.
+  const isFollowUpLead = (l: ColdCallLead): boolean => {
+    return hasFollowUpDate(l) || hasExplicitFollowUpStatus(l);
+  };
+
   // Prospects include Pending, Call-No, Message and Not answered. Notes or a date
   // alone do not remove a lead from Prospects. Explicit CRM status does.
   const isProspectLead = (l: ColdCallLead): boolean => {
-    return !isInterestedLead(l) && !isNotInterestedLead(l) && !isFollowUpLead(l);
+    return !isInterestedLead(l) && !isNotInterestedLead(l) && !hasExplicitFollowUpStatus(l);
   };
 
   // ── Helper: Get Lead Notes Count ───────────────────────────────────────────
@@ -1639,7 +1644,7 @@ export function ColdCallsModule({
                     {sortedLeads.map((lead) => {
                       const statusText = getLeadStatusDisplay(lead);
                       const hasEnteredStatus = Boolean(statusText && statusText.trim());
-                      const hasConnectedStatus = isInterestedLead(lead) || isNotInterestedLead(lead) || isFollowUpLead(lead);
+                      const hasConnectedStatus = isInterestedLead(lead) || isNotInterestedLead(lead) || hasExplicitFollowUpStatus(lead);
                       const isActiveInCall = activeSelectedLeadId === lead.id && !hasEnteredStatus;
                       const activeUnfinishedLead = leads.find(l =>
                         activeSelectedLeadId === l.id &&

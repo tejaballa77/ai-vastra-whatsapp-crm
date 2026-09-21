@@ -1019,7 +1019,20 @@ export function ColdCallsModule({
       } catch (e) {}
 
       const currentNotes = getRoundNotesList(latestRound, infoPopupLead.createdAt);
+      const isProfileChanged = (
+        (infoPopupLead.businessName || '').trim() !== (initialRound0.businessName || '') ||
+        (infoPopupLead.personName || infoPopupLead.name || '').trim() !== (initialRound0.personName || '') ||
+        (infoPopupLead.phone || '').trim() !== (initialRound0.phone || '') ||
+        (infoPopupLead.businessWebsite || '').trim() !== (initialRound0.businessWebsite || '') ||
+        (infoPopupLead.role || '').trim() !== (initialRound0.role || '') ||
+        (infoPopupLead.email || '').trim() !== (initialRound0.email || '') ||
+        (infoPopupLead.linkedinProfile || '').trim() !== (initialRound0.linkedinProfile || '') ||
+        (infoPopupLead.facebookProfile || '').trim() !== (initialRound0.facebookProfile || '') ||
+        (infoPopupLead.instaProfile || '').trim() !== (initialRound0.instaProfile || '') ||
+        (infoPopupLead.clientLanguage || '').trim() !== (initialRound0.clientLanguage || '')
+      );
       const isOperationalChanged = (
+        isProfileChanged ||
         (latestRound?.callChoice || 'PENDING') !== (initialRound0.callChoice || 'PENDING') ||
         (latestRound?.callStatus || 'PENDING') !== (initialRound0.callStatus || 'PENDING') ||
         (latestRound?.followUpDate || '') !== (initialRound0.followUpDate || '') ||
@@ -1043,6 +1056,19 @@ export function ColdCallsModule({
         }
       }
 
+      const storedBdmHistory = Array.isArray(infoPopupLead.customFields?.bdmHistory)
+        ? infoPopupLead.customFields.bdmHistory.filter((name: unknown): name is string => (
+            typeof name === 'string' && Boolean(name.trim()) && name !== 'Executive User' && name !== 'Staff'
+          ))
+        : [];
+      const previousBdmNames = [infoPopupLead.calledBy, ...storedBdmHistory]
+        .filter((name): name is string => Boolean(
+          name && name.trim() && name !== 'Executive User' && name !== 'Staff' && !isAdminUser(name)
+        ));
+      const nextBdmHistory = (!isAdminUser(currentUserName) && isOperationalChanged)
+        ? Array.from(new Set([currentUserName, ...previousBdmNames]))
+        : Array.from(new Set(previousBdmNames));
+
       const partial: Partial<ColdCallLead> = {
         businessName: infoPopupLead.businessName,
         personName: infoPopupLead.personName,
@@ -1061,6 +1087,10 @@ export function ColdCallsModule({
         notesList: latestRound?.notesList || [],
         calledBy: newCalledBy || undefined,
         clientLanguage: infoPopupLead.clientLanguage || '',
+        customFields: {
+          ...(infoPopupLead.customFields || {}),
+          bdmHistory: nextBdmHistory,
+        },
         callTimestamp: isOperationalChanged ? now : (infoPopupLead.callTimestamp || now),
         updatedAt: now,
       };
@@ -1526,9 +1556,10 @@ export function ColdCallsModule({
                   <thead>
                     <tr className="bg-[#f3f4f6] text-gray-700 font-bold border-b border-gray-300 text-xs uppercase tracking-wider select-none">
                       <th className="py-3 px-3 text-center w-[70px]">CHECK</th>
-                      <th className="py-3 px-4 w-[22%]">PHONE NUMBER</th>
-                      <th className="py-3 px-4 w-[40%]">NOTE</th>
-                      <th className="py-3 px-4 w-[20%]">BDM</th>
+                      <th className="py-3 px-4 w-[18%]">PHONE NUMBER</th>
+                      <th className="py-3 px-4 w-[31%]">NOTE</th>
+                      <th className="py-3 px-4 w-[16%]">BDM</th>
+                      <th className="py-3 px-4 w-[15%]">FOLLOW UP DATE</th>
                       <th className="py-3 px-4 text-center w-[145px]">ACTION</th>
                     </tr>
                   </thead>
@@ -1544,14 +1575,20 @@ export function ColdCallsModule({
                       const isLocked = Boolean(activeUnfinishedLead && activeUnfinishedLead.id !== lead.id);
                       const rounds = getLeadFollowUps(lead);
                       const notes = getRoundNotesList(rounds[0], lead.createdAt);
+                      const storedBdmHistory = Array.isArray(lead.customFields?.bdmHistory)
+                        ? lead.customFields.bdmHistory.filter((name: unknown): name is string => (
+                            typeof name === 'string' && Boolean(name.trim())
+                          ))
+                        : [];
                       const bdmNames = Array.from(new Set(
-                        [lead.calledBy, ...[...rounds]
+                        [...storedBdmHistory, lead.calledBy, ...[...rounds]
                           .sort((a, b) => Number(b.updatedAt || 0) - Number(a.updatedAt || 0))
                           .map(r => r.calledBy)]
                           .filter((name): name is string => Boolean(
                             name && name.trim() && name !== 'Executive User' && name !== 'Staff'
                           ))
                       ));
+                      const followUpDate = getLeadFollowUpDate(lead);
 
                       return (
                         <tr
@@ -1559,6 +1596,8 @@ export function ColdCallsModule({
                           className={`border-b last:border-b-0 transition-colors ${
                             isActiveInCall
                               ? 'bg-red-600 hover:bg-red-700 text-white border-red-700 font-extrabold'
+                              : hasEnteredStatus
+                              ? 'bg-zinc-700 hover:bg-zinc-800 text-white border-zinc-800 font-semibold'
                               : 'bg-white hover:bg-blue-50/40 text-zinc-900 border-gray-200'
                           }`}
                         >
@@ -1582,7 +1621,7 @@ export function ColdCallsModule({
 
                           <td className="py-4 px-4 align-top relative group/phone overflow-visible">
                             <span className={`font-black tracking-wide border-b border-dashed ${
-                              isActiveInCall ? 'text-white border-white/70' : 'text-black border-zinc-400'
+                              (isActiveInCall || hasEnteredStatus) ? 'text-white border-white/70' : 'text-black border-zinc-400'
                             }`}>
                               {lead.phone || '—'}
                             </span>
@@ -1610,14 +1649,35 @@ export function ColdCallsModule({
                                 ))}
                               </ol>
                             ) : (
-                              <span className={isActiveInCall ? 'text-white/75' : 'text-zinc-400'}>—</span>
+                              <span className={(isActiveInCall || hasEnteredStatus) ? 'text-white/75' : 'text-zinc-400'}>—</span>
                             )}
                           </td>
 
                           <td className="py-4 px-4 align-top font-semibold text-xs leading-relaxed break-words">
-                            {bdmNames.length > 0
-                              ? bdmNames.join(', ')
-                              : <span className={isActiveInCall ? 'text-white/75' : 'text-zinc-400'}>—</span>}
+                            {isActiveInCall ? (
+                              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-black text-white border border-black/80 rounded-lg font-black shadow-sm">
+                                <span className="w-2 h-2 rounded-full bg-red-400 animate-ping" />
+                                In-call: {lead.calledBy || currentUserName}
+                              </span>
+                            ) : bdmNames.length > 0 ? (
+                              bdmNames.join(', ')
+                            ) : (
+                              <span className={hasEnteredStatus ? 'text-white/75' : 'text-zinc-400'}>—</span>
+                            )}
+                          </td>
+
+                          <td className="py-4 px-4 align-top text-xs font-bold">
+                            {followUpDate ? (
+                              <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border ${
+                                hasEnteredStatus
+                                  ? 'bg-white/10 text-white border-white/30'
+                                  : 'bg-zinc-50 text-zinc-900 border-zinc-300'
+                              }`}>
+                                📅 {formatDateDDMMYYYY(followUpDate)}
+                              </span>
+                            ) : (
+                              <span className={(isActiveInCall || hasEnteredStatus) ? 'text-white/75' : 'text-zinc-400'}>—</span>
+                            )}
                           </td>
 
                           <td className="py-4 px-4 text-center align-top">
@@ -1652,6 +1712,58 @@ export function ColdCallsModule({
               </div>
             )}
           </div>
+
+          {/* Pagination for the redesigned table. */}
+          {filteredLeads.length > 0 && (
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-4 py-3 border border-t-0 border-gray-300 rounded-b-xl bg-[#fbfbfb] text-xs">
+              <div className="font-bold text-zinc-600">
+                Showing <span className="text-black font-extrabold">{startIndex + 1}</span> to{' '}
+                <span className="text-black font-extrabold">{Math.min(filteredLeads.length, endIndex)}</span> of{' '}
+                <span className="text-black font-extrabold">{filteredLeads.length}</span> leads
+              </div>
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <button
+                  type="button"
+                  disabled={safeCurrentPage <= 1}
+                  onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                  className="px-2.5 py-1 rounded-lg border border-zinc-300 bg-white hover:bg-zinc-100 disabled:opacity-40 disabled:cursor-not-allowed font-extrabold text-zinc-700 transition-all cursor-pointer shadow-2xs"
+                >
+                  Prev
+                </button>
+                {Array.from({ length: totalPages }).map((_, i) => {
+                  const pNum = i + 1;
+                  const isNear = Math.abs(pNum - safeCurrentPage) <= 2 || pNum === 1 || pNum === totalPages;
+                  if (!isNear && (pNum === 2 || pNum === totalPages - 1)) {
+                    return <span key={`new_ellipsis_${pNum}`} className="px-1 text-zinc-400 font-bold">...</span>;
+                  }
+                  if (!isNear) return null;
+                  const isCurrent = pNum === safeCurrentPage;
+                  return (
+                    <button
+                      key={`new_page_${pNum}`}
+                      type="button"
+                      onClick={() => setCurrentPage(pNum)}
+                      className={`w-7 h-7 rounded-lg text-xs font-black transition-all flex items-center justify-center cursor-pointer shadow-2xs ${
+                        isCurrent
+                          ? 'bg-black text-white border border-black'
+                          : 'bg-white text-zinc-700 hover:bg-zinc-100 border border-zinc-300'
+                      }`}
+                    >
+                      {pNum}
+                    </button>
+                  );
+                })}
+                <button
+                  type="button"
+                  disabled={safeCurrentPage >= totalPages}
+                  onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                  className="px-2.5 py-1 rounded-lg border border-zinc-300 bg-white hover:bg-zinc-100 disabled:opacity-40 disabled:cursor-not-allowed font-extrabold text-zinc-700 transition-all cursor-pointer shadow-2xs"
+                >
+                  Next
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* Legacy spreadsheet table retained but not rendered, for safe rollback during review. */}
           <div className="hidden">

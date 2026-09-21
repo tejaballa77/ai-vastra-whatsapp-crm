@@ -1644,7 +1644,6 @@ export function ColdCallsModule({
                     {sortedLeads.map((lead) => {
                       const statusText = getLeadStatusDisplay(lead);
                       const hasEnteredStatus = Boolean(statusText && statusText.trim());
-                      const hasConnectedStatus = isInterestedLead(lead) || isNotInterestedLead(lead) || hasExplicitFollowUpStatus(lead);
                       const isActiveInCall = activeSelectedLeadId === lead.id && !hasEnteredStatus;
                       const activeUnfinishedLead = leads.find(l =>
                         activeSelectedLeadId === l.id &&
@@ -1697,7 +1696,7 @@ export function ColdCallsModule({
                               className={`w-6 h-6 rounded-lg inline-flex items-center justify-center border transition-all ${
                                 isActiveInCall
                                   ? 'bg-white border-2 border-white text-red-600 ring-2 ring-white/60'
-                                  : hasConnectedStatus
+                                  : hasEnteredStatus
                                   ? 'bg-[#00a884] border-[#00a884] text-white'
                                   : 'bg-white border-zinc-300 text-transparent hover:border-black'
                               } ${isLocked ? 'opacity-30 cursor-not-allowed' : 'cursor-pointer active:scale-90'}`}

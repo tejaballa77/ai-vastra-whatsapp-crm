@@ -1691,7 +1691,7 @@ export function ColdCallsModule({
                           <td className="py-4 px-3 text-center align-top">
                             <button
                               type="button"
-                              disabled={isLocked}
+                              disabled={isLocked || hasEnteredStatus}
                               onClick={() => handleToggleContacted(lead)}
                               className={`w-6 h-6 rounded-lg inline-flex items-center justify-center border transition-all ${
                                 isActiveInCall
@@ -1699,8 +1699,20 @@ export function ColdCallsModule({
                                   : hasEnteredStatus
                                   ? 'bg-[#00a884] border-[#00a884] text-white'
                                   : 'bg-white border-zinc-300 text-transparent hover:border-black'
-                              } ${isLocked ? 'opacity-30 cursor-not-allowed' : 'cursor-pointer active:scale-90'}`}
-                              title={isLocked ? 'Enter STATUS for the active red row first' : 'Start this call'}
+                              } ${
+                                hasEnteredStatus
+                                  ? 'cursor-default'
+                                  : isLocked
+                                  ? 'opacity-30 cursor-not-allowed'
+                                  : 'cursor-pointer active:scale-90'
+                              }`}
+                              title={
+                                hasEnteredStatus
+                                  ? 'Completed status'
+                                  : isLocked
+                                  ? 'Enter STATUS for the active red row first'
+                                  : 'Start this call'
+                              }
                             >
                               <Check className="w-3.5 h-3.5 stroke-[3]" />
                             </button>

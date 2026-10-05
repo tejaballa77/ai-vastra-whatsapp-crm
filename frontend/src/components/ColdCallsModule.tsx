@@ -28,12 +28,13 @@ import {
   Filter,
   MessageSquare,
   ArrowUpRight,
-  Upload
+  Upload,
+  Settings as SettingsIcon
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { useSocket } from '../context/SocketContext';
 
-// ─── Types ────────────────────────────────────────────────────────────────────
+// â”€â”€â”€ Types â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export type CallChoiceType = 'YES' | 'NO' | 'MESSAGE' | 'NOT_ANSWERED' | 'INVALID' | 'PENDING';
 export type CallStatusType = 'INTERESTED' | 'WARM' | 'NOT_INTERESTED' | 'NOT_CONNECTED' | 'NOT_REACHABLE' | 'INVALID' | 'PENDING' | string;
@@ -90,7 +91,7 @@ export interface ColdCallLead {
   updatedAt: number;
 }
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+// â”€â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 const getBackendUrl = () => {
   if (process.env.NEXT_PUBLIC_BACKEND_URL) return process.env.NEXT_PUBLIC_BACKEND_URL;
@@ -109,7 +110,7 @@ const formatDateDDMMYYYY = (ts?: number | string): string => {
   if (!ts) return getTodayDate();
   if (typeof ts === 'string') {
     const s = ts.trim();
-    if (!s || s === '—') return '—';
+    if (!s || s === 'â€”') return 'â€”';
     if (s.includes('/')) {
       const parts = s.split('/');
       if (parts.length === 3) {
@@ -134,9 +135,9 @@ const formatDateDDMMYYYY = (ts?: number | string): string => {
 };
 
 const formatDateTime = (ts?: number | string): string => {
-  if (!ts) return '—';
+  if (!ts) return 'â€”';
   const d = typeof ts === 'number' ? new Date(ts) : new Date(Number(ts) || ts);
-  if (isNaN(d.getTime())) return '—';
+  if (isNaN(d.getTime())) return 'â€”';
   const dd = String(d.getDate()).padStart(2, '0');
   const mm = String(d.getMonth() + 1).padStart(2, '0');
   const yyyy = d.getFullYear();
@@ -299,7 +300,7 @@ const mapExcelRow = (row: Record<string, any>, idx: number, userNotesDate?: stri
   };
 };
 
-// ─── Component ────────────────────────────────────────────────────────────────
+// â”€â”€â”€ Component â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export function ColdCallsModule({
   subPage = 'analytics',
@@ -361,6 +362,7 @@ export function ColdCallsModule({
 
   // Add Data popup
   const [showAddPopup, setShowAddPopup] = useState(false);
+  const [showToolsPopup, setShowToolsPopup] = useState(false);
   const [showAddProfileDetails, setShowAddProfileDetails] = useState(false);
   const [addForm, setAddForm] = useState<Partial<ColdCallLead> & { phoneError?: string; bdmError?: string }>({});
 
@@ -406,7 +408,7 @@ export function ColdCallsModule({
   // Upload file input ref
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // ── Column Width Resizing State ─────────────────────────────────────────────
+  // â”€â”€ Column Width Resizing State â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const [colWidths, setColWidths] = useState<Record<string, number>>({
     index: 70,
     businessName: 260,
@@ -445,7 +447,7 @@ export function ColdCallsModule({
     window.addEventListener('mouseup', handleMouseUp);
   };
 
-  // ── Fetch & Real-time Sync ──────────────────────────────────────────────────
+  // â”€â”€ Fetch & Real-time Sync â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const fetchLeads = useCallback(async (isBackground = false) => {
     try {
       if (!isBackground) setLoading(true);
@@ -480,77 +482,12 @@ export function ColdCallsModule({
     };
   }, [socket]);
 
-  // ── Select Active Lead / Toggle Contacted Status via Row Number Button ──────
+  // â”€â”€ Select Active Lead / Toggle Contacted Status via Row Number Button â”€â”€â”€â”€â”€â”€
   const handleToggleContacted = async (lead: ColdCallLead) => {
-    const isCurrentlyClaimed = Boolean(
-      lead.calledBy &&
-      lead.calledBy.trim().length > 0 &&
-      lead.calledBy !== 'Executive User' &&
-      lead.calledBy !== 'Staff'
-    );
-
-    const now = Date.now();
-    const isClaimedByMe = isCurrentlyClaimed && lead.calledBy === currentUserName;
-    const isClaimedByOther = isCurrentlyClaimed && !isClaimedByMe;
-
-    // RULE: The check box toggle access is ONLY for the user who entered/claimed the lead (or admin).
-    // If another user clicks the check box on an already-entered lead, preserve the original BDM!
-    if (isClaimedByOther && !isAdminUser(currentUserName)) {
-      showAlert(
-        `This lead was entered by ${lead.calledBy}. Only ${lead.calledBy} can toggle this check box. To update details or enter new status, open the None/Action button.`,
-        'Lead Claimed',
-        'info'
-      );
-      return;
-    }
-
-    // Toggle: if claimed by me, clicking again unchecks/removes claim! If unclaimed, claim for current user!
-    const newCalledBy = isAdminUser(currentUserName)
-      ? (lead.calledBy || '')
-      : (isClaimedByMe ? '' : currentUserName);
-
-    if (isClaimedByMe) {
-      if (activeSelectedLeadId === lead.id) {
-        setActiveSelectedLeadId(null);
-      }
-    } else {
-      setActiveSelectedLeadId(lead.id);
-    }
-
-    const fRounds = getLeadFollowUps(lead);
-    const updatedRounds = fRounds.map(r => ({
-      ...r,
-      calledBy: newCalledBy || undefined,
-      updatedAt: now,
-    }));
-
-    const partial: Partial<ColdCallLead> = {
-      calledBy: newCalledBy || undefined,
-      callTimestamp: newCalledBy ? now : undefined,
-      followUps: updatedRounds,
-      updatedAt: now,
-    };
-
-    // Immediate optimistic state update
-    setLeads(prev => prev.map(l => l.id === lead.id ? { ...l, ...partial, calledBy: newCalledBy } : l));
-
-    try {
-      await fetch(`${getBackendUrl()}/api/cold-calls/${lead.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          calledBy: newCalledBy,
-          callTimestamp: newCalledBy ? now : null,
-          followUps: updatedRounds,
-          updatedAt: now,
-        }),
-      });
-    } catch (err) {
-      console.error('Failed to toggle contacted lead:', err);
-    }
+    setActiveSelectedLeadId(prev => prev === lead.id ? null : lead.id);
   };
 
-  // ── Update Action Choice directly from Table Row ───────────────────────────
+  // â”€â”€ Update Action Choice directly from Table Row â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const handleActionChange = async (lead: ColdCallLead, newChoice: CallChoiceType) => {
     const now = Date.now();
     const isCurrentlyClaimed = Boolean(
@@ -599,7 +536,7 @@ export function ColdCallsModule({
     }
   };
 
-  // ── Lead Action & Status Helpers ───────────────────────────────────────────
+  // â”€â”€ Lead Action & Status Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const getLeadActionChoice = (lead: ColdCallLead): CallChoiceType => {
     const fRounds = getLeadFollowUps(lead);
     const round = fRounds[0];
@@ -640,11 +577,11 @@ export function ColdCallsModule({
     return '';
   };
 
-  // ── Helper: Get Lead BDM / Called By (ONLY for STATUS entered leads or active call) ─
+  // â”€â”€ Helper: Get Lead BDM / Called By (ONLY for STATUS entered leads or active call) â”€
   const getLeadCaller = (lead: ColdCallLead): string => {
     const statusDisp = getLeadStatusDisplay(lead);
     
-    // If NO status is entered, only show if currently active in call; otherwise leave empty (—)
+    // If NO status is entered, only show if currently active in call; otherwise leave empty (â€”)
     if (!statusDisp || statusDisp.trim().length === 0) {
       if (activeSelectedLeadId === lead.id && lead.calledBy && lead.calledBy.trim().length > 0 && lead.calledBy !== 'Executive User' && lead.calledBy !== 'Staff' && !isAdminUser(lead.calledBy)) {
         return lead.calledBy.trim();
@@ -668,26 +605,26 @@ export function ColdCallsModule({
     return '';
   };
 
-  // ── Helper: Get Lead Follow Up Date ────────────────────────────────────────
+  // â”€â”€ Helper: Get Lead Follow Up Date â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const getLeadFollowUpDate = (l: ColdCallLead): string => {
     const fRounds = getLeadFollowUps(l);
     for (const r of fRounds) {
-      if (r.followUpDate && r.followUpDate.trim() !== '' && r.followUpDate !== '—') {
+      if (r.followUpDate && r.followUpDate.trim() !== '' && r.followUpDate !== 'â€”') {
         return r.followUpDate.trim();
       }
     }
-    if (l.followUpDate && l.followUpDate.trim() !== '' && l.followUpDate !== '—') {
+    if (l.followUpDate && l.followUpDate.trim() !== '' && l.followUpDate !== 'â€”') {
       return l.followUpDate.trim();
     }
     return '';
   };
 
-  // ── Helper: Has Follow Up Date ─────────────────────────────────────────────
+  // â”€â”€ Helper: Has Follow Up Date â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const hasFollowUpDate = (l: ColdCallLead): boolean => {
     return Boolean(getLeadFollowUpDate(l));
   };
 
-  // ── Helper: Lead Categorization Helpers ────────────────────────────────────
+  // â”€â”€ Helper: Lead Categorization Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const isInterestedLead = (l: ColdCallLead): boolean => {
     const status = l.callStatus;
     const outcome = l.callOutcome;
@@ -720,7 +657,7 @@ export function ColdCallsModule({
     return !isInterestedLead(l) && !isNotInterestedLead(l) && !hasExplicitFollowUpStatus(l);
   };
 
-  // ── Helper: Get Lead Notes Count ───────────────────────────────────────────
+  // â”€â”€ Helper: Get Lead Notes Count â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const getLeadNotesCount = (lead: ColdCallLead): number => {
     const fRounds = getLeadFollowUps(lead);
     let count = 0;
@@ -741,7 +678,7 @@ export function ColdCallsModule({
     return count;
   };
 
-  // ── Upload Cold Calls Sheet Modal Submit ───────────────────────────────────
+  // â”€â”€ Upload Cold Calls Sheet Modal Submit â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const handleUploadSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!uploadFile) {
@@ -807,7 +744,7 @@ export function ColdCallsModule({
     reader.readAsArrayBuffer(uploadFile);
   };
 
-  // ── Upload Excel file trigger ──────────────────────────────────────────────
+  // â”€â”€ Upload Excel file trigger â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -815,7 +752,7 @@ export function ColdCallsModule({
     setShowUploadModal(true);
   };
 
-  // ── Inline Edit (Always-On Excel Editing with Instant Auto-Save) ────────────
+  // â”€â”€ Inline Edit (Always-On Excel Editing with Instant Auto-Save) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const handleCellEdit = (leadId: string, field: keyof ColdCallLead, value: string) => {
     const now = Date.now();
 
@@ -845,7 +782,7 @@ export function ColdCallsModule({
     }).catch(err => console.error('Instant cell save error:', err));
   };
 
-  // ── Save All Edits ────────────────────────────────────────────────────────────
+  // â”€â”€ Save All Edits â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const handleSaveAll = async () => {
     setSaveStatus('saving');
     try {
@@ -874,7 +811,7 @@ export function ColdCallsModule({
     setTimeout(() => setSaveStatus('idle'), 3000);
   };
 
-  // ── Info & Follow-up Popup ──────────────────────────────────────────────────
+  // â”€â”€ Info & Follow-up Popup â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const getRoundNotesList = (round: FollowUpRound, leadCreatedAt?: number): NoteEntry[] => {
     const defaultDate = formatDateDDMMYYYY(leadCreatedAt);
     if (round.notesList && round.notesList.length > 0) {
@@ -1230,7 +1167,7 @@ export function ColdCallsModule({
     setInfoPopupLead(prev => prev ? { ...prev, [field]: value } : null);
   };
 
-  // ── Add Data Handler ──────────────────────────────────────────────────────────
+  // â”€â”€ Add Data Handler â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const handleAddData = async () => {
     const rawPhone = (addForm.phone || '').trim();
     const cleanPhone = rawPhone ? rawPhone.replace(/\D/g, '') : '';
@@ -1341,7 +1278,7 @@ export function ColdCallsModule({
     callsToday: callsMadeTodayCount,
   };
 
-  // ── Filter Leads (Earliest uploaded files on top pages, newly uploaded data below) ──
+  // â”€â”€ Filter Leads (Earliest uploaded files on top pages, newly uploaded data below) â”€â”€
   const baseLeads = [...leads].sort((a, b) => {
     const timeA = typeof a.createdAt === 'number' ? a.createdAt : (a.createdAt ? new Date(a.createdAt).getTime() : 0);
     const timeB = typeof b.createdAt === 'number' ? b.createdAt : (b.createdAt ? new Date(b.createdAt).getTime() : 0);
@@ -1373,7 +1310,7 @@ export function ColdCallsModule({
     });
   }
 
-  // ── Pagination & Permanent Chronological Sequence (No In-Page Floating) ──────
+  // â”€â”€ Pagination & Permanent Chronological Sequence (No In-Page Floating) â”€â”€â”€â”€â”€â”€
   const PAGE_SIZE = 20;
   const totalPages = Math.max(1, Math.ceil(filteredLeads.length / PAGE_SIZE));
   const safeCurrentPage = Math.min(Math.max(1, currentPage), totalPages);
@@ -1381,7 +1318,7 @@ export function ColdCallsModule({
   const endIndex = startIndex + PAGE_SIZE;
   const sortedLeads = filteredLeads.slice(startIndex, endIndex);
 
-  // ── Editable Cell Component (Always Live Excel Editable) ──────────────────────
+  // â”€â”€ Editable Cell Component (Always Live Excel Editable) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const EditableCell = ({
     leadId, field, value, placeholder = '', className = '', disabled = false
   }: {
@@ -1448,7 +1385,7 @@ export function ColdCallsModule({
   const normalizeDateStr = (dStr?: string) => {
     if (!dStr) return '';
     const s = dStr.trim();
-    if (!s || s === '—') return '';
+    if (!s || s === 'â€”') return '';
     if (s.includes('T')) return s.split('T')[0];
 
     // Check if it's already YYYY-MM-DD
@@ -1506,112 +1443,77 @@ export function ColdCallsModule({
     return normF === todayLocalStr;
   });
 
-  // ─── Render ───────────────────────────────────────────────────────────────────
+  // â”€â”€â”€ Render â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   return (
     <div className="flex-1 overflow-y-auto p-6 space-y-6 bg-zinc-50/50 text-black">
 
-      {/* ── TOAST ───────────────────────────────────────────────────────────── */}
+      {/* â”€â”€ TOAST â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       {saveStatus !== 'idle' && (
         <div className="fixed top-5 right-5 z-[9999] bg-black text-white px-6 py-3 rounded-2xl shadow-2xl border border-zinc-700 flex items-center gap-3">
           {saveStatus === 'saving' ? (
             <div className="w-6 h-6 rounded-full border-2 border-white border-t-transparent animate-spin" />
           ) : (
             <div className="w-6 h-6 rounded-full bg-white flex items-center justify-center text-black font-bold">
-              ✓
+              âœ“
             </div>
           )}
-          <span className="text-sm font-bold">{saveStatus === 'saving' ? 'Saving...' : '✓ Saved'}</span>
+          <span className="text-sm font-bold">{saveStatus === 'saving' ? 'Saving...' : 'âœ“ Saved'}</span>
         </div>
       )}
 
-      {/* ══════════════════════════════════════════════════════════════════════
+      {/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
           COLD CALLS LEAD LIST SPREADSHEET
-      ══════════════════════════════════════════════════════════════════════ */}
-      <div className="space-y-4">
-        {/* Top Filter Bar: Tabs on Left | Upload Excel on Right */}
-        <div className="bg-white rounded-xl border border-zinc-200 p-3 flex flex-col lg:flex-row lg:items-center justify-between gap-3 shadow-xs">
-          {/* Left Side: Filter Tabs */}
-          <div className="flex items-center gap-2 overflow-x-auto flex-wrap">
-            {([
-              ['PROSPECTS', `Prospects (${counts.prospects})`],
-              ['INTERESTED', `Interested (${counts.interested})`],
-              ['NOT_INTERESTED', `Not Interested (${counts.notInterested})`],
-              ['FOLLOW_UPS', `Follow ups (${counts.followups})`],
-              ['ALL', `All (${counts.all})`],
-            ] as [any, string][]).map(([tab, label]) => (
+      â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */}
+      <div className="space-y-5">
+        <div className="bg-white p-6 rounded-2xl border border-zinc-200 shadow-sm space-y-5">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="flex items-center gap-2">
+              <PhoneCall className="w-5 h-5 text-black" />
+              <h3 className="text-lg font-extrabold text-black">Cold Calls List</h3>
               <button
-                key={tab}
-                onClick={() => setFilterTab(tab)}
-                className={`px-3.5 py-1.5 rounded-xl text-xs font-black transition-all whitespace-nowrap cursor-pointer ${
-                  filterTab === tab ? 'bg-black text-white shadow-xs' : 'text-zinc-700 bg-zinc-100 hover:bg-zinc-200'
-                }`}
+                type="button"
+                onClick={() => setShowToolsPopup(true)}
+                className="ml-1 p-2 rounded-xl border border-zinc-200 bg-zinc-100 hover:bg-zinc-200 text-black transition-all cursor-pointer"
+                title="Cold Calls tools"
+                aria-label="Cold Calls tools"
               >
-                {label}
+                <SettingsIcon className="w-4 h-4" />
               </button>
-            ))}
-          </div>
+            </div>
 
-          {/* Right Side: Upload Excel Button */}
-          <div className="flex items-center gap-2 flex-wrap flex-shrink-0">
-            <button
-              type="button"
-              onClick={() => {
-                setUploadFile(null);
-                setShowUploadModal(true);
-              }}
-              className="inline-flex items-center gap-2 px-4 py-2 bg-[#00a884] hover:bg-[#008f70] text-white font-extrabold text-xs rounded-xl transition-all shadow-xs cursor-pointer active:scale-95"
-            >
-              <Upload className="w-4 h-4" />
-              <span>Upload Excel</span>
-            </button>
-          </div>
-        </div>
+            <div className="flex items-center gap-3 flex-wrap">
+              <div className="relative">
+                <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={e => setSearchQuery(e.target.value)}
+                  placeholder="Search name, phone, business..."
+                  className="w-56 pl-9 pr-4 py-2 text-sm font-medium rounded-xl border border-zinc-300 bg-zinc-100 focus:bg-white focus:border-black focus:outline-none transition-all text-black"
+                />
+              </div>
 
-        {/* TOOLBAR - Search Box on left | Save, Add Data on right */}
-        <div className="bg-white rounded-xl border border-zinc-200 p-3 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-          {/* Left Side: Search Box */}
-          <div className="relative min-w-[280px] flex-1 max-w-md">
-            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={e => setSearchQuery(e.target.value)}
-              placeholder="Search name, phone, business..."
-              className="w-full pl-9 pr-4 py-2 text-sm font-medium rounded-xl border border-zinc-300 bg-zinc-50 focus:bg-white focus:border-black focus:outline-none transition-all text-black"
-            />
+              <div className="flex items-center gap-1 bg-zinc-100 p-1 rounded-xl border border-zinc-200 flex-wrap">
+                {([
+                  ['PROSPECTS', `Prospects (${counts.prospects})`],
+                  ['INTERESTED', `Interested (${counts.interested})`],
+                  ['NOT_INTERESTED', `Not Interested (${counts.notInterested})`],
+                  ['FOLLOW_UPS', `Follow ups (${counts.followups})`],
+                  ['ALL', `All (${counts.all})`],
+                ] as [any, string][]).map(([tab, label]) => (
+                  <button
+                    key={tab}
+                    onClick={() => setFilterTab(tab)}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
+                      filterTab === tab ? 'bg-black text-white shadow-sm' : 'text-zinc-700 hover:text-black'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
-
-          {/* Right Side: Save, Add Data */}
-          <div className="flex items-center gap-2 flex-wrap flex-shrink-0">
-            {/* Save Button */}
-            <button
-              onClick={handleSaveAll}
-              disabled={saveStatus === 'saving'}
-              className="inline-flex items-center gap-2 px-4 py-2 bg-black hover:bg-zinc-800 text-white font-bold text-xs rounded-xl transition-all shadow-sm active:scale-95 disabled:opacity-60 cursor-pointer"
-            >
-              {saveStatus === 'saving' ? (
-                <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-              ) : saveStatus === 'saved' ? (
-                <Check className="w-3.5 h-3.5" />
-              ) : (
-                <Save className="w-3.5 h-3.5" />
-              )}
-              <span>{saveStatus === 'saved' ? 'Saved ✓' : 'Save'}</span>
-            </button>
-
-            {/* Add Data Button */}
-            <button
-              onClick={() => {
-                setAddForm({});
-                setShowAddPopup(true);
-              }}
-              className="inline-flex items-center gap-1.5 px-4 py-2 bg-[#00a884] hover:bg-[#008f70] text-white font-extrabold text-xs rounded-xl transition-all shadow-sm active:scale-95 cursor-pointer"
-            >
-              <Plus className="w-3.5 h-3.5" />
-              <span>Add Data</span>
-            </button>
-          </div>
-        </div>
 
           {/* WhatsApp-style Cold Calls table. Existing filters, actions and popup logic are unchanged. */}
           <div className="bg-white rounded-xl border border-gray-300 shadow-sm overflow-visible font-sans">
@@ -1644,7 +1546,7 @@ export function ColdCallsModule({
                     {sortedLeads.map((lead) => {
                       const statusText = getLeadStatusDisplay(lead);
                       const hasEnteredStatus = Boolean(statusText && statusText.trim());
-                      const isActiveInCall = activeSelectedLeadId === lead.id && !hasEnteredStatus;
+                      const isActiveInCall = activeSelectedLeadId === lead.id;
                       const activeUnfinishedLead = leads.find(l =>
                         activeSelectedLeadId === l.id &&
                         (!getLeadStatusDisplay(l) || !getLeadStatusDisplay(l).trim())
@@ -1691,25 +1593,19 @@ export function ColdCallsModule({
                           <td className="py-4 px-3 text-center align-top">
                             <button
                               type="button"
-                              disabled={isLocked || hasEnteredStatus}
+                              disabled={isLocked}
                               onClick={() => handleToggleContacted(lead)}
                               className={`w-6 h-6 rounded-lg inline-flex items-center justify-center border transition-all ${
                                 isActiveInCall
                                   ? 'bg-white border-2 border-white text-red-600 ring-2 ring-white/60'
-                                  : hasEnteredStatus
-                                  ? 'bg-[#00a884] border-[#00a884] text-white'
                                   : 'bg-white border-zinc-300 text-transparent hover:border-black'
                               } ${
-                                hasEnteredStatus
-                                  ? 'cursor-default'
-                                  : isLocked
+                                isLocked
                                   ? 'opacity-30 cursor-not-allowed'
                                   : 'cursor-pointer active:scale-90'
                               }`}
                               title={
-                                hasEnteredStatus
-                                  ? 'Completed status'
-                                  : isLocked
+                                isLocked
                                   ? 'Enter STATUS for the active red row first'
                                   : 'Start this call'
                               }
@@ -1718,20 +1614,13 @@ export function ColdCallsModule({
                             </button>
                           </td>
 
-                          <td className="py-4 px-4 align-top relative group/phone overflow-visible">
-                            <span className={`font-black tracking-wide border-b border-dashed ${
-                              isActiveInCall ? 'text-white border-white/70' : 'text-black border-zinc-500'
-                            }`}>
+                          <td className="py-4 px-4 align-top">
+                            <span className={`font-black tracking-wide ${isActiveInCall ? 'text-white' : 'text-black'}`}>
                               {lead.phone || '—'}
                             </span>
-                            <div className="invisible opacity-0 group-hover/phone:visible group-hover/phone:opacity-100 absolute z-50 left-4 top-12 w-72 bg-white text-black border border-zinc-300 rounded-xl shadow-2xl p-4 transition-all">
-                              <div className="absolute -top-2 left-7 w-4 h-4 bg-white border-l border-t border-zinc-300 rotate-45" />
-                              <div className="relative grid grid-cols-[105px_1fr] gap-x-3 gap-y-3 text-xs">
-                                <span className="text-zinc-500 font-bold">Business name</span>
-                                <strong className="break-words">{lead.businessName || '—'}</strong>
-                                <span className="text-zinc-500 font-bold">Person name</span>
-                                <strong className="break-words">{lead.personName || lead.name || '—'}</strong>
-                              </div>
+                            <div className={`mt-1 space-y-0.5 text-xs leading-relaxed ${isActiveInCall ? 'text-white/85' : 'text-zinc-600'}`}>
+                              <div><span className="font-bold">Business:</span> {lead.businessName || '—'}</div>
+                              <div><span className="font-bold">Person:</span> {lead.personName || lead.name || '—'}</div>
                             </div>
                           </td>
 
@@ -1742,10 +1631,10 @@ export function ColdCallsModule({
                                   ? 'bg-zinc-100 text-zinc-950 border-zinc-500'
                                   : 'bg-zinc-50 text-zinc-900 border-zinc-300'
                               }`}>
-                                📅 {formatDateDDMMYYYY(followUpDate)}
+                                ðŸ“… {formatDateDDMMYYYY(followUpDate)}
                               </span>
                             ) : (
-                              <span className={isActiveInCall ? 'text-white/75' : 'text-zinc-500'}>—</span>
+                              <span className={isActiveInCall ? 'text-white/75' : 'text-zinc-500'}>â€”</span>
                             )}
                           </td>
 
@@ -1756,13 +1645,13 @@ export function ColdCallsModule({
                                   <li key={`${lead.id}-note-${index}`} className="grid grid-cols-[22px_1fr] gap-1 leading-relaxed">
                                     <span className="font-black">{index + 1}.</span>
                                     <span className="italic whitespace-pre-wrap break-words">
-                                      “{noteItem.text} ({noteItem.date ? noteItem.date.replace(/-/g, '/') : '—'})”
+                                      â€œ{noteItem.text} ({noteItem.date ? noteItem.date.replace(/-/g, '/') : 'â€”'})â€
                                     </span>
                                   </li>
                                 ))}
                               </ol>
                             ) : (
-                              <span className={isActiveInCall ? 'text-white/75' : 'text-zinc-500'}>—</span>
+                              <span className={isActiveInCall ? 'text-white/75' : 'text-zinc-500'}>â€”</span>
                             )}
                           </td>
 
@@ -1770,12 +1659,12 @@ export function ColdCallsModule({
                             {isActiveInCall ? (
                               <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-black text-white border border-black/80 rounded-lg font-black shadow-sm">
                                 <span className="w-2 h-2 rounded-full bg-red-400 animate-ping" />
-                                In-call: {lead.calledBy || currentUserName}
+                                In-call: {currentUserName}
                               </span>
                             ) : bdmNames.length > 0 ? (
                               bdmNames.join(', ')
                             ) : (
-                              <span className="text-zinc-500">—</span>
+                              <span className="text-zinc-500">â€”</span>
                             )}
                           </td>
 
@@ -1991,9 +1880,9 @@ export function ColdCallsModule({
                                 }`}
                                 title={
                                   isClaimedByOther
-                                    ? `🔒 ${isActiveInCall ? 'In call with' : 'Contacted by'} ${lead.calledBy} (Locked)`
+                                    ? `ðŸ”’ ${isActiveInCall ? 'In call with' : 'Contacted by'} ${lead.calledBy} (Locked)`
                                     : isClaimedByMe
-                                    ? `✓ ${isActiveInCall ? 'Currently in call with you' : 'Claimed by you'} (${currentUserName}) (Click to start/uncheck)`
+                                    ? `âœ“ ${isActiveInCall ? 'Currently in call with you' : 'Claimed by you'} (${currentUserName}) (Click to start/uncheck)`
                                     : `Click to start call with ${currentUserName}`
                                 }
                               >
@@ -2060,7 +1949,7 @@ export function ColdCallsModule({
                                 return (
                                   <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-black text-white border border-black/80 rounded-lg text-xs font-black shadow-sm">
                                     <span className="w-2 h-2 rounded-full bg-red-400 animate-ping" />
-                                    <span>🔴 In Call: {caller || currentUserName}</span>
+                                    <span>ðŸ”´ In Call: {caller || currentUserName}</span>
                                   </span>
                                 );
                               }
@@ -2071,7 +1960,7 @@ export function ColdCallsModule({
                                   </span>
                                 );
                               }
-                              return <span className="text-zinc-400 font-normal">—</span>;
+                              return <span className="text-zinc-400 font-normal">â€”</span>;
                             })()}
                           </td>
 
@@ -2169,10 +2058,11 @@ export function ColdCallsModule({
             )}
           </div>
         </div>
+      </div>
 
-      {/* ══════════════════════════════════════════════════════════════════════
+      {/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
           INFO & FOLLOW-UP POPUP MODAL
-      ══════════════════════════════════════════════════════════════════════ */}
+      â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */}
       {infoPopupLead && (() => {
         const isClaimed = Boolean(
           infoPopupLead.calledBy &&
@@ -2208,7 +2098,7 @@ export function ColdCallsModule({
                   {(infoPopupLead.personName || infoPopupLead.phone) && (
                     <p className="text-sm font-bold text-zinc-500 mt-1 truncate">
                       {infoPopupLead.personName ? infoPopupLead.personName : ''}
-                      {infoPopupLead.phone ? `${infoPopupLead.personName ? ' · ' : ''}📞 ${infoPopupLead.phone}` : ''}
+                      {infoPopupLead.phone ? `${infoPopupLead.personName ? ' Â· ' : ''}ðŸ“ž ${infoPopupLead.phone}` : ''}
                     </p>
                   )}
                 </div>
@@ -2226,7 +2116,7 @@ export function ColdCallsModule({
               {/* View Only Alert Banner if Claimed by Another User */}
               {isClaimedByOther && (
                 <div className="mx-8 mt-4 px-4 py-2.5 bg-amber-50 border border-amber-300 rounded-xl text-xs font-black text-amber-900 flex items-center gap-2 shadow-xs">
-                  <span>🔒 View-Only Mode: This contact is claimed by <strong>{infoPopupLead.calledBy}</strong>. Only {infoPopupLead.calledBy} has permission to edit, schedule follow-ups, or add notes.</span>
+                  <span>ðŸ”’ View-Only Mode: This contact is claimed by <strong>{infoPopupLead.calledBy}</strong>. Only {infoPopupLead.calledBy} has permission to edit, schedule follow-ups, or add notes.</span>
                 </div>
               )}
 
@@ -2295,7 +2185,7 @@ export function ColdCallsModule({
                       </div>
                     ) : (
                       <div className="w-full h-11 px-3.5 rounded-xl border border-zinc-200 bg-zinc-50 text-sm font-semibold text-zinc-400 flex items-center justify-center select-none shadow-xs">
-                        —
+                        â€”
                       </div>
                     )}
                   </div>
@@ -2336,7 +2226,7 @@ export function ColdCallsModule({
                   </div>
                 </div>
 
-                {/* ── Simplified Note Section ── */}
+                {/* â”€â”€ Simplified Note Section â”€â”€ */}
                 <div className="space-y-3 pt-2">
                   <label className="text-xs font-black text-zinc-700 uppercase tracking-wider block">
                     Note
@@ -2386,7 +2276,7 @@ export function ColdCallsModule({
                               <tr key={nIdx} className="hover:bg-zinc-50/80 transition-colors">
                                 <td className="py-3 px-4 align-top whitespace-nowrap">
                                   <span className="px-2.5 py-1 text-xs font-extrabold bg-zinc-100 text-zinc-800 border border-zinc-300 rounded-lg inline-flex items-center gap-1 shadow-2xs">
-                                    📅 {noteItem.date ? noteItem.date.replace(/-/g, '/') : '—'}
+                                    ðŸ“… {noteItem.date ? noteItem.date.replace(/-/g, '/') : 'â€”'}
                                   </span>
                                 </td>
                                 <td className="py-3 px-4 align-top text-black font-semibold text-sm leading-relaxed whitespace-pre-wrap break-words">
@@ -2411,7 +2301,7 @@ export function ColdCallsModule({
                   )}
                 </div>
 
-                {/* ── Contact Details (ONLY DISPLAYED IF EXTRA DATA / COLUMNS EXIST IN THE FILE) ── */}
+                {/* â”€â”€ Contact Details (ONLY DISPLAYED IF EXTRA DATA / COLUMNS EXIST IN THE FILE) â”€â”€ */}
                 {Boolean(
                   (infoPopupLead.role && infoPopupLead.role.trim()) ||
                   (infoPopupLead.email && infoPopupLead.email.trim()) ||
@@ -2548,9 +2438,73 @@ export function ColdCallsModule({
         );
       })()}
 
-      {/* ══════════════════════════════════════════════════════════════════════
+      {/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
           ADD DATA POPUP (FULL CONTACT & ACTION MODAL)
-      ══════════════════════════════════════════════════════════════════════ */}
+      â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */}
+      {showToolsPopup && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[9998] flex items-center justify-center p-4">
+          <div className="bg-white w-full max-w-sm rounded-2xl shadow-2xl border border-zinc-200 overflow-hidden">
+            <div className="px-5 py-4 bg-zinc-100 border-b border-zinc-200 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <SettingsIcon className="w-5 h-5 text-black" />
+                <h3 className="text-sm font-extrabold text-black">Cold Calls Tools</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowToolsPopup(false)}
+                className="w-8 h-8 rounded-full bg-white hover:bg-zinc-200 flex items-center justify-center text-zinc-700 transition-all border border-zinc-200 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowToolsPopup(false);
+                  setUploadFile(null);
+                  setShowUploadModal(true);
+                }}
+                className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-sm transition-all cursor-pointer"
+              >
+                <Upload className="w-5 h-5" />
+                <span>Upload Excel</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setShowToolsPopup(false);
+                  setAddForm({});
+                  setShowAddPopup(true);
+                }}
+                className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-[#00a884] hover:bg-[#008f70] text-white font-extrabold text-sm transition-all cursor-pointer"
+              >
+                <Plus className="w-5 h-5" />
+                <span>Add Data</span>
+              </button>
+
+              <button
+                type="button"
+                disabled={saveStatus === 'saving'}
+                onClick={() => {
+                  setShowToolsPopup(false);
+                  handleSaveAll();
+                }}
+                className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-black hover:bg-zinc-800 text-white font-extrabold text-sm transition-all cursor-pointer disabled:opacity-60"
+              >
+                {saveStatus === 'saving' ? (
+                  <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                ) : (
+                  <Save className="w-5 h-5" />
+                )}
+                <span>{saveStatus === 'saving' ? 'Saving...' : 'Save Changes'}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       {showAddPopup && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[9999] flex items-center justify-center p-4 text-black font-sans">
           <div className="bg-white w-full max-w-2xl rounded-2xl shadow-2xl border border-gray-200 flex flex-col max-h-[90vh] overflow-hidden animate-in fade-in zoom-in duration-150">
@@ -2765,7 +2719,7 @@ export function ColdCallsModule({
                   className="flex items-center justify-between w-full text-left py-1 text-xs font-black text-zinc-600 hover:text-black transition-colors"
                 >
                   <span className="flex items-center gap-1.5 uppercase tracking-wider">
-                    <span>📋</span>
+                    <span>ðŸ“‹</span>
                     <span>Lead & Contact Profile Details (Website, Email, Socials)</span>
                   </span>
                   <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${showAddProfileDetails ? 'rotate-180' : ''}`} />
@@ -2862,7 +2816,7 @@ export function ColdCallsModule({
         </div>
       )}
 
-      {/* ── STATUS BREAKDOWN POPUP MODAL ── */}
+      {/* â”€â”€ STATUS BREAKDOWN POPUP MODAL â”€â”€ */}
       {showStatusModal && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[9999] flex items-center justify-center p-4 text-black font-sans">
           <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl border border-gray-200 flex flex-col overflow-hidden animate-in fade-in zoom-in duration-150">
@@ -2882,10 +2836,10 @@ export function ColdCallsModule({
             {/* Body */}
             <div className="p-6 space-y-3 font-sans">
               {([
-                ['Interested', leads.filter(l => l.callStatus === 'INTERESTED').length, 'text-emerald-900', 'bg-emerald-50', 'border-emerald-200', '👍'],
-                ['Warm', leads.filter(l => l.callStatus === 'WARM' || l.callStatus === 'YES').length, 'text-amber-900', 'bg-amber-50', 'border-amber-200', '🔥'],
-                ['Not Interested', leads.filter(l => l.callStatus === 'NOT_INTERESTED').length, 'text-rose-900', 'bg-rose-50', 'border-rose-200', '👎'],
-                ['Not Connected / Pending', leads.filter(l => l.callStatus === 'NOT_CONNECTED' || l.callChoice === 'NO' || !l.callStatus || l.callStatus === 'PENDING').length, 'text-zinc-900', 'bg-zinc-50', 'border-zinc-200', '⏳'],
+                ['Interested', leads.filter(l => l.callStatus === 'INTERESTED').length, 'text-emerald-900', 'bg-emerald-50', 'border-emerald-200', 'ðŸ‘'],
+                ['Warm', leads.filter(l => l.callStatus === 'WARM' || l.callStatus === 'YES').length, 'text-amber-900', 'bg-amber-50', 'border-amber-200', 'ðŸ”¥'],
+                ['Not Interested', leads.filter(l => l.callStatus === 'NOT_INTERESTED').length, 'text-rose-900', 'bg-rose-50', 'border-rose-200', 'ðŸ‘Ž'],
+                ['Not Connected / Pending', leads.filter(l => l.callStatus === 'NOT_CONNECTED' || l.callChoice === 'NO' || !l.callStatus || l.callStatus === 'PENDING').length, 'text-zinc-900', 'bg-zinc-50', 'border-zinc-200', 'â³'],
               ] as [string, number, string, string, string, string][]).map(([label, count, textColor, cardBg, cardBorder, emoji]) => (
                 <div key={label} className={`p-4 rounded-xl border ${cardBg} ${cardBorder} flex items-center justify-between`}>
                   <div className={`flex items-center gap-2.5 text-sm font-extrabold ${textColor}`}>
@@ -2906,7 +2860,7 @@ export function ColdCallsModule({
         </div>
       )}
 
-      {/* ── INTERESTED CONTACTS POPUP MODAL ── */}
+      {/* â”€â”€ INTERESTED CONTACTS POPUP MODAL â”€â”€ */}
       {showInterestedModal && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[9999] flex items-center justify-center p-4 text-black font-sans">
           <div className="bg-white w-full max-w-3xl rounded-2xl shadow-2xl border border-gray-200 flex flex-col max-h-[85vh] overflow-hidden animate-in fade-in zoom-in duration-150">
@@ -2947,15 +2901,15 @@ export function ColdCallsModule({
                       {leads.filter(l => l.callStatus === 'INTERESTED' || (l.callChoice === 'YES' && (l.callStatus === 'WARM' || l.callStatus === 'YES' || !l.callStatus))).map((lead, idx) => (
                         <tr key={lead.id} className="hover:bg-purple-50/30 transition-colors">
                           <td className="p-3 text-gray-400 font-mono font-bold">{idx + 1}</td>
-                          <td className="p-3 font-extrabold text-black">{lead.businessName || '—'}</td>
-                          <td className="p-3 font-semibold text-gray-700">{lead.personName || lead.name || '—'}</td>
-                          <td className="p-3 font-extrabold text-[#00a884]">{lead.phone || '—'}</td>
+                          <td className="p-3 font-extrabold text-black">{lead.businessName || 'â€”'}</td>
+                          <td className="p-3 font-semibold text-gray-700">{lead.personName || lead.name || 'â€”'}</td>
+                          <td className="p-3 font-extrabold text-[#00a884]">{lead.phone || 'â€”'}</td>
                           <td className="p-3 text-center">
                             <span className="px-2.5 py-0.5 text-xs font-bold rounded bg-emerald-100 text-emerald-800 border border-emerald-300">
                               {lead.callStatus || 'Interested'}
                             </span>
                           </td>
-                          <td className="p-3 text-gray-600 truncate max-w-[150px]">{lead.note || lead.notesList?.[0]?.text || '—'}</td>
+                          <td className="p-3 text-gray-600 truncate max-w-[150px]">{lead.note || lead.notesList?.[0]?.text || 'â€”'}</td>
                           <td className="p-3 text-right">
                             <button
                               onClick={() => { setShowInterestedModal(false); openInfoPopup(lead); }}
@@ -2981,7 +2935,7 @@ export function ColdCallsModule({
         </div>
       )}
 
-      {/* ── FOLLOW-UPS SCHEDULED POPUP MODAL (ALL FUTURE) ── */}
+      {/* â”€â”€ FOLLOW-UPS SCHEDULED POPUP MODAL (ALL FUTURE) â”€â”€ */}
       {showScheduledModal && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[9999] flex items-center justify-center p-4 text-black font-sans">
           <div className="bg-white w-full max-w-3xl rounded-2xl shadow-2xl border border-gray-200 flex flex-col max-h-[85vh] overflow-hidden animate-in fade-in zoom-in duration-150">
@@ -3022,11 +2976,11 @@ export function ColdCallsModule({
                       {scheduledFollowupLeadsList.map((lead, idx) => (
                         <tr key={lead.id} className="hover:bg-indigo-50/30 transition-colors">
                           <td className="p-3 text-gray-400 font-mono font-bold">{idx + 1}</td>
-                          <td className="p-3 font-extrabold text-black">{lead.businessName || '—'}</td>
-                          <td className="p-3 font-semibold text-gray-700">{lead.personName || lead.name || '—'}</td>
-                          <td className="p-3 font-extrabold text-[#00a884]">{lead.phone || '—'}</td>
+                          <td className="p-3 font-extrabold text-black">{lead.businessName || 'â€”'}</td>
+                          <td className="p-3 font-semibold text-gray-700">{lead.personName || lead.name || 'â€”'}</td>
+                          <td className="p-3 font-extrabold text-[#00a884]">{lead.phone || 'â€”'}</td>
                           <td className="p-3 font-extrabold text-indigo-800 bg-indigo-50/80 rounded">{formatDateDDMMYYYY(getLeadFollowUpDate(lead))}</td>
-                          <td className="p-3 text-gray-600 truncate max-w-[150px]">{lead.note || lead.notesList?.[0]?.text || '—'}</td>
+                          <td className="p-3 text-gray-600 truncate max-w-[150px]">{lead.note || lead.notesList?.[0]?.text || 'â€”'}</td>
                           <td className="p-3 text-right">
                             <button
                               onClick={() => { setShowScheduledModal(false); openInfoPopup(lead); }}
@@ -3052,7 +3006,7 @@ export function ColdCallsModule({
         </div>
       )}
 
-      {/* ── FOLLOW-UPS TODAY POPUP MODAL ── */}
+      {/* â”€â”€ FOLLOW-UPS TODAY POPUP MODAL â”€â”€ */}
       {showFollowupsTodayModal && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[9999] flex items-center justify-center p-4 text-black font-sans">
           <div className="bg-white w-full max-w-3xl rounded-2xl shadow-2xl border border-gray-200 flex flex-col max-h-[85vh] overflow-hidden animate-in fade-in zoom-in duration-150">
@@ -3093,11 +3047,11 @@ export function ColdCallsModule({
                       {followupTodayLeadsList.map((lead, idx) => (
                         <tr key={lead.id} className="hover:bg-amber-50/30 transition-colors">
                           <td className="p-3 text-gray-400 font-mono font-bold">{idx + 1}</td>
-                          <td className="p-3 font-extrabold text-black">{lead.businessName || '—'}</td>
-                          <td className="p-3 font-semibold text-gray-700">{lead.personName || lead.name || '—'}</td>
-                          <td className="p-3 font-extrabold text-[#00a884]">{lead.phone || '—'}</td>
+                          <td className="p-3 font-extrabold text-black">{lead.businessName || 'â€”'}</td>
+                          <td className="p-3 font-semibold text-gray-700">{lead.personName || lead.name || 'â€”'}</td>
+                          <td className="p-3 font-extrabold text-[#00a884]">{lead.phone || 'â€”'}</td>
                           <td className="p-3 font-extrabold text-amber-800 bg-amber-50/80 rounded">{formatDateDDMMYYYY(getLeadFollowUpDate(lead))}</td>
-                          <td className="p-3 text-gray-600 truncate max-w-[150px]">{lead.note || lead.notesList?.[0]?.text || '—'}</td>
+                          <td className="p-3 text-gray-600 truncate max-w-[150px]">{lead.note || lead.notesList?.[0]?.text || 'â€”'}</td>
                           <td className="p-3 text-right">
                             <button
                               onClick={() => { setShowFollowupsTodayModal(false); openInfoPopup(lead); }}
@@ -3123,7 +3077,7 @@ export function ColdCallsModule({
         </div>
       )}
 
-      {/* ── DELETE CONFIRMATION POPUP MODAL ── */}
+      {/* â”€â”€ DELETE CONFIRMATION POPUP MODAL â”€â”€ */}
       {deleteConfirmLead && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[9999] flex items-center justify-center p-4 text-black font-sans">
           <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl border border-gray-200 overflow-hidden animate-in fade-in zoom-in duration-150 p-6 space-y-4">
@@ -3160,7 +3114,7 @@ export function ColdCallsModule({
         </div>
       )}
 
-      {/* ── UPLOAD COLD CALLS SHEET POPUP MODAL ── */}
+      {/* â”€â”€ UPLOAD COLD CALLS SHEET POPUP MODAL â”€â”€ */}
       {showUploadModal && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[9999] flex items-center justify-center p-4 text-black font-sans">
           <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl border border-gray-200 flex flex-col overflow-hidden animate-in fade-in zoom-in duration-150">
@@ -3241,7 +3195,7 @@ export function ColdCallsModule({
         </div>
       )}
 
-      {/* ── CENTERED CRM CUSTOM ALERT / NOTICE POPUP MODAL ── */}
+      {/* â”€â”€ CENTERED CRM CUSTOM ALERT / NOTICE POPUP MODAL â”€â”€ */}
       {alertModal && alertModal.isOpen && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[99999] flex items-center justify-center p-4 text-black font-sans animate-in fade-in duration-150">
           <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl border border-gray-200 overflow-hidden transform animate-in zoom-in-95 duration-150">
@@ -3251,7 +3205,7 @@ export function ColdCallsModule({
                 <div className={`w-9 h-9 rounded-xl flex items-center justify-center font-bold text-base shadow-2xs ${
                   alertModal.type === 'error' ? 'bg-rose-100 text-rose-600' : 'bg-amber-100 text-amber-700'
                 }`}>
-                  {alertModal.type === 'error' ? '✕' : '⚠️'}
+                  {alertModal.type === 'error' ? 'âœ•' : 'âš ï¸'}
                 </div>
                 <h3 className="text-base font-black text-black tracking-tight">{alertModal.title}</h3>
               </div>
@@ -3285,7 +3239,7 @@ export function ColdCallsModule({
   );
 }
 
-// ─── Info Field Helper Component ──────────────────────────────────────────────
+// â”€â”€â”€ Info Field Helper Component â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function InfoField({
   icon, label, value, onChange, isLink = false,
 }: {

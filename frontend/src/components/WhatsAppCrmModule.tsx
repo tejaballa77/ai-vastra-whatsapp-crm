@@ -8,6 +8,9 @@ import {
   PhoneCall, 
   Mail, 
   Settings, 
+  Instagram,
+  Linkedin,
+  Facebook,
   ExternalLink,
   Flame,
   ThumbsUp,
@@ -615,7 +618,6 @@ export function WhatsAppCrmModule() {
   const sidebarNavClass = (isActive: boolean) => `w-full flex items-center gap-3.5 px-4 py-3 rounded-2xl text-sm transition-all cursor-pointer ${
     isActive ? 'bg-white text-black shadow-md font-extrabold' : 'text-white hover:bg-white/10 font-semibold'
   }`;
-  const sidebarIconClass = (isActive: boolean, extra = '') => `${extra} ${isActive ? '' : 'brightness-0 invert'}`.trim();
 
   const getModalTitle = () => {
     switch (modalCategory) {
@@ -648,11 +650,7 @@ export function WhatsAppCrmModule() {
               onClick={() => setActiveNav('whatsapp')}
               className={sidebarNavClass(activeNav === 'whatsapp')}
             >
-              <img
-                src="/whatsapp_icon.png"
-                alt="WhatsApp"
-                className={sidebarIconClass(activeNav === 'whatsapp', 'w-6 h-6 object-contain flex-shrink-0 scale-110 transition-all')}
-              />
+              <MessageSquare className="w-6 h-6 flex-shrink-0" />
               <span className="flex-1 text-left">WhatsApp</span>
             </button>
 
@@ -671,11 +669,7 @@ export function WhatsAppCrmModule() {
               onClick={() => setActiveNav('instagram')}
               className={sidebarNavClass(activeNav === 'instagram')}
             >
-              <img
-                src="/instagram_icon.png"
-                alt="Instagram"
-                className={sidebarIconClass(activeNav === 'instagram', 'w-6 h-6 object-contain flex-shrink-0 scale-110 transition-all')}
-              />
+              <Instagram className="w-6 h-6 flex-shrink-0" />
               <span className="flex-1 text-left">Instagram</span>
             </button>
 
@@ -683,11 +677,7 @@ export function WhatsAppCrmModule() {
               onClick={() => setActiveNav('linkedin')}
               className={sidebarNavClass(activeNav === 'linkedin')}
             >
-              <img
-                src="/linkedin_icon.png"
-                alt="LinkedIn"
-                className={sidebarIconClass(activeNav === 'linkedin', 'w-6 h-6 object-contain flex-shrink-0 scale-135 transition-all')}
-              />
+              <Linkedin className="w-6 h-6 flex-shrink-0" />
               <span className="flex-1 text-left">LinkedIn</span>
             </button>
 
@@ -695,13 +685,8 @@ export function WhatsAppCrmModule() {
               onClick={() => setActiveNav('facebook')}
               className={sidebarNavClass(activeNav === 'facebook')}
             >
-              <img
-                src="/facebook_icon.png"
-                alt="Facebook"
-                className={sidebarIconClass(activeNav === 'facebook', 'w-6 h-6 object-contain flex-shrink-0 scale-110 transition-all')}
-              />
+              <Facebook className="w-6 h-6 flex-shrink-0" />
               <span className="flex-1 text-left">Facebook</span>
-              <span className={`ml-auto text-[10px] px-2 py-0.5 rounded-full font-bold border ${activeNav === 'facebook' ? 'bg-black text-white border-black' : 'bg-white/10 text-zinc-300 border-white/10'}`}>Soon</span>
             </button>
 
             <button
@@ -766,7 +751,7 @@ export function WhatsAppCrmModule() {
                 <div>
                   <h3 className="text-lg font-extrabold text-black flex items-center gap-2">
                     {activeNav === 'whatsapp' ? (
-                      <img src="/whatsapp_icon.png" alt="WhatsApp" className="w-5 h-5 object-contain" />
+                      <img src="/whatsapp_icon.png" alt="WhatsApp" className="w-6 h-6 object-contain" />
                     ) : (
                       <FileText className="w-5 h-5 text-black" />
                     )}

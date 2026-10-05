@@ -1110,7 +1110,7 @@ export function WhatsAppCrmModule() {
 
 
         {activeNav === 'settings' && (
-          <SettingsModule chats={chats} onExportCsv={handleExportCsv} />
+          <SettingsModule chats={chats} />
         )}
       </main>
 
@@ -1571,21 +1571,22 @@ export function WhatsAppCrmModule() {
                   onChange={(e) => setForwardDateInput(e.target.value)}
                   className="w-full p-2.5 bg-[#f0f2f5] border border-[#e9edef] rounded-lg text-xs font-bold text-[#111b21] outline-none focus:border-[#00a884] transition-all"
                 />
-                {/* Quick date chips */}
-                <div className="flex gap-2 mt-2">
-                  {[['Today',0],['Tmrw',1],['+3d',3],['+1wk',7]].map(([label, days]) => (
-                    <button
-                      key={label}
-                      type="button"
-                      onClick={() => {
-                        const d = new Date();
-                        d.setDate(d.getDate() + Number(days));
-                        setForwardDateInput(d.toISOString().slice(0,10));
-                      }}
-                      className="flex-1 py-1 text-[10px] font-bold bg-[#f0f2f5] hover:bg-[#e9edef] text-[#111b21] border border-[#e9edef] rounded-md transition-all"
-                    >{label}</button>
-                  ))}
-                </div>
+                {activeNav !== 'whatsapp' && (
+                  <div className="flex gap-2 mt-2">
+                    {[['Today',0],['Tmrw',1],['+3d',3],['+1wk',7]].map(([label, days]) => (
+                      <button
+                        key={label}
+                        type="button"
+                        onClick={() => {
+                          const d = new Date();
+                          d.setDate(d.getDate() + Number(days));
+                          setForwardDateInput(d.toISOString().slice(0,10));
+                        }}
+                        className="flex-1 py-1 text-[10px] font-bold bg-[#f0f2f5] hover:bg-[#e9edef] text-[#111b21] border border-[#e9edef] rounded-md transition-all"
+                      >{label}</button>
+                    ))}
+                  </div>
+                )}
               </div>
 
               {/* CALL REQUEST (WhatsApp) vs BDM & LANGUAGE (Social) */}

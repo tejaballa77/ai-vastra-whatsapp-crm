@@ -1,265 +1,251 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Database, MessageSquare, PhoneCall, Check, FileSpreadsheet } from 'lucide-react';
+import { Check, Download, Facebook, FileSpreadsheet, Instagram, Linkedin, MessageSquare, PhoneCall } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { getBackendUrl } from '../config';
 import { Chat } from '../types/chat';
 
 interface SettingsModuleProps {
   chats: Chat[];
-  onExportCsv?: () => void;
 }
 
-export function SettingsModule({ chats, onExportCsv }: SettingsModuleProps) {
-  const [downloadingWhatsapp, setDownloadingWhatsapp] = useState(false);
-  const [downloadingColdCalls, setDownloadingColdCalls] = useState(false);
-  const [whatsappSuccess, setWhatsappSuccess] = useState(false);
-  const [coldCallsSuccess, setColdCallsSuccess] = useState(false);
+type BackupBlock = 'whatsapp' | 'cold-calls' | 'instagram' | 'linkedin' | 'facebook';
 
-  // 1. Download WhatsApp Data Excel Spreadsheet (.xlsx)
-  const handleDownloadWhatsappBackup = () => {
+const cleanDash = (value: unknown): string => {
+  const text = String(value ?? '').trim();
+  if (!text || text === '—' || text.includes('â') || text.includes('Ã')) return '-';
+  return text;
+};
+
+const notesToText = (notesList: unknown, notes?: string): string => {
+  if (Array.isArray(notesList) && notesList.length > 0) {
+    const parsed = notesList
+      .map((note) => {
+        if (typeof note === 'string') return note.trim();
+        if (note && typeof note === 'object') {
+          const item = note as { text?: string; date?: string };
+          return [item.text, item.date ? `(${item.date})` : ''].filter(Boolean).join(' ').trim();
+        }
+        return '';
+      })
+      .filter(Boolean);
+    if (parsed.length > 0) return parsed.join('\n');
+  }
+  return cleanDash(notes);
+};
+
+const isSavedCrmChat = (chat: Chat): boolean => {
+  const hasStatus = Boolean(chat.leadStatus && chat.leadStatus !== 'UNASSIGNED');
+  const hasCall = Boolean(chat.callStatus);
+  const hasFollow = Boolean(chat.followUpDate && chat.followUpDate.trim().length > 0 && chat.followUpDate !== '—');
+  const hasNotes = Boolean((chat.notesList && chat.notesList.length > 0) || (chat.notes && chat.notes.trim().length > 0));
+  return hasStatus || hasCall || hasFollow || hasNotes || (chat as any).manuallySaved === true;
+};
+
+const chatMatchesPlatform = (chat: Chat, platform: 'whatsapp' | 'instagram' | 'linkedin' | 'facebook'): boolean => {
+  const jid = String(chat.jid || '').toLowerCase();
+  const phone = String(chat.phone || '').toLowerCase();
+  if (platform === 'instagram') return jid.includes('instagram') || phone.includes('instagram');
+  if (platform === 'linkedin') return jid.includes('linkedin') || phone.includes('linkedin');
+  if (platform === 'facebook') return jid.includes('facebook') || phone.includes('facebook');
+  return !jid.includes('instagram') && !jid.includes('linkedin') && !jid.includes('facebook');
+};
+
+export function SettingsModule({ chats }: SettingsModuleProps) {
+  const [downloading, setDownloading] = useState<BackupBlock | null>(null);
+  const [success, setSuccess] = useState<BackupBlock | null>(null);
+
+  const finishSuccess = (block: BackupBlock) => {
+    setDownloading(null);
+    setSuccess(block);
+    setTimeout(() => setSuccess(null), 2500);
+  };
+
+  const downloadWorkbook = (rows: Record<string, string>[], sheetName: string, fileName: string, widths: number[]) => {
+    const worksheet = XLSX.utils.json_to_sheet(rows);
+    worksheet['!cols'] = widths.map((wch) => ({ wch }));
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, sheetName);
+    XLSX.writeFile(workbook, fileName);
+  };
+
+  const downloadSocialBackup = (block: Exclude<BackupBlock, 'cold-calls'>) => {
+    setDownloading(block);
     try {
-      setDownloadingWhatsapp(true);
-
-      const savedLeads = chats.filter((c) => {
-        const hasStatus = Boolean(c.leadStatus && c.leadStatus !== 'UNASSIGNED');
-        const hasCall = Boolean(c.callStatus && c.callStatus !== undefined && c.callStatus !== null && (c.callStatus as any) !== 'None');
-        const hasFollow = Boolean(c.followUpDate && c.followUpDate.trim().length > 0 && c.followUpDate !== '—');
-        const hasNotes = Boolean((c.notesList && c.notesList.length > 0) || (c.notes && c.notes.trim().length > 0));
-        const isManuallySaved = (c as any).manuallySaved === true;
-        return hasStatus || hasCall || hasFollow || hasNotes || isManuallySaved;
-      });
-
-      const excelRows = savedLeads.map((c) => {
-        const notesStr = Array.isArray(c.notesList) && c.notesList.length > 0
-          ? c.notesList.join(' | ')
-          : (c.notes || '—');
-
-        return {
-          'Contact Name / Phone': c.name || c.phone || (c.jid ? c.jid.split('@')[0] : 'Unsaved'),
-          'Lead Status': c.leadStatus || 'UNASSIGNED',
-          'Call Status': c.callStatus || '—',
-          'Follow-Up Date': c.followUpDate || '—',
-          'Latest CRM Notes': notesStr,
-        };
-      });
-
-      const worksheet = XLSX.utils.json_to_sheet(excelRows.length > 0 ? excelRows : [{
-        'Contact Name / Phone': 'No saved data found',
-        'Lead Status': '—',
-        'Call Status': '—',
-        'Follow-Up Date': '—',
-        'Latest CRM Notes': '—',
-      }]);
-
-      worksheet['!cols'] = [
-        { wch: 30 },
-        { wch: 20 },
-        { wch: 15 },
-        { wch: 18 },
-        { wch: 60 },
-      ];
-
-      const workbook = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(workbook, worksheet, 'WhatsApp_CRM_Data');
-
       const dateStr = new Date().toISOString().slice(0, 10);
-      XLSX.writeFile(workbook, `AIVastra_WhatsApp_CRM_Backup_${dateStr}.xlsx`);
+      const title = block === 'whatsapp' ? 'WhatsApp' : block === 'instagram' ? 'Instagram' : block === 'linkedin' ? 'LinkedIn' : 'Facebook';
+      const rows = chats
+        .filter((chat) => chatMatchesPlatform(chat, block))
+        .filter(isSavedCrmChat)
+        .map((chat) => ({
+          [block === 'whatsapp' ? 'Name / Phone' : 'Name / Username']: cleanDash(chat.name || chat.phone || chat.jid?.split('@')[0]),
+          'Lead Status': cleanDash(chat.leadStatus || 'UNASSIGNED'),
+          ...(block !== 'whatsapp'
+            ? { 'BDM / Language': `${cleanDash((chat as any).assignedUser || (chat as any).calledBy)} / ${cleanDash((chat as any).clientLanguage || (chat as any).language)}` }
+            : {}),
+          'Follow-up Date': cleanDash(chat.followUpDate),
+          'CRM Notes': notesToText(chat.notesList, chat.notes),
+          ...(block === 'whatsapp'
+            ? { BDM: cleanDash((chat as any).assignedUser || (chat as any).calledBy) }
+            : {}),
+        }));
 
-      setDownloadingWhatsapp(false);
-      setWhatsappSuccess(true);
-      setTimeout(() => setWhatsappSuccess(false), 3000);
-    } catch (err) {
-      console.error('Error exporting WhatsApp Excel backup:', err);
-      setDownloadingWhatsapp(false);
+      const fallback = block === 'whatsapp'
+        ? { 'Name / Phone': 'No saved data found', 'Lead Status': '-', 'Follow-up Date': '-', 'CRM Notes': '-', BDM: '-' }
+        : { 'Name / Username': 'No saved data found', 'Lead Status': '-', 'BDM / Language': '- / -', 'Follow-up Date': '-', 'CRM Notes': '-' };
+
+      downloadWorkbook(
+        rows.length > 0 ? rows : [fallback],
+        `${title}_Backup`,
+        `${title}_backup_${dateStr}.xlsx`,
+        block === 'whatsapp' ? [30, 18, 18, 60, 18] : [30, 18, 24, 18, 60]
+      );
+      finishSuccess(block);
+    } catch (error) {
+      console.error(`Failed to download ${block} backup`, error);
+      setDownloading(null);
     }
   };
 
-  // 2. Download Cold Calls Data Excel Spreadsheet (.xlsx)
-  const handleDownloadColdCallsBackup = async () => {
+  const downloadColdCallsBackup = async () => {
+    setDownloading('cold-calls');
     try {
-      setDownloadingColdCalls(true);
-
+      const dateStr = new Date().toISOString().slice(0, 10);
       const res = await fetch(`${getBackendUrl()}/api/cold-calls`);
-      const allLeads = await res.json();
+      const leads = await res.json();
+      const rows = (Array.isArray(leads) ? leads : []).map((lead: any) => ({
+        'Phone Number': cleanDash(lead.phone),
+        'Business Name': cleanDash(lead.businessName || lead.company),
+        'Person Name': cleanDash(lead.personName || lead.name),
+        'Follow Up Date': cleanDash(lead.followUpDate || lead.followUps?.[0]?.followUpDate),
+        Note: notesToText(lead.notesList || lead.followUps?.[0]?.notesList, lead.note || lead.followUps?.[0]?.note),
+        BDM: cleanDash(lead.calledBy || lead.followUps?.[0]?.calledBy),
+        Action: cleanDash(lead.callStatus || lead.callChoice || lead.callOutcome),
+      }));
 
-      const excelRows = (Array.isArray(allLeads) ? allLeads : []).map((l: any) => {
-        const notesStr = Array.isArray(l.notesList) && l.notesList.length > 0
-          ? l.notesList.map((n: any) => (typeof n === 'string' ? n : (n.text || ''))).join(' | ')
-          : (l.note || '—');
-
-        return {
-          'Business Name': l.businessName || l.company || '—',
-          'Person Name': l.personName || l.name || '—',
-          'Phone Number': l.phone || '—',
-          'BDM': l.calledBy || '—',
-          'Call Status': l.callChoice || l.callOutcome || l.callStatus || '—',
-          'Follow-Up Date': l.followUpDate || '—',
-          'Notes': notesStr,
-        };
-      });
-
-      const worksheet = XLSX.utils.json_to_sheet(excelRows.length > 0 ? excelRows : [{
-        'Business Name': 'No cold call data found',
-        'Person Name': '—',
-        'Phone Number': '—',
-        'BDM': '—',
-        'Call Status': '—',
-        'Follow-Up Date': '—',
-        'Notes': '—',
-      }]);
-
-      worksheet['!cols'] = [
-        { wch: 28 },
-        { wch: 25 },
-        { wch: 18 },
-        { wch: 15 },
-        { wch: 18 },
-        { wch: 18 },
-        { wch: 55 },
-      ];
-
-      const workbook = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(workbook, worksheet, 'Cold_Calls_All_Data');
-
-      const dateStr = new Date().toISOString().slice(0, 10);
-      XLSX.writeFile(workbook, `AIVastra_Cold_Calls_Backup_${dateStr}.xlsx`);
-
-      setDownloadingColdCalls(false);
-      setColdCallsSuccess(true);
-      setTimeout(() => setColdCallsSuccess(false), 3000);
-    } catch (err) {
-      console.error('Error exporting Cold Calls Excel backup:', err);
-      setDownloadingColdCalls(false);
+      downloadWorkbook(
+        rows.length > 0 ? rows : [{
+          'Phone Number': 'No saved data found',
+          'Business Name': '-',
+          'Person Name': '-',
+          'Follow Up Date': '-',
+          Note: '-',
+          BDM: '-',
+          Action: '-',
+        }],
+        'Cold_Calls_Backup',
+        `Cold_Calls_backup_${dateStr}.xlsx`,
+        [18, 28, 24, 18, 60, 24, 18]
+      );
+      finishSuccess('cold-calls');
+    } catch (error) {
+      console.error('Failed to download cold calls backup', error);
+      setDownloading(null);
     }
   };
+
+  const cards: Array<{
+    key: BackupBlock;
+    title: string;
+    description: string;
+    icon: React.ReactNode;
+    buttonClass: string;
+    onClick: () => void;
+  }> = [
+    {
+      key: 'whatsapp',
+      title: 'WhatsApp',
+      description: 'Download WhatsApp CRM table data in Excel format.',
+      icon: <MessageSquare className="w-6 h-6" />,
+      buttonClass: 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-600/20',
+      onClick: () => downloadSocialBackup('whatsapp'),
+    },
+    {
+      key: 'cold-calls',
+      title: 'Cold Calls',
+      description: 'Download Cold Calls table data in Excel format.',
+      icon: <PhoneCall className="w-6 h-6" />,
+      buttonClass: 'bg-blue-600 hover:bg-blue-700 shadow-blue-600/20',
+      onClick: downloadColdCallsBackup,
+    },
+    {
+      key: 'instagram',
+      title: 'Instagram',
+      description: 'Download Instagram CRM table data in Excel format.',
+      icon: <Instagram className="w-6 h-6" />,
+      buttonClass: 'bg-pink-600 hover:bg-pink-700 shadow-pink-600/20',
+      onClick: () => downloadSocialBackup('instagram'),
+    },
+    {
+      key: 'linkedin',
+      title: 'LinkedIn',
+      description: 'Download LinkedIn CRM table data in Excel format.',
+      icon: <Linkedin className="w-6 h-6" />,
+      buttonClass: 'bg-sky-700 hover:bg-sky-800 shadow-sky-700/20',
+      onClick: () => downloadSocialBackup('linkedin'),
+    },
+    {
+      key: 'facebook',
+      title: 'Facebook',
+      description: 'Download Facebook CRM table data in Excel format.',
+      icon: <Facebook className="w-6 h-6" />,
+      buttonClass: 'bg-indigo-600 hover:bg-indigo-700 shadow-indigo-600/20',
+      onClick: () => downloadSocialBackup('facebook'),
+    },
+  ];
 
   return (
     <div className="flex-1 p-8 overflow-y-auto bg-[#fafafa]">
-      <div className="max-w-4xl mx-auto space-y-8">
+      <div className="max-w-5xl mx-auto space-y-6">
         <div>
           <h1 className="text-2xl font-black text-zinc-900 flex items-center gap-3 tracking-tight">
-            <Database className="w-7 h-7 text-black" />
-            CRM Backup Center
+            <Download className="w-7 h-7 text-black" />
+            Download Backup
           </h1>
           <p className="text-sm font-semibold text-zinc-500 mt-1">
-            Manually export and download instant Excel backups for WhatsApp CRM and Cold Calls data.
+            Download each CRM block separately as an Excel file.
           </p>
         </div>
 
-        {/* ── MANUAL INSTANT EXCEL BACKUP DOWNLOAD BOXES ── */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {/* WhatsApp Data Backup Box */}
-          <div className="bg-white border border-zinc-200/80 rounded-3xl p-6 shadow-xs flex flex-col justify-between hover:border-zinc-300 transition-all">
-            <div className="space-y-4">
-              <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center border border-emerald-100">
-                <MessageSquare className="w-6 h-6" />
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+          {cards.map((card) => {
+            const isDownloading = downloading === card.key;
+            const isSuccess = success === card.key;
+            return (
+              <div key={card.key} className="bg-white border border-zinc-200 rounded-3xl p-6 shadow-sm hover:border-zinc-300 transition-all">
+                <div className="flex items-start gap-4">
+                  <div className="w-12 h-12 rounded-2xl bg-zinc-100 text-zinc-900 flex items-center justify-center border border-zinc-200">
+                    {card.icon}
+                  </div>
+                  <div className="min-w-0">
+                    <h3 className="text-lg font-extrabold text-zinc-900">{card.title}</h3>
+                    <p className="text-xs font-semibold text-zinc-500 mt-1 leading-relaxed">{card.description}</p>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={card.onClick}
+                  disabled={Boolean(downloading)}
+                  className={`mt-6 w-full flex items-center justify-center gap-2.5 px-5 py-3.5 text-white rounded-2xl font-extrabold text-sm transition-all shadow-md cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.98] ${card.buttonClass}`}
+                >
+                  {isSuccess ? (
+                    <>
+                      <Check className="w-5 h-5" />
+                      Downloaded
+                    </>
+                  ) : (
+                    <>
+                      <FileSpreadsheet className="w-5 h-5" />
+                      {isDownloading ? 'Preparing Excel...' : 'Download Excel'}
+                    </>
+                  )}
+                </button>
               </div>
-
-              <div>
-                <h3 className="text-lg font-extrabold text-zinc-900">WhatsApp Data</h3>
-                <p className="text-xs font-semibold text-zinc-500 mt-1 leading-relaxed">
-                  Export all saved WhatsApp CRM contacts, lead statuses, scheduled calls, follow-up dates, and CRM notes into Excel format.
-                </p>
-              </div>
-
-              <div className="p-3 bg-zinc-50 rounded-xl border border-zinc-100 flex items-center justify-between text-xs">
-                <span className="font-semibold text-zinc-600">Excel Header Columns:</span>
-                <span className="font-extrabold text-zinc-900">5 Columns</span>
-              </div>
-            </div>
-
-            <div className="pt-6">
-              <button
-                type="button"
-                onClick={handleDownloadWhatsappBackup}
-                disabled={downloadingWhatsapp}
-                className="w-full flex items-center justify-center gap-2.5 px-5 py-3.5 bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98] text-white rounded-2xl font-extrabold text-sm transition-all shadow-md shadow-emerald-600/20 cursor-pointer disabled:opacity-50"
-              >
-                {whatsappSuccess ? (
-                  <>
-                    <Check className="w-5 h-5" />
-                    Downloaded Excel File!
-                  </>
-                ) : (
-                  <>
-                    <FileSpreadsheet className="w-5 h-5" />
-                    Download Backup Data (.xlsx)
-                  </>
-                )}
-              </button>
-            </div>
-          </div>
-
-          {/* Cold Calls Data Backup Box */}
-          <div className="bg-white border border-zinc-200/80 rounded-3xl p-6 shadow-xs flex flex-col justify-between hover:border-zinc-300 transition-all">
-            <div className="space-y-4">
-              <div className="w-12 h-12 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center border border-blue-100">
-                <PhoneCall className="w-6 h-6" />
-              </div>
-
-              <div>
-                <h3 className="text-lg font-extrabold text-zinc-900">Cold Calls Data</h3>
-                <p className="text-xs font-semibold text-zinc-500 mt-1 leading-relaxed">
-                  Export all Cold Call leads from the ALL section with Business Name, Person Name, Phone, BDM, Call Status, and Notes.
-                </p>
-              </div>
-
-              <div className="p-3 bg-zinc-50 rounded-xl border border-zinc-100 flex items-center justify-between text-xs">
-                <span className="font-semibold text-zinc-600">Excel Header Columns:</span>
-                <span className="font-extrabold text-zinc-900">7 Columns</span>
-              </div>
-            </div>
-
-            <div className="pt-6">
-              <button
-                type="button"
-                onClick={handleDownloadColdCallsBackup}
-                disabled={downloadingColdCalls}
-                className="w-full flex items-center justify-center gap-2.5 px-5 py-3.5 bg-blue-600 hover:bg-blue-700 active:scale-[0.98] text-white rounded-2xl font-extrabold text-sm transition-all shadow-md shadow-blue-600/20 cursor-pointer disabled:opacity-50"
-              >
-                {coldCallsSuccess ? (
-                  <>
-                    <Check className="w-5 h-5" />
-                    Downloaded Excel File!
-                  </>
-                ) : (
-                  <>
-                    <FileSpreadsheet className="w-5 h-5" />
-                    Download Backup Data (.xlsx)
-                  </>
-                )}
-              </button>
-            </div>
-          </div>
+            );
+          })}
         </div>
-
-        {onExportCsv && (
-          <div className="bg-white border border-zinc-200/80 rounded-3xl p-6 shadow-xs">
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-              <div className="flex items-start gap-4">
-                <div className="w-12 h-12 rounded-2xl bg-zinc-100 text-zinc-900 flex items-center justify-center border border-zinc-200">
-                  <FileSpreadsheet className="w-6 h-6" />
-                </div>
-                <div>
-                  <h3 className="text-lg font-extrabold text-zinc-900">CSV Export</h3>
-                  <p className="text-xs font-semibold text-zinc-500 mt-1 leading-relaxed">
-                    Download saved CRM leads as a CSV file with phone numbers preserved in Excel-friendly format.
-                  </p>
-                </div>
-              </div>
-
-              <button
-                type="button"
-                onClick={onExportCsv}
-                className="px-5 py-3 bg-black hover:bg-zinc-800 active:scale-[0.98] text-white rounded-2xl font-extrabold text-sm transition-all shadow-md cursor-pointer"
-              >
-                Export CSV
-              </button>
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );

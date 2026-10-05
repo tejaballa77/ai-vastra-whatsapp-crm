@@ -136,6 +136,7 @@ export function WhatsAppCrmModule() {
   const [activeNav, setActiveNav] = useState<'whatsapp' | 'calls' | 'instagram' | 'linkedin' | 'facebook' | 'settings'>('whatsapp');
   const [coldCallsSubPage, setColdCallsSubPage] = useState<'analytics' | 'sheet' | 'database'>('sheet');
   const [tableFilter, setTableFilter] = useState<'ALL' | 'INTERESTED' | 'WARM' | 'NOT_INTERESTED' | 'CALLS' | 'FOLLOWUPS'>('ALL');
+  const [whatsappBdmFilter, setWhatsappBdmFilter] = useState<string>('ALL');
   const [modalCategory, setModalCategory] = useState<'INTERESTED' | 'WARM' | 'NOT_INTERESTED' | 'CALLS' | 'FOLLOWUPS' | null>(null);
   const [showStatusModal, setShowStatusModal] = useState(false);
   const [showInterestedModal, setShowInterestedModal] = useState(false);
@@ -478,6 +479,11 @@ export function WhatsAppCrmModule() {
   const followUpsCount = scheduledFollowupChatsList.length;
   const callsYesCount = navChats.filter((c) => c.callStatus === 'YES').length;
   const allTabLeads = savedLeads;
+  const whatsappBdmOptions = activeNav === 'whatsapp'
+    ? Array.from(new Set(savedLeads.flatMap((c) => getBdmUsers(getChatBdm(c)))))
+      .filter((name) => name && name !== '-')
+      .sort((a, b) => a.localeCompare(b))
+    : [];
 
   // Base list for table: default to savedLeads unless specific filter tab is chosen
   const baseLeads = tableFilter === 'WARM' ? warmTabLeads : (tableFilter === 'ALL' ? savedLeads : savedLeads);
@@ -490,6 +496,12 @@ export function WhatsAppCrmModule() {
         (c.phone || c.jid || '').toLowerCase().includes(searchQuery.toLowerCase());
 
       if (!matchesSearch) return false;
+
+      if (activeNav === 'whatsapp' && whatsappBdmFilter !== 'ALL') {
+        const selectedBdm = normalizeBdmName(whatsappBdmFilter);
+        const rowBdms = getBdmUsers(getChatBdm(c)).map((name) => normalizeBdmName(name));
+        if (!rowBdms.includes(selectedBdm)) return false;
+      }
 
       if (tableFilter === 'INTERESTED') return c.leadStatus === 'INTERESTED';
       if (tableFilter === 'WARM') return c.leadStatus === 'WARM' || c.leadStatus === 'WARM_INTERESTED' || isPureAutoWarmLead(c);
@@ -514,7 +526,13 @@ export function WhatsAppCrmModule() {
 
   useEffect(() => {
     setTablePage(1);
-  }, [activeNav, tableFilter, searchQuery]);
+  }, [activeNav, tableFilter, searchQuery, whatsappBdmFilter]);
+
+  useEffect(() => {
+    if (activeNav !== 'whatsapp' && whatsappBdmFilter !== 'ALL') {
+      setWhatsappBdmFilter('ALL');
+    }
+  }, [activeNav, whatsappBdmFilter]);
 
   const handleCopyPhone = (phoneNum: string) => {
     const clean = phoneNum.replace(/\D/g, '');
@@ -760,7 +778,7 @@ export function WhatsAppCrmModule() {
           <div className="flex-1 overflow-y-auto p-4 bg-zinc-50/50">
             <div className="bg-white p-6 rounded-2xl border border-zinc-200 shadow-sm space-y-5">
               <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <div>
+                <div className="flex items-center gap-3 flex-wrap">
                   <h3 className="text-lg font-extrabold text-black flex items-center gap-2">
                     {activeNav === 'whatsapp' ? (
                       <img src="/whatsapp_icon.png" alt="WhatsApp" className="w-6 h-6 object-contain" />
@@ -774,6 +792,19 @@ export function WhatsAppCrmModule() {
                         : 'Facebook Contact Leads'}
                     </span>
                   </h3>
+                  {activeNav === 'whatsapp' && (
+                    <select
+                      value={whatsappBdmFilter}
+                      onChange={(e) => setWhatsappBdmFilter(e.target.value)}
+                      className="px-3 py-2 bg-zinc-100 border border-zinc-300 rounded-xl text-xs font-extrabold text-black focus:outline-none focus:border-black min-w-[150px]"
+                      title="Filter WhatsApp leads by BDM"
+                    >
+                      <option value="ALL">All BDMs</option>
+                      {whatsappBdmOptions.map((name) => (
+                        <option key={name} value={name}>{name}</option>
+                      ))}
+                    </select>
+                  )}
                 </div>
 
                 <div className="flex items-center gap-3 flex-wrap">

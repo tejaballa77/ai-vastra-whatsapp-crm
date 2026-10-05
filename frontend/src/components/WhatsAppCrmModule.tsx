@@ -222,6 +222,44 @@ export function WhatsAppCrmModule() {
     return { displayName, hasSavedName, formattedPhone, cleanPhone: tenDigit || rawNum || chat.phone || '', platform, platformIcon };
   };
 
+  const normalizeBdmName = (value: string) => value.trim().toLowerCase().replace(/\s+/g, ' ');
+  const getBdmUsers = (value?: string) => String(value || '')
+    .split(',')
+    .map((user) => user.trim())
+    .filter(Boolean);
+  const getChatBdm = (chat: any) => String(chat?.assignedUser || chat?.calledBy || '').trim();
+  const prependBdmUser = (existing: string, user: string) => {
+    const cleanUser = user.trim();
+    if (!cleanUser || cleanUser === 'Executive User' || cleanUser === 'Staff') return existing.trim();
+    const seen = new Set<string>();
+    return [cleanUser, ...getBdmUsers(existing)]
+      .filter((name) => {
+        const key = normalizeBdmName(name);
+        if (!key || seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      })
+      .join(', ');
+  };
+  const bdmIncludesCurrentUser = (chat: any) => {
+    const currentUser = normalizeBdmName(adminDisplayName);
+    if (!currentUser || currentUser === 'executive user' || currentUser === 'staff') return false;
+    return getBdmUsers(getChatBdm(chat)).some((user) => normalizeBdmName(user) === currentUser);
+  };
+  const normalizeNotesForCompare = (notes: string[]) => notes.map((note) => String(note || '').trim()).filter(Boolean);
+  const notesAreEqual = (a: string[], b: string[]) => {
+    const left = normalizeNotesForCompare(a);
+    const right = normalizeNotesForCompare(b);
+    return left.length === right.length && left.every((note, index) => note === right[index]);
+  };
+  const hasWhatsAppEditChanges = (chat: Chat, finalNotesList: string[]) => {
+    const existingNotes = normalizeNotesForCompare(Array.isArray(chat.notesList) ? chat.notesList : (chat.notes ? [chat.notes] : []));
+    return String(chat.followUpDate || '') !== String(forwardDateInput || '') ||
+      String(chat.leadStatus || 'UNASSIGNED') !== String(editStatus || 'UNASSIGNED') ||
+      String(chat.callStatus || '') !== String(editCallStatus || '') ||
+      !notesAreEqual(existingNotes, finalNotesList);
+  };
+
   const phoneToKey = new Map<string, string>();
 
   const chatsMap = new Map<string, (typeof rawChats)[0]>();
@@ -296,6 +334,7 @@ export function WhatsAppCrmModule() {
 
       const mergedNotesList = Array.from(notesSet);
       const mergedNotes = mergedNotesList.join('\n\n');
+      const mergedAssignedUser = getChatBdm(pickChat) || getChatBdm(otherChat);
 
       const curNameBad = !pickChat.name || BAD_NAMES.has(pickChat.name.toLowerCase().trim()) || pickChat.name.length <= 1;
       const existNameBad = !otherChat.name || BAD_NAMES.has(otherChat.name.toLowerCase().trim()) || otherChat.name.length <= 1;
@@ -310,6 +349,7 @@ export function WhatsAppCrmModule() {
         followUpDate: mergedFollowUpDate,
         notes: mergedNotes,
         notesList: mergedNotesList,
+        assignedUser: mergedAssignedUser || undefined,
         manuallySaved: Boolean(existing.manuallySaved || c.manuallySaved),
         // Preserve the real edit time. Using Date.now() here made unchanged
         // duplicate records jump to the top on every socket refresh/poll.
@@ -572,6 +612,11 @@ export function WhatsAppCrmModule() {
     }
   };
 
+  const sidebarNavClass = (isActive: boolean) => `w-full flex items-center gap-3.5 px-4 py-3 rounded-2xl text-sm transition-all cursor-pointer ${
+    isActive ? 'bg-white text-black shadow-md font-extrabold' : 'text-white hover:bg-white/10 font-semibold'
+  }`;
+  const sidebarIconClass = (isActive: boolean, extra = '') => `${extra} ${isActive ? '' : 'brightness-0 invert'}`.trim();
+
   const getModalTitle = () => {
     switch (modalCategory) {
       case 'INTERESTED':
@@ -591,7 +636,7 @@ export function WhatsAppCrmModule() {
 
   return (
     <div className="w-screen h-screen flex overflow-hidden bg-white text-black">
-      <aside className="w-64 bg-white text-black flex flex-col justify-between p-4 flex-shrink-0 select-none border-r border-zinc-200">
+      <aside className="w-64 bg-black text-white flex flex-col justify-between p-4 flex-shrink-0 select-none border-r border-zinc-900">
         <div>
           {/* Top Logo Box — Perfect Fit Display */}
           <div className="px-3 py-2 mb-6 bg-white rounded-2xl border border-zinc-200 shadow-sm flex items-center justify-center h-20">
@@ -601,14 +646,12 @@ export function WhatsAppCrmModule() {
           <nav className="space-y-1.5">
             <button
               onClick={() => setActiveNav('whatsapp')}
-              className={`w-full flex items-center gap-3.5 px-4 py-3 rounded-2xl text-sm transition-all cursor-pointer ${
-                activeNav === 'whatsapp' ? 'bg-black text-white shadow-md font-extrabold' : 'text-zinc-700 hover:bg-zinc-100 hover:text-black font-semibold'
-              }`}
+              className={sidebarNavClass(activeNav === 'whatsapp')}
             >
               <img
                 src="/whatsapp_icon.png"
                 alt="WhatsApp"
-                className={`w-6 h-6 object-contain flex-shrink-0 scale-110 transition-all ${activeNav === 'whatsapp' ? 'invert' : ''}`}
+                className={sidebarIconClass(activeNav === 'whatsapp', 'w-6 h-6 object-contain flex-shrink-0 scale-110 transition-all')}
               />
               <span className="flex-1 text-left">WhatsApp</span>
             </button>
@@ -618,9 +661,7 @@ export function WhatsAppCrmModule() {
                 setActiveNav('calls');
                 setColdCallsSubPage('sheet');
               }}
-              className={`w-full flex items-center gap-3.5 px-4 py-3 rounded-2xl text-sm transition-all cursor-pointer ${
-                activeNav === 'calls' ? 'bg-black text-white shadow-md font-extrabold' : 'text-zinc-700 hover:bg-zinc-100 hover:text-black font-semibold'
-              }`}
+              className={sidebarNavClass(activeNav === 'calls')}
             >
               <PhoneCall className="w-6 h-6 flex-shrink-0" />
               <span className="flex-1 text-left">Cold Calls</span>
@@ -628,82 +669,74 @@ export function WhatsAppCrmModule() {
 
             <button
               onClick={() => setActiveNav('instagram')}
-              className={`w-full flex items-center gap-3.5 px-4 py-3 rounded-2xl text-sm transition-all cursor-pointer ${
-                activeNav === 'instagram' ? 'bg-black text-white shadow-md font-extrabold' : 'text-zinc-700 hover:bg-zinc-100 hover:text-black font-semibold'
-              }`}
+              className={sidebarNavClass(activeNav === 'instagram')}
             >
               <img
                 src="/instagram_icon.png"
                 alt="Instagram"
-                className={`w-6 h-6 object-contain flex-shrink-0 scale-110 transition-all ${activeNav === 'instagram' ? 'invert' : ''}`}
+                className={sidebarIconClass(activeNav === 'instagram', 'w-6 h-6 object-contain flex-shrink-0 scale-110 transition-all')}
               />
               <span className="flex-1 text-left">Instagram</span>
             </button>
 
             <button
               onClick={() => setActiveNav('linkedin')}
-              className={`w-full flex items-center gap-3.5 px-4 py-3 rounded-2xl text-sm transition-all cursor-pointer ${
-                activeNav === 'linkedin' ? 'bg-black text-white shadow-md font-extrabold' : 'text-zinc-700 hover:bg-zinc-100 hover:text-black font-semibold'
-              }`}
+              className={sidebarNavClass(activeNav === 'linkedin')}
             >
               <img
                 src="/linkedin_icon.png"
                 alt="LinkedIn"
-                className={`w-6 h-6 object-contain flex-shrink-0 scale-135 transition-all ${activeNav === 'linkedin' ? 'invert' : ''}`}
+                className={sidebarIconClass(activeNav === 'linkedin', 'w-6 h-6 object-contain flex-shrink-0 scale-135 transition-all')}
               />
               <span className="flex-1 text-left">LinkedIn</span>
             </button>
 
             <button
               onClick={() => setActiveNav('facebook')}
-              className={`w-full flex items-center gap-3.5 px-4 py-3 rounded-2xl text-sm transition-all cursor-pointer ${
-                activeNav === 'facebook' ? 'bg-black text-white shadow-md font-extrabold' : 'text-zinc-700 hover:bg-zinc-100 hover:text-black font-semibold'
-              }`}
+              className={sidebarNavClass(activeNav === 'facebook')}
             >
               <img
                 src="/facebook_icon.png"
                 alt="Facebook"
-                className={`w-6 h-6 object-contain flex-shrink-0 scale-110 transition-all ${activeNav === 'facebook' ? 'invert' : ''}`}
+                className={sidebarIconClass(activeNav === 'facebook', 'w-6 h-6 object-contain flex-shrink-0 scale-110 transition-all')}
               />
               <span className="flex-1 text-left">Facebook</span>
-              <span className="ml-auto text-[10px] bg-zinc-100 text-zinc-500 border border-zinc-200 px-2 py-0.5 rounded-full font-bold">Soon</span>
+              <span className={`ml-auto text-[10px] px-2 py-0.5 rounded-full font-bold border ${activeNav === 'facebook' ? 'bg-black text-white border-black' : 'bg-white/10 text-zinc-300 border-white/10'}`}>Soon</span>
             </button>
 
             <button
               onClick={() => setActiveNav('settings')}
-              className={`w-full flex items-center gap-3.5 px-4 py-3 rounded-2xl text-sm transition-all cursor-pointer ${
-                activeNav === 'settings' ? 'bg-black text-white shadow-md font-extrabold' : 'text-zinc-700 hover:bg-zinc-100 hover:text-black font-semibold'
-              }`}
+              className={sidebarNavClass(activeNav === 'settings')}
             >
-              <Settings className="w-6 h-6 flex-shrink-0 text-zinc-500" />
+              <Settings className={`w-6 h-6 flex-shrink-0 ${activeNav === 'settings' ? 'text-black' : 'text-white'}`} />
               <span className="flex-1 text-left">Settings</span>
             </button>
           </nav>
         </div>
 
         {/* Bottom Sidebar: Admin Profile Block + Logout Icon Button */}
-        <div className="pt-4 border-t border-zinc-200 flex items-center justify-between gap-2 mt-auto">
+        <div className="pt-4 border-t border-white/15 flex items-center justify-between gap-2 mt-auto">
           <button
             onClick={() => setShowAdminModal(true)}
-            className="flex-1 flex items-center gap-3 p-3 rounded-2xl bg-[#f4f4f5] hover:bg-zinc-200/80 border border-zinc-200/80 transition-all text-left group overflow-hidden cursor-pointer"
+            className="flex-1 flex items-center gap-3 p-3 rounded-2xl bg-white/10 hover:bg-white/15 border border-white/10 transition-all text-left group overflow-hidden cursor-pointer"
             title="Open Admin Profile Settings"
           >
-            <div className="w-9 h-9 rounded-full bg-black text-white font-bold flex items-center justify-center text-xs flex-shrink-0 overflow-hidden border border-black">
+            <div className="w-9 h-9 rounded-full bg-white text-black font-bold flex items-center justify-center text-xs flex-shrink-0 overflow-hidden border border-white">
               {adminAvatar ? (
                 <img src={adminAvatar} alt="Admin" className="w-full h-full object-cover" />
               ) : (
-                <UserIcon className="w-5 h-5 text-white" />
+                <UserIcon className="w-5 h-5 text-black" />
               )}
             </div>
             <div className="flex-1 min-w-0">
-              <h4 className="text-sm font-extrabold text-black truncate">{adminDisplayName}</h4>
-              <p className="text-[11px] text-zinc-500 font-semibold truncate">@{adminUsername}</p>
+              <h4 className="text-sm font-extrabold text-white truncate">{adminDisplayName}</h4>
+              <p className="text-[11px] text-zinc-300 font-semibold truncate">@{adminUsername}</p>
             </div>
           </button>
 
           <button
             onClick={() => setShowLogoutModal(true)}
-            className="p-3 rounded-2xl bg-[#f4f4f5] hover:bg-rose-50 hover:text-rose-600 text-zinc-700 border border-zinc-200/80 transition-all flex-shrink-0 cursor-pointer"
+            className="p-3 rounded-2xl bg-white/10 hover:bg-rose-500/15 hover:text-rose-300 text-white border border-white/10 transition-all flex-shrink-0 cursor-pointer"
             title="Log Out of CRM"
           >
             <LogOut className="w-5 h-5" />
@@ -713,26 +746,23 @@ export function WhatsAppCrmModule() {
 
       <main className="flex-1 flex flex-col overflow-hidden bg-white text-black">
         <header className="h-16 bg-white border-b border-zinc-200 px-6 flex items-center justify-between flex-shrink-0">
-          <h2 className="text-xl font-extrabold text-black tracking-tight">
-            {activeNav === 'whatsapp' ? '💬 WhatsApp CRM Dashboard'
-              : activeNav === 'calls' ? '📞 Cold Calls Lead List'
-              : activeNav === 'instagram' ? '📸 Instagram DMs Lead Dashboard'
-              : activeNav === 'linkedin' ? '💼 LinkedIn Messages Lead Dashboard'
-              : activeNav === 'facebook' ? '📘 Facebook Messenger Lead Dashboard'
-              : '⚙️ CRM Settings & Backup Center'}
+          <h2 className="text-xl font-extrabold text-black tracking-tight flex items-center gap-2">
+            {activeNav === 'whatsapp' ? (
+              <>
+                <img src="/whatsapp_icon.png" alt="WhatsApp" className="w-6 h-6 object-contain" />
+                <span>CRM Dashboard</span>
+              </>
+            )
+              : activeNav === 'calls' ? 'Cold Calls Lead List'
+              : activeNav === 'instagram' ? 'Instagram DMs Lead Dashboard'
+              : activeNav === 'linkedin' ? 'LinkedIn Messages Lead Dashboard'
+              : activeNav === 'facebook' ? 'Facebook Messenger Lead Dashboard'
+              : 'CRM Settings & Backup Center'}
           </h2>
 
           <div className="flex items-center gap-3">
             {activeNav === 'whatsapp' && (
-              <>
-                <button
-                  onClick={() => handleOpenSpecificChat()}
-                  className="px-4 py-2 bg-black hover:bg-zinc-800 text-white font-bold text-sm rounded-xl transition-all flex items-center gap-2 shadow-sm cursor-pointer"
-                >
-                  <span>Launch WhatsApp Web</span>
-                  <ExternalLink className="w-4 h-4" />
-                </button>
-                <button
+              <button
                   type="button"
                   onClick={toggleFullscreen}
                   className="p-2 bg-zinc-100 hover:bg-zinc-200 text-black rounded-xl border border-zinc-300 transition-all shadow-sm cursor-pointer"
@@ -741,7 +771,6 @@ export function WhatsAppCrmModule() {
                 >
                   {isFullscreen ? <Minimize2 className="w-5 h-5" /> : <Maximize2 className="w-5 h-5" />}
                 </button>
-              </>
             )}
             {activeNav !== 'calls' && activeNav !== 'settings' && activeNav !== 'facebook' && (
               <button
@@ -833,9 +862,10 @@ export function WhatsAppCrmModule() {
                     <tr className="bg-zinc-100 text-black font-extrabold border-b border-zinc-200 text-xs uppercase tracking-wider">
                       <th className="p-4">{activeNav === 'whatsapp' ? 'Name / Phone' : 'Name / Username'}</th>
                       <th className="p-4">Lead Status</th>
-                      <th className="p-4">{activeNav === 'whatsapp' ? 'Call Request' : 'BDM / Language'}</th>
+                      {activeNav !== 'whatsapp' && <th className="p-4">BDM / Language</th>}
                       <th className="p-4">Follow-up Date</th>
-                      <th className="p-4">Latest CRM Notes</th>
+                      <th className="p-4">CRM Notes</th>
+                      {activeNav === 'whatsapp' && <th className="p-4">BDM</th>}
                       <th className="p-4 text-right">Actions</th>
                     </tr>
                   </thead>
@@ -917,29 +947,19 @@ export function WhatsAppCrmModule() {
                               )}
                             </td>
 
+                            {activeNav !== 'whatsapp' && (
                             <td className="p-4 align-middle">
-                              {activeNav === 'whatsapp' ? (
-                                <div className="text-xs font-bold text-black">
-                                  {chat.callStatus === 'YES' ? (
-                                    <span className="px-2.5 py-1 text-xs font-extrabold bg-emerald-100 text-emerald-800 rounded-md inline-block">📞 Yes</span>
-                                  ) : chat.callStatus === 'NO' ? (
-                                    <span className="px-2 py-0.5 text-xs font-semibold text-zinc-500 bg-zinc-100 rounded-md inline-block">No</span>
-                                  ) : (
-                                    <span className="text-zinc-400 font-semibold italic">—</span>
-                                  )}
-                                </div>
-                              ) : (
-                                <div className="text-xs font-bold text-black">
-                                  {((chat as any).assignedUser || (chat as any).calledBy || (chat as any).clientLanguage || (chat as any).language) ? (
-                                    <span className="font-extrabold text-black">
-                                      {(chat as any).assignedUser || (chat as any).calledBy || '—'} / {(chat as any).clientLanguage || (chat as any).language || '—'}
-                                    </span>
-                                  ) : (
-                                    <span className="text-zinc-400 font-semibold italic">—</span>
-                                  )}
-                                </div>
-                              )}
+                              <div className="text-xs font-bold text-black">
+                                {((chat as any).assignedUser || (chat as any).calledBy || (chat as any).clientLanguage || (chat as any).language) ? (
+                                  <span className="font-extrabold text-black">
+                                    {(chat as any).assignedUser || (chat as any).calledBy || '—'} / {(chat as any).clientLanguage || (chat as any).language || '—'}
+                                  </span>
+                                ) : (
+                                  <span className="text-zinc-400 font-semibold italic">—</span>
+                                )}
+                              </div>
                             </td>
+                            )}
 
                             <td className="p-4 align-middle">
                               {chat.followUpDate ? (
@@ -992,6 +1012,18 @@ export function WhatsAppCrmModule() {
                               })()}
                             </td>
 
+                            {activeNav === 'whatsapp' && (
+                              <td className="p-4 align-middle">
+                                {((chat as any).assignedUser || (chat as any).calledBy) ? (
+                                  <span className="px-3 py-1 text-xs font-extrabold bg-zinc-100 text-black border border-zinc-200 rounded-md inline-block">
+                                    {(chat as any).assignedUser || (chat as any).calledBy}
+                                  </span>
+                                ) : (
+                                  <span className="text-zinc-400 text-xs italic">—</span>
+                                )}
+                              </td>
+                            )}
+
                             <td className="p-4 text-right align-middle">
                               <div className="flex items-center justify-end gap-2">
                                 <button
@@ -1021,14 +1053,14 @@ export function WhatsAppCrmModule() {
                                 >
                                   <span>Edit</span>
                                 </button>
-                                {activeNav === 'whatsapp' && (
+                                {activeNav === 'whatsapp' && bdmIncludesCurrentUser(chat) && (
                                   <button
                                     type="button"
                                     onClick={() => handleOpenSpecificChat(chat.phone || chat.jid)}
-                                    className="px-3.5 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 font-extrabold text-xs rounded-xl border border-emerald-200 transition-all inline-flex items-center gap-1.5 shadow-sm active:scale-95 whitespace-nowrap"
+                                    className="p-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 rounded-xl border border-emerald-200 transition-all inline-flex items-center justify-center shadow-sm active:scale-95"
                                     title={`Open ${displayName} in WhatsApp Web`}
+                                    aria-label={`Open ${displayName} in WhatsApp Web`}
                                   >
-                                    <span>Open chat</span>
                                     <ExternalLink className="w-3.5 h-3.5" />
                                   </button>
                                 )}
@@ -1647,13 +1679,17 @@ export function WhatsAppCrmModule() {
                         const t = editNoteInputText.trim();
                         finalNotesList.unshift(/\(\d{2}-\d{2}-\d{4}\)$/.test(t) ? t : `${t} ${dateStr}`);
                       }
+                      const existingBdm = getChatBdm(editingContact);
+                      const finalBdmUser = activeNav === 'whatsapp' && hasWhatsAppEditChanges(editingContact, finalNotesList)
+                        ? prependBdmUser(existingBdm, adminDisplayName)
+                        : editBdmUser;
 
                       await updateCrmMetadata(editingContact.jid, {
                         followUpDate: forwardDateInput || undefined,
                         leadStatus: editStatus as any,
                         callStatus: editCallStatus as any,
-                        assignedUser: editBdmUser,
-                        calledBy: editBdmUser,
+                        assignedUser: finalBdmUser,
+                        calledBy: finalBdmUser,
                         clientLanguage: editLanguage,
                         language: editLanguage,
                         notes: finalNotesList.join('\n\n'),

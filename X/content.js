@@ -65,6 +65,25 @@ let indexedDbContactMap = new Map();
 let contactBookRefreshPending = false;
 let lastContactBookRefresh = 0;
 let pendingPhoneSaveGeneration = null;
+let configuredCrmUsername = '';
+
+function refreshConfiguredCrmUsername() {
+  safeStorageGet(['crmUsername'], (result) => {
+    configuredCrmUsername = String(result?.crmUsername || '').trim();
+  });
+}
+
+refreshConfiguredCrmUsername();
+
+try {
+  if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.onChanged) {
+    chrome.storage.onChanged.addListener((changes, areaName) => {
+      if (areaName === 'local' && changes.crmUsername) {
+        configuredCrmUsername = String(changes.crmUsername.newValue || '').trim();
+      }
+    });
+  }
+} catch (e) {}
 
 function normalizeNameIdentity(name) {
   return String(name || '').normalize('NFKC').trim().replace(/\s+/g, ' ').toLowerCase();
@@ -1007,6 +1026,7 @@ function fetchCrmMetadata(searchKey, displayName, domAvatar, generation) {
 
 function saveCrmMetadata(forcedAiDisabled, retryCount = 0, expectedGeneration = fetchRequestGeneration) {
   if (expectedGeneration !== fetchRequestGeneration) return;
+  refreshConfiguredCrmUsername();
   const saveGeneration = fetchRequestGeneration;
   const header = document.querySelector('#main header');
   const title = Array.from(header?.querySelectorAll('span[title], span[dir="auto"]') || [])
@@ -1088,6 +1108,8 @@ function saveCrmMetadata(forcedAiDisabled, retryCount = 0, expectedGeneration = 
 
   // Update activePhoneClean cache ONLY if valid 10+ digit phone belongs to this chat
   if (validPhone) activePhoneClean = validPhone;
+  const assignedUserForSave = String(configuredCrmUsername || activeFormData.assignedUser || '').trim();
+  if (assignedUserForSave) activeFormData.assignedUser = assignedUserForSave;
 
   const metaObj = { ...activeFormData, name: effectiveName, phone: validPhone || '' };
 
@@ -1121,8 +1143,8 @@ function saveCrmMetadata(forcedAiDisabled, retryCount = 0, expectedGeneration = 
     leadStatus: activeFormData.leadStatus,
     callStatus: activeFormData.callStatus,
     followUpDate: activeFormData.followUpDate || undefined,
-    assignedUser: activeFormData.assignedUser,
-    calledBy: activeFormData.assignedUser,
+    assignedUser: assignedUserForSave || undefined,
+    calledBy: assignedUserForSave || undefined,
     clientLanguage: activeFormData.clientLanguage,
     language: activeFormData.clientLanguage,
     notes: activeFormData.notesList.join('\n\n'),

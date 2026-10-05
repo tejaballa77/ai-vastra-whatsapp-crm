@@ -19,6 +19,10 @@ export interface Chat {
   aiDisabled?: boolean;
   manuallySaved?: boolean;
   isAutoWarm?: boolean;
+  assignedUser?: string;
+  calledBy?: string;
+  clientLanguage?: string;
+  language?: string;
   updatedAt?: number;
 }
 

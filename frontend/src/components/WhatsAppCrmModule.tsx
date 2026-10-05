@@ -153,6 +153,7 @@ export function WhatsAppCrmModule() {
   const [saveSuccessToast, setSaveSuccessToast] = useState<boolean>(false);
   const [copiedPhone, setCopiedPhone] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState<string>('');
+  const [tablePage, setTablePage] = useState<number>(1);
   const [showQrModal, setShowQrModal] = useState<boolean>(false);
   const [hasLoadedOnce, setHasLoadedOnce] = useState<boolean>(() => {
     if (typeof window !== 'undefined') {
@@ -504,6 +505,17 @@ export function WhatsAppCrmModule() {
       return timeB - timeA;
     });
 
+  const TABLE_PAGE_SIZE = 7;
+  const tableTotalPages = Math.max(1, Math.ceil(filteredTableLeads.length / TABLE_PAGE_SIZE));
+  const safeTablePage = Math.min(Math.max(1, tablePage), tableTotalPages);
+  const tableStartIndex = (safeTablePage - 1) * TABLE_PAGE_SIZE;
+  const tableEndIndex = tableStartIndex + TABLE_PAGE_SIZE;
+  const paginatedTableLeads = filteredTableLeads.slice(tableStartIndex, tableEndIndex);
+
+  useEffect(() => {
+    setTablePage(1);
+  }, [activeNav, tableFilter, searchQuery]);
+
   const handleCopyPhone = (phoneNum: string) => {
     const clean = phoneNum.replace(/\D/g, '');
     navigator.clipboard.writeText(clean);
@@ -852,7 +864,7 @@ export function WhatsAppCrmModule() {
                         </td>
                       </tr>
                     ) : (
-                      filteredTableLeads.map((chat) => {
+                      paginatedTableLeads.map((chat) => {
                         const { displayName, hasSavedName, formattedPhone, cleanPhone } = getCleanDisplayContact(chat);
                         const rawUsername = chat.phone || (chat.jid || '').split('@')[0] || '';
                         const cleanUsername = rawUsername.replace(/^@/, '');
@@ -1038,6 +1050,56 @@ export function WhatsAppCrmModule() {
                   </tbody>
                 </table>
               </div>
+              {filteredTableLeads.length > 0 && (
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-4 py-3 text-xs">
+                  <div className="font-bold text-zinc-600">
+                    Showing <span className="text-black font-extrabold">{tableStartIndex + 1}</span> to{' '}
+                    <span className="text-black font-extrabold">{Math.min(filteredTableLeads.length, tableEndIndex)}</span> of{' '}
+                    <span className="text-black font-extrabold">{filteredTableLeads.length}</span> leads
+                  </div>
+                  <div className="flex items-center justify-end gap-1.5 flex-wrap ml-auto">
+                    <button
+                      type="button"
+                      disabled={safeTablePage <= 1}
+                      onClick={() => setTablePage(p => Math.max(1, p - 1))}
+                      className="px-2.5 py-1 rounded-lg border border-zinc-300 bg-white hover:bg-zinc-100 disabled:opacity-40 disabled:cursor-not-allowed font-extrabold text-zinc-700 transition-all cursor-pointer shadow-2xs"
+                    >
+                      Prev
+                    </button>
+                    {Array.from({ length: tableTotalPages }).map((_, i) => {
+                      const pNum = i + 1;
+                      const isNear = Math.abs(pNum - safeTablePage) <= 2 || pNum === 1 || pNum === tableTotalPages;
+                      if (!isNear && (pNum === 2 || pNum === tableTotalPages - 1)) {
+                        return <span key={`crm_table_ellipsis_${pNum}`} className="px-1 text-zinc-400 font-bold">...</span>;
+                      }
+                      if (!isNear) return null;
+                      const isCurrent = pNum === safeTablePage;
+                      return (
+                        <button
+                          key={`crm_table_page_${pNum}`}
+                          type="button"
+                          onClick={() => setTablePage(pNum)}
+                          className={`w-7 h-7 rounded-lg text-xs font-black transition-all flex items-center justify-center cursor-pointer shadow-2xs ${
+                            isCurrent
+                              ? 'bg-black text-white border border-black'
+                              : 'bg-white text-zinc-700 hover:bg-zinc-100 border border-zinc-300'
+                          }`}
+                        >
+                          {pNum}
+                        </button>
+                      );
+                    })}
+                    <button
+                      type="button"
+                      disabled={safeTablePage >= tableTotalPages}
+                      onClick={() => setTablePage(p => Math.min(tableTotalPages, p + 1))}
+                      className="px-2.5 py-1 rounded-lg border border-zinc-300 bg-white hover:bg-zinc-100 disabled:opacity-40 disabled:cursor-not-allowed font-extrabold text-zinc-700 transition-all cursor-pointer shadow-2xs"
+                    >
+                      Next
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         )}

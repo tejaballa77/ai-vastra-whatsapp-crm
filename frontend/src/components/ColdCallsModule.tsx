@@ -1689,7 +1689,7 @@ export function ColdCallsModule({
                                   : 'bg-zinc-100 hover:bg-zinc-200 text-black border border-zinc-300 font-bold'
                               }`}
                             >
-                              {hasEnteredStatus ? statusText : 'None'}
+                              None
                             </button>
                           </td>
                         </tr>
@@ -1989,7 +1989,7 @@ export function ColdCallsModule({
                                     : 'bg-zinc-100 hover:bg-zinc-200 text-black border border-zinc-300 font-bold'
                                 } ${shakingPromptLeadId === lead.id ? 'ring-2 ring-black' : ''}`}
                               >
-                                <span>{hasEnteredStatus ? statusText : 'None'}</span>
+                                <span>None</span>
                               </button>
                             </div>
                           </td>

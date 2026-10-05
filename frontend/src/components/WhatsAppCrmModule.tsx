@@ -714,8 +714,21 @@ export function WhatsAppCrmModule() {
           </nav>
         </div>
 
+        <div className="pt-4 mt-auto">
+          <button
+            type="button"
+            onClick={toggleFullscreen}
+            className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-2xl bg-white/10 hover:bg-white/15 text-white border border-white/10 transition-all cursor-pointer font-extrabold text-sm"
+            title={isFullscreen ? 'Exit full screen' : 'Open CRM in full screen'}
+            aria-label={isFullscreen ? 'Exit full screen' : 'Open CRM in full screen'}
+          >
+            {isFullscreen ? <Minimize2 className="w-5 h-5" /> : <Maximize2 className="w-5 h-5" />}
+            <span>{isFullscreen ? 'Exit Full Screen' : 'Full Screen'}</span>
+          </button>
+        </div>
+
         {/* Bottom Sidebar: Admin Profile Block + Logout Icon Button */}
-        <div className="pt-4 border-t border-white/15 flex items-center justify-between gap-2 mt-auto">
+        <div className="pt-4 border-t border-white/15 flex items-center justify-between gap-2">
           <button
             onClick={() => setShowAdminModal(true)}
             className="flex-1 flex items-center gap-3 p-3 rounded-2xl bg-white/10 hover:bg-white/15 border border-white/10 transition-all text-left group overflow-hidden cursor-pointer"
@@ -745,51 +758,18 @@ export function WhatsAppCrmModule() {
       </aside>
 
       <main className="flex-1 flex flex-col overflow-hidden bg-white text-black">
-        <header className="h-16 bg-white border-b border-zinc-200 px-6 flex items-center justify-between flex-shrink-0">
-          <h2 className="text-xl font-extrabold text-black tracking-tight flex items-center gap-2">
-            {activeNav === 'whatsapp' ? (
-              <>
-                <img src="/whatsapp_icon.png" alt="WhatsApp" className="w-6 h-6 object-contain" />
-                <span>CRM Dashboard</span>
-              </>
-            )
-              : activeNav === 'calls' ? 'Cold Calls Lead List'
-              : activeNav === 'instagram' ? 'Instagram DMs Lead Dashboard'
-              : activeNav === 'linkedin' ? 'LinkedIn Messages Lead Dashboard'
-              : activeNav === 'facebook' ? 'Facebook Messenger Lead Dashboard'
-              : 'CRM Settings & Backup Center'}
-          </h2>
-
-          <div className="flex items-center gap-3">
-            {activeNav === 'whatsapp' && (
-              <button
-                  type="button"
-                  onClick={toggleFullscreen}
-                  className="p-2 bg-zinc-100 hover:bg-zinc-200 text-black rounded-xl border border-zinc-300 transition-all shadow-sm cursor-pointer"
-                  title={isFullscreen ? 'Exit full screen' : 'Open CRM in full screen'}
-                  aria-label={isFullscreen ? 'Exit full screen' : 'Open CRM in full screen'}
-                >
-                  {isFullscreen ? <Minimize2 className="w-5 h-5" /> : <Maximize2 className="w-5 h-5" />}
-                </button>
-            )}
-            {activeNav !== 'calls' && activeNav !== 'settings' && activeNav !== 'facebook' && (
-              <button
-                onClick={() => handleExportCsv()}
-                className="px-3.5 py-1.5 bg-zinc-100 hover:bg-zinc-200 text-black font-extrabold text-xs rounded-xl border border-zinc-300 transition-all flex items-center gap-1.5 shadow-sm cursor-pointer"
-              >
-                <span>📥 Export CSV</span>
-              </button>
-            )}
-          </div>
-        </header>
 
         {(activeNav === 'whatsapp' || activeNav === 'instagram' || activeNav === 'linkedin' || activeNav === 'facebook') && (
-          <div className="flex-1 overflow-y-auto p-6 bg-zinc-50/50">
+          <div className="flex-1 overflow-y-auto p-4 bg-zinc-50/50">
             <div className="bg-white p-6 rounded-2xl border border-zinc-200 shadow-sm space-y-5">
               <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
                   <h3 className="text-lg font-extrabold text-black flex items-center gap-2">
-                    <FileText className="w-5 h-5 text-black" />
+                    {activeNav === 'whatsapp' ? (
+                      <img src="/whatsapp_icon.png" alt="WhatsApp" className="w-5 h-5 object-contain" />
+                    ) : (
+                      <FileText className="w-5 h-5 text-black" />
+                    )}
                     <span>
                       {activeNav === 'whatsapp' ? 'WhatsApp Contact Leads'
                         : activeNav === 'instagram' ? 'Instagram Contact Leads'
@@ -1083,7 +1063,7 @@ export function WhatsAppCrmModule() {
 
 
         {activeNav === 'settings' && (
-          <SettingsModule chats={chats} />
+          <SettingsModule chats={chats} onExportCsv={handleExportCsv} />
         )}
       </main>
 

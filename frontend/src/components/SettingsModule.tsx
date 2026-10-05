@@ -8,9 +8,10 @@ import { Chat } from '../types/chat';
 
 interface SettingsModuleProps {
   chats: Chat[];
+  onExportCsv?: () => void;
 }
 
-export function SettingsModule({ chats }: SettingsModuleProps) {
+export function SettingsModule({ chats, onExportCsv }: SettingsModuleProps) {
   const [downloadingWhatsapp, setDownloadingWhatsapp] = useState(false);
   const [downloadingColdCalls, setDownloadingColdCalls] = useState(false);
   const [whatsappSuccess, setWhatsappSuccess] = useState(false);
@@ -233,6 +234,32 @@ export function SettingsModule({ chats }: SettingsModuleProps) {
             </div>
           </div>
         </div>
+
+        {onExportCsv && (
+          <div className="bg-white border border-zinc-200/80 rounded-3xl p-6 shadow-xs">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div className="flex items-start gap-4">
+                <div className="w-12 h-12 rounded-2xl bg-zinc-100 text-zinc-900 flex items-center justify-center border border-zinc-200">
+                  <FileSpreadsheet className="w-6 h-6" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-extrabold text-zinc-900">CSV Export</h3>
+                  <p className="text-xs font-semibold text-zinc-500 mt-1 leading-relaxed">
+                    Download saved CRM leads as a CSV file with phone numbers preserved in Excel-friendly format.
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={onExportCsv}
+                className="px-5 py-3 bg-black hover:bg-zinc-800 active:scale-[0.98] text-white rounded-2xl font-extrabold text-sm transition-all shadow-md cursor-pointer"
+              >
+                Export CSV
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

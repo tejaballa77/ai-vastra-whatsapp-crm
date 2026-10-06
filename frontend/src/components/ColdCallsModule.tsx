@@ -314,6 +314,7 @@ export function ColdCallsModule({
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterTab, setFilterTab] = useState<'PROSPECTS' | 'INTERESTED' | 'NOT_INTERESTED' | 'FOLLOW_UPS' | 'ALL'>('PROSPECTS');
+  const [bdmFilter, setBdmFilter] = useState<string>('ALL');
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [activeSelectedLeadId, setActiveSelectedLeadId] = useState<string | null>(null);
   const [shakingPromptLeadId, setShakingPromptLeadId] = useState<string | null>(null);
@@ -321,7 +322,7 @@ export function ColdCallsModule({
   // Reset pagination on filter or search changes
   useEffect(() => {
     setCurrentPage(1);
-  }, [filterTab, searchQuery]);
+  }, [filterTab, searchQuery, bdmFilter]);
 
   // Upload Modal State
   const [showUploadModal, setShowUploadModal] = useState(false);
@@ -1285,6 +1286,36 @@ export function ColdCallsModule({
     return timeA - timeB;
   });
 
+  const normalizeBdmName = (value: string) => value.trim().toLowerCase().replace(/\s+/g, ' ');
+  const splitBdmNames = (value?: string) => String(value || '')
+    .split(',')
+    .map(name => name.trim())
+    .filter(name => name && name !== '-' && name !== 'Executive User' && name !== 'Staff');
+  const getColdCallBdmUsers = (lead: ColdCallLead) => {
+    const storedBdmHistory = Array.isArray(lead.customFields?.bdmHistory)
+      ? lead.customFields.bdmHistory.filter((name: unknown): name is string => typeof name === 'string' && Boolean(name.trim()))
+      : [];
+    const rawBdmContributions = lead.customFields?.bdmContributions;
+    const bdmContributions = (
+      rawBdmContributions && typeof rawBdmContributions === 'object' && !Array.isArray(rawBdmContributions)
+    ) ? rawBdmContributions as Record<string, { updatedAt?: number; fields?: Record<string, string>; noteKeys?: string[] }> : {};
+    const activeContributionUsers = Object.entries(bdmContributions)
+      .filter(([, contribution]) => (
+        Object.keys(contribution.fields || {}).length > 0 || (contribution.noteKeys || []).length > 0
+      ))
+      .sort(([, a], [, b]) => Number(b.updatedAt || 0) - Number(a.updatedAt || 0))
+      .map(([username]) => username);
+    const rounds = getLeadFollowUps(lead);
+    return Array.from(new Set([
+      ...activeContributionUsers,
+      ...splitBdmNames(lead.calledBy),
+      ...storedBdmHistory.flatMap(name => splitBdmNames(name)),
+      ...rounds.flatMap(round => splitBdmNames(round.calledBy)),
+    ]));
+  };
+  const coldCallBdmOptions = Array.from(new Set(baseLeads.flatMap(getColdCallBdmUsers)))
+    .sort((a, b) => a.localeCompare(b));
+
   let filteredLeads = baseLeads.filter(l => {
     const q = searchQuery.toLowerCase();
     const match =
@@ -1294,6 +1325,11 @@ export function ColdCallsModule({
       (l.note || '').toLowerCase().includes(q) ||
       (l.followUps || []).some(f => (f.note || '').toLowerCase().includes(q) || (f.notesList || []).some(n => n.text.toLowerCase().includes(q)));
     if (!match) return false;
+    if (bdmFilter !== 'ALL') {
+      const selectedBdm = normalizeBdmName(bdmFilter);
+      const rowBdms = getColdCallBdmUsers(l).map(name => normalizeBdmName(name));
+      if (!rowBdms.includes(selectedBdm)) return false;
+    }
     if (filterTab === 'PROSPECTS') return isProspectLead(l);
     if (filterTab === 'INTERESTED') return isInterestedLead(l);
     if (filterTab === 'NOT_INTERESTED') return isNotInterestedLead(l);
@@ -1479,6 +1515,17 @@ export function ColdCallsModule({
               >
                 <SettingsIcon className="w-4 h-4" />
               </button>
+              <select
+                value={bdmFilter}
+                onChange={(e) => setBdmFilter(e.target.value)}
+                className="ml-1 px-3 py-2 bg-zinc-100 border border-zinc-300 rounded-xl text-xs font-extrabold text-black focus:outline-none focus:border-black min-w-[150px]"
+                title="Filter Cold Calls by BDM"
+              >
+                <option value="ALL">All BDMs</option>
+                {coldCallBdmOptions.map((name) => (
+                  <option key={name} value={name}>{name}</option>
+                ))}
+              </select>
             </div>
 
             <div className="flex items-center gap-3 flex-wrap">

@@ -136,7 +136,7 @@ export function WhatsAppCrmModule() {
   const [activeNav, setActiveNav] = useState<'whatsapp' | 'calls' | 'instagram' | 'linkedin' | 'facebook' | 'settings'>('whatsapp');
   const [coldCallsSubPage, setColdCallsSubPage] = useState<'analytics' | 'sheet' | 'database'>('sheet');
   const [tableFilter, setTableFilter] = useState<'ALL' | 'INTERESTED' | 'WARM' | 'NOT_INTERESTED' | 'CALLS' | 'FOLLOWUPS'>('ALL');
-  const [whatsappBdmFilter, setWhatsappBdmFilter] = useState<string>('ALL');
+  const [crmBdmFilter, setCrmBdmFilter] = useState<string>('ALL');
   const [modalCategory, setModalCategory] = useState<'INTERESTED' | 'WARM' | 'NOT_INTERESTED' | 'CALLS' | 'FOLLOWUPS' | null>(null);
   const [showStatusModal, setShowStatusModal] = useState(false);
   const [showInterestedModal, setShowInterestedModal] = useState(false);
@@ -479,7 +479,7 @@ export function WhatsAppCrmModule() {
   const followUpsCount = scheduledFollowupChatsList.length;
   const callsYesCount = navChats.filter((c) => c.callStatus === 'YES').length;
   const allTabLeads = savedLeads;
-  const whatsappBdmOptions = activeNav === 'whatsapp'
+  const crmBdmOptions = (activeNav === 'whatsapp' || activeNav === 'instagram' || activeNav === 'linkedin' || activeNav === 'facebook')
     ? Array.from(new Set(savedLeads.flatMap((c) => getBdmUsers(getChatBdm(c)))))
       .filter((name) => name && name !== '-')
       .sort((a, b) => a.localeCompare(b))
@@ -497,8 +497,8 @@ export function WhatsAppCrmModule() {
 
       if (!matchesSearch) return false;
 
-      if (activeNav === 'whatsapp' && whatsappBdmFilter !== 'ALL') {
-        const selectedBdm = normalizeBdmName(whatsappBdmFilter);
+      if ((activeNav === 'whatsapp' || activeNav === 'instagram' || activeNav === 'linkedin' || activeNav === 'facebook') && crmBdmFilter !== 'ALL') {
+        const selectedBdm = normalizeBdmName(crmBdmFilter);
         const rowBdms = getBdmUsers(getChatBdm(c)).map((name) => normalizeBdmName(name));
         if (!rowBdms.includes(selectedBdm)) return false;
       }
@@ -526,13 +526,7 @@ export function WhatsAppCrmModule() {
 
   useEffect(() => {
     setTablePage(1);
-  }, [activeNav, tableFilter, searchQuery, whatsappBdmFilter]);
-
-  useEffect(() => {
-    if (activeNav !== 'whatsapp' && whatsappBdmFilter !== 'ALL') {
-      setWhatsappBdmFilter('ALL');
-    }
-  }, [activeNav, whatsappBdmFilter]);
+  }, [activeNav, tableFilter, searchQuery, crmBdmFilter]);
 
   const handleCopyPhone = (phoneNum: string) => {
     const clean = phoneNum.replace(/\D/g, '');
@@ -792,15 +786,15 @@ export function WhatsAppCrmModule() {
                         : 'Facebook Contact Leads'}
                     </span>
                   </h3>
-                  {activeNav === 'whatsapp' && (
+                  {(activeNav === 'whatsapp' || activeNav === 'instagram' || activeNav === 'linkedin' || activeNav === 'facebook') && (
                     <select
-                      value={whatsappBdmFilter}
-                      onChange={(e) => setWhatsappBdmFilter(e.target.value)}
+                      value={crmBdmFilter}
+                      onChange={(e) => setCrmBdmFilter(e.target.value)}
                       className="px-3 py-2 bg-zinc-100 border border-zinc-300 rounded-xl text-xs font-extrabold text-black focus:outline-none focus:border-black min-w-[150px]"
-                      title="Filter WhatsApp leads by BDM"
+                      title="Filter leads by BDM"
                     >
                       <option value="ALL">All BDMs</option>
-                      {whatsappBdmOptions.map((name) => (
+                      {crmBdmOptions.map((name) => (
                         <option key={name} value={name}>{name}</option>
                       ))}
                     </select>

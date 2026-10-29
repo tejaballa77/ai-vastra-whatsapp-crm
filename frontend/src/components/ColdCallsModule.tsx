@@ -1509,11 +1509,11 @@ export function ColdCallsModule({
               <button
                 type="button"
                 onClick={() => setShowToolsPopup(true)}
-                className="ml-1 p-2 rounded-xl border border-zinc-200 bg-zinc-100 hover:bg-zinc-200 text-black transition-all cursor-pointer"
+                className="ml-1 px-3 py-2 rounded-xl border border-zinc-200 bg-zinc-100 hover:bg-zinc-200 text-black text-xs font-extrabold transition-all cursor-pointer"
                 title="Cold Calls tools"
                 aria-label="Cold Calls tools"
               >
-                <SettingsIcon className="w-4 h-4" />
+                Add Data
               </button>
               <select
                 value={bdmFilter}

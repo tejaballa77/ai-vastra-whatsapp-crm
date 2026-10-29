@@ -5,7 +5,7 @@ import path from 'path';
 import { Server as SocketIOServer } from 'socket.io';
 import cors from 'cors';
 import dotenv from 'dotenv';
-import { WhatsAppEngine } from './whatsappEngine';
+// import { WhatsAppEngine } from './whatsappEngine';
 import { db } from './store';
 import { DbMigrator } from './dbMigrator';
 
@@ -40,18 +40,18 @@ const io = new SocketIOServer(server, {
 });
 
 // Initialize WhatsApp Engine
-const waEngine = new WhatsAppEngine(io);
+// const waEngine = new WhatsAppEngine(io);
 
 // Socket.IO Connections
 io.on('connection', (socket) => {
   console.log(`[Socket.IO] Client connected: ${socket.id}`);
 
   // Send current status immediately upon connection
-  socket.emit('connection_status', {
-    status: waEngine.status,
-    currentQrCode: waEngine.currentQrCode,
-    meJid: waEngine.meJid,
-  });
+  // socket.emit('connection_status', {
+  //   status: waEngine.status,
+  //   currentQrCode: waEngine.currentQrCode,
+  //   meJid: waEngine.meJid,
+  // });
 
   // Send initial chat list, cold calls & active users from local cache
   socket.emit('chats_updated', db.getAllChatsSorted());
@@ -66,13 +66,13 @@ io.on('connection', (socket) => {
 // REST API Endpoints
 
 // 1. Session status
-app.get('/api/session/status', (req, res) => {
-  res.json({
-    status: waEngine.status,
-    currentQrCode: waEngine.currentQrCode,
-    meJid: waEngine.meJid,
-  });
-});
+// app.get('/api/session/status', (req, res) => {
+//   res.json({
+//     status: waEngine.status,
+//     currentQrCode: waEngine.currentQrCode,
+//     meJid: waEngine.meJid,
+//   });
+// });
 
 // 2. Initialize / Reconnect session
 // Read-only resolution: return only an existing verified LID-to-phone mapping.
@@ -87,35 +87,35 @@ app.get('/api/contacts/resolve-lid', (req, res) => {
   return res.json({ success: true, lid, jid, phone: jid.split('@')[0] });
 });
 
-app.post('/api/session/connect', async (req, res) => {
-  try {
-    await waEngine.initialize();
-    res.json({ success: true, status: waEngine.status });
-  } catch (err: any) {
-    res.status(500).json({ error: err.message });
-  }
-});
+// app.post('/api/session/connect', async (req, res) => {
+//   try {
+//     await waEngine.initialize();
+//     res.json({ success: true, status: waEngine.status });
+//   } catch (err: any) {
+//     res.status(500).json({ error: err.message });
+//   }
+// });
 
 // 3. Disconnect / Logout session
-app.post('/api/session/disconnect', async (req, res) => {
-  try {
-    await waEngine.disconnect();
-    res.json({ success: true, message: 'Session disconnected successfully' });
-  } catch (err: any) {
-    res.status(500).json({ error: err.message });
-  }
-});
+// app.post('/api/session/disconnect', async (req, res) => {
+//   try {
+//     await waEngine.disconnect();
+//     res.json({ success: true, message: 'Session disconnected successfully' });
+//   } catch (err: any) {
+//     res.status(500).json({ error: err.message });
+//   }
+// });
 
 // 3b. Reset session for fresh QR re-sync (Preserves all CRM Lead Data & Extension Entries)
-app.post('/api/session/reset', async (req, res) => {
-  try {
-    await waEngine.disconnect();
-    waEngine.clearAuthAndStore();
-    res.json({ success: true, message: 'WhatsApp session unlinked cleanly. All CRM Data preserved.' });
-  } catch (err: any) {
-    res.status(500).json({ error: err.message });
-  }
-});
+// app.post('/api/session/reset', async (req, res) => {
+//   try {
+//     await waEngine.disconnect();
+//     waEngine.clearAuthAndStore();
+//     res.json({ success: true, message: 'WhatsApp session unlinked cleanly. All CRM Data preserved.' });
+//   } catch (err: any) {
+//     res.status(500).json({ error: err.message });
+//   }
+// });
 
 
 // 4. Get all chats (sorted by recent message)
@@ -131,19 +131,19 @@ app.get('/api/messages/:chatJid', (req, res) => {
 });
 
 // 6. Send message
-app.post('/api/messages/send', async (req, res) => {
-  const { chatJid, text } = req.body;
-  if (!chatJid || !text) {
-    return res.status(400).json({ error: 'chatJid and text are required' });
-  }
-
-  try {
-    const msg = await waEngine.sendMessage(chatJid, text);
-    res.json({ success: true, message: msg });
-  } catch (err: any) {
-    res.status(500).json({ error: err.message });
-  }
-});
+// app.post('/api/messages/send', async (req, res) => {
+//   const { chatJid, text } = req.body;
+//   if (!chatJid || !text) {
+//     return res.status(400).json({ error: 'chatJid and text are required' });
+//   }
+//
+//   try {
+//     const msg = await waEngine.sendMessage(chatJid, text);
+//     res.json({ success: true, message: msg });
+//   } catch (err: any) {
+//     res.status(500).json({ error: err.message });
+//   }
+// });
 
 // 7. Update CRM metadata (Lead Status, Call Status, Follow-up date, Notes, Tags, BDM, Language)
 const handleCrmUpdate = (req: express.Request, res: express.Response) => {
@@ -462,11 +462,11 @@ server.listen(PORT, async () => {
   console.log(`=======================================================`);
 
   // Fire-and-forget: Start WhatsApp session in background WITHOUT blocking the server
-  setTimeout(() => {
-    waEngine.initialize().catch((err) => {
-      console.error('[AI Vastra CRM Backend] Non-fatal WhatsApp Engine init error:', err?.message || err);
-    });
-  }, 2000);
+  // setTimeout(() => {
+  //   waEngine.initialize().catch((err) => {
+  //     console.error('[AI Vastra CRM Backend] Non-fatal WhatsApp Engine init error:', err?.message || err);
+  //   });
+  // }, 2000);
 
   // Background Automated Daily IST Backup Scheduler (checks every 30 seconds)
   setInterval(() => {

@@ -57,6 +57,7 @@ io.on('connection', (socket) => {
   socket.emit('chats_updated', db.getAllChatsSorted());
   socket.emit('cold_calls_updated', db.getAllColdCalls());
   socket.emit('users_updated', db.getActiveUsers());
+  socket.emit('bdm_excluded_updated', db.getExcludedBdmNames());
 
   socket.on('disconnect', () => {
     console.log(`[Socket.IO] Client disconnected: ${socket.id}`);
@@ -356,6 +357,39 @@ app.put('/api/cold-calls/campaign/rename', (req, res) => {
   const updatedCount = db.renameCampaign(oldName, newName);
   io.emit('cold_calls_updated', db.getAllColdCalls());
   res.json({ success: true, updatedCount });
+});
+
+// ==================== BDM DROPDOWN EXCLUSIONS ====================
+// Hiding a name here never touches any lead/contact data - it only removes that name from
+// being OFFERED as a BDM filter option in the given section, for every user, until restored.
+
+// Get all currently hidden BDM names, grouped by section
+app.get('/api/bdm/excluded', (req, res) => {
+  res.json({ success: true, excluded: db.getExcludedBdmNames() });
+});
+
+// Hide a BDM name from a section's filter dropdown
+app.post('/api/bdm/excluded', (req, res) => {
+  const { section, name } = req.body;
+  if (!section || !name) {
+    return res.status(400).json({ success: false, error: 'section and name are required' });
+  }
+  db.excludeBdmName(section, name);
+  const excluded = db.getExcludedBdmNames();
+  io.emit('bdm_excluded_updated', excluded);
+  res.json({ success: true, excluded });
+});
+
+// Restore a previously hidden BDM name
+app.delete('/api/bdm/excluded', (req, res) => {
+  const { section, name } = req.body;
+  if (!section || !name) {
+    return res.status(400).json({ success: false, error: 'section and name are required' });
+  }
+  db.restoreBdmName(section, name);
+  const excluded = db.getExcludedBdmNames();
+  io.emit('bdm_excluded_updated', excluded);
+  res.json({ success: true, excluded });
 });
 
 // Get active CRM users

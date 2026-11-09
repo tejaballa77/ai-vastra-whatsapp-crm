@@ -29,6 +29,8 @@ interface SocketContextType {
   removeChatFromState: (targetJid: string, targetPhone?: string, targetName?: string) => void;
   isHistorySyncing: boolean;
   syncedMessageCount: number;
+  excludedBdmNames: Record<string, string[]>;
+  deleteBdmName: (section: string, name: string) => Promise<void>;
 }
 
 const SocketContext = createContext<SocketContextType | undefined>(undefined);
@@ -56,6 +58,7 @@ export const SocketProvider = ({ children }: { children: ReactNode }) => {
   const [activeChatJid, setActiveChatJid] = useState<string | null>(null);
   const [isHistorySyncing, setIsHistorySyncing] = useState<boolean>(false);
   const [syncedMessageCount, setSyncedMessageCount] = useState<number>(0);
+  const [excludedBdmNames, setExcludedBdmNames] = useState<Record<string, string[]>>({});
 
   const removeChatFromState = (targetJid: string, targetPhone?: string, targetName?: string) => {
     setChats((prev) => {
@@ -170,6 +173,17 @@ export const SocketProvider = ({ children }: { children: ReactNode }) => {
       setSyncedMessageCount(messageCount);
     });
 
+    s.on('bdm_excluded_updated', (updated: Record<string, string[]>) => {
+      if (updated && typeof updated === 'object') setExcludedBdmNames(updated);
+    });
+
+    fetch(`${getBackendUrl()}/api/bdm/excluded`)
+      .then((res) => res.json())
+      .then((data) => {
+        if (data?.excluded) setExcludedBdmNames(data.excluded);
+      })
+      .catch((err) => console.error('[SocketContext] Error fetching excluded BDM names:', err));
+
     return () => {
       clearInterval(pollInterval);
       s.disconnect();
@@ -250,6 +264,26 @@ export const SocketProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
+  const deleteBdmName = async (section: string, name: string) => {
+    // Optimistic UI update so the name disappears immediately for this user
+    setExcludedBdmNames((prev) => {
+      const key = name.trim().toLowerCase().replace(/\s+/g, ' ');
+      const list = prev[section] || [];
+      if (list.includes(key)) return prev;
+      return { ...prev, [section]: [...list, key] };
+    });
+
+    try {
+      await fetch(`${getBackendUrl()}/api/bdm/excluded`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ section, name }),
+      });
+    } catch (err) {
+      console.error('[SocketContext] Delete BDM name error:', err);
+    }
+  };
+
   return (
     <SocketContext.Provider
       value={{
@@ -266,6 +300,8 @@ export const SocketProvider = ({ children }: { children: ReactNode }) => {
         removeChatFromState,
         isHistorySyncing,
         syncedMessageCount,
+        excludedBdmNames,
+        deleteBdmName,
       }}
     >
       {children}

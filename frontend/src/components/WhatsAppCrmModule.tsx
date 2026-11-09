@@ -38,6 +38,7 @@ import { ColdCallsModule } from './ColdCallsModule';
 import { SettingsModule } from './SettingsModule';
 import { AdminProfileModal } from './AdminProfileModal';
 import { CustomModal } from './CustomModal';
+import BdmFilterDropdown from './BdmFilterDropdown';
 import { QrCodeModal } from './QrCodeModal';
 
 const formatPhoneForExport = (value: string): string => {
@@ -172,7 +173,7 @@ export function WhatsAppCrmModule() {
   const [showClearConfirmModal, setShowClearConfirmModal] = useState<boolean>(false);
   const [contactToClear, setContactToClear] = useState<Chat | null>(null);
 
-  const { sessionState, chats: rawChats, updateCrmMetadata, removeChatFromState } = useSocket();
+  const { sessionState, chats: rawChats, updateCrmMetadata, removeChatFromState, excludedBdmNames, deleteBdmName } = useSocket();
 
   useEffect(() => {
     if (rawChats && Array.isArray(rawChats)) {
@@ -490,10 +491,24 @@ export function WhatsAppCrmModule() {
     const hasNotes = Boolean((c.notesList && c.notesList.length > 0) || (c.notes && c.notes.trim().length > 0));
     return hasStatus || hasCall || hasFollow || hasNotes;
   };
+  // Merge case-variant duplicates ("Chand" vs "chand") into a single dropdown entry: group by
+  // normalized name, then show whichever exact capitalization occurs most often in the data.
+  const dedupeBdmNamesByCasing = (names: string[]): string[] => {
+    const variantCounts = new Map<string, Map<string, number>>();
+    for (const name of names) {
+      if (!name || name === '-') continue;
+      const key = normalizeBdmName(name);
+      if (!variantCounts.has(key)) variantCounts.set(key, new Map());
+      const variants = variantCounts.get(key)!;
+      variants.set(name, (variants.get(name) || 0) + 1);
+    }
+    return Array.from(variantCounts.values())
+      .map((variants) => Array.from(variants.entries()).sort((a, b) => b[1] - a[1])[0][0])
+      .sort((a, b) => a.localeCompare(b));
+  };
   const crmBdmOptions = (activeNav === 'whatsapp' || activeNav === 'instagram' || activeNav === 'linkedin' || activeNav === 'facebook')
-    ? Array.from(new Set(navChats.filter(hasGenuineCrmData).flatMap((c) => getBdmUsers(getChatBdm(c)))))
-      .filter((name) => name && name !== '-')
-      .sort((a, b) => a.localeCompare(b))
+    ? dedupeBdmNamesByCasing(navChats.filter(hasGenuineCrmData).flatMap((c) => getBdmUsers(getChatBdm(c))))
+      .filter((name) => !(excludedBdmNames[activeNav] || []).includes(normalizeBdmName(name)))
     : [];
 
   // Base list for table: default to savedLeads unless specific filter tab is chosen
@@ -798,17 +813,13 @@ export function WhatsAppCrmModule() {
                     </span>
                   </h3>
                   {(activeNav === 'whatsapp' || activeNav === 'instagram' || activeNav === 'linkedin' || activeNav === 'facebook') && (
-                    <select
+                    <BdmFilterDropdown
+                      options={crmBdmOptions}
                       value={crmBdmFilter}
-                      onChange={(e) => setCrmBdmFilter(e.target.value)}
-                      className="px-3 py-2 bg-zinc-100 border border-zinc-300 rounded-xl text-xs font-extrabold text-black focus:outline-none focus:border-black min-w-[150px]"
-                      title="Filter leads by BDM"
-                    >
-                      <option value="ALL">All BDMs</option>
-                      {crmBdmOptions.map((name) => (
-                        <option key={name} value={name}>{name}</option>
-                      ))}
-                    </select>
+                      onChange={setCrmBdmFilter}
+                      onDeleteName={(name) => deleteBdmName(activeNav, name)}
+                      title="Filter leads by BDM (right-click a name with no data to remove it)"
+                    />
                   )}
                 </div>
 

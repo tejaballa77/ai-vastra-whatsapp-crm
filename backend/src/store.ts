@@ -162,6 +162,37 @@ class StorageEngine {
     lastBackupDate: '',
   };
 
+  // BDM names manually hidden from a section's filter dropdown (e.g. a stray no-data name).
+  // This never touches any lead/contact data - it only hides a name from being OFFERED as a
+  // dropdown option in that section, for every user, until explicitly restored.
+  public excludedBdmNames: Record<string, string[]> = {};
+
+  private normalizeBdmKey(name: string): string {
+    return String(name || '').trim().toLowerCase().replace(/\s+/g, ' ');
+  }
+
+  public excludeBdmName(section: string, name: string) {
+    const key = this.normalizeBdmKey(name);
+    if (!section || !key) return;
+    const list = this.excludedBdmNames[section] || [];
+    if (!list.includes(key)) {
+      this.excludedBdmNames[section] = [...list, key];
+      this.saveData();
+    }
+  }
+
+  public restoreBdmName(section: string, name: string) {
+    const key = this.normalizeBdmKey(name);
+    if (!section || !key) return;
+    const list = this.excludedBdmNames[section] || [];
+    this.excludedBdmNames[section] = list.filter((n) => n !== key);
+    this.saveData();
+  }
+
+  public getExcludedBdmNames(): Record<string, string[]> {
+    return this.excludedBdmNames;
+  }
+
   public runAutomatedBackupNow(customFolderPath?: string): { success: boolean; whatsappFile: string; coldCallsFile: string; message: string } {
     try {
       const defaultFolder = path.join(__dirname, '../backups');
@@ -584,6 +615,7 @@ class StorageEngine {
         if (parsed.activeUsers) this.activeUsers = new Set(parsed.activeUsers);
         if (parsed.archivedClearedLeads) this.archivedClearedLeads = new Map(Object.entries(parsed.archivedClearedLeads));
         if (parsed.backupSettings) this.backupSettings = { ...this.backupSettings, ...parsed.backupSettings };
+        if (parsed.excludedBdmNames) this.excludedBdmNames = parsed.excludedBdmNames;
       }
     } catch (err) {
       console.error('[Storage] Error loading fallback db.json:', err);
@@ -601,6 +633,7 @@ class StorageEngine {
         activeUsers: Array.from(this.activeUsers),
         archivedClearedLeads: Object.fromEntries(this.archivedClearedLeads),
         backupSettings: this.backupSettings,
+        excludedBdmNames: this.excludedBdmNames,
       };
       fs.writeFileSync(this.dataFilePath, JSON.stringify(obj, null, 2), 'utf-8');
     } catch (err) {

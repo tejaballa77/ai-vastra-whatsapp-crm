@@ -479,8 +479,19 @@ export function WhatsAppCrmModule() {
   const followUpsCount = scheduledFollowupChatsList.length;
   const callsYesCount = navChats.filter((c) => c.callStatus === 'YES').length;
   const allTabLeads = savedLeads;
+  // Dropdown must only ever list a BDM if a GENUINE CRM field (status/call/follow-up/notes) was
+  // entered for at least one of their contacts. Deliberately excludes the "manuallySaved" flag,
+  // which the extension sets to true on every save click regardless of whether real data was
+  // entered, and would otherwise let a name leak into the dropdown with zero actual lead data.
+  const hasGenuineCrmData = (c: Chat) => {
+    const hasStatus = Boolean(c.leadStatus && c.leadStatus !== 'UNASSIGNED');
+    const hasCall = Boolean(c.callStatus && c.callStatus !== undefined && c.callStatus !== null && (c.callStatus as any) !== 'None');
+    const hasFollow = Boolean(c.followUpDate && c.followUpDate.trim().length > 0 && c.followUpDate !== '—');
+    const hasNotes = Boolean((c.notesList && c.notesList.length > 0) || (c.notes && c.notes.trim().length > 0));
+    return hasStatus || hasCall || hasFollow || hasNotes;
+  };
   const crmBdmOptions = (activeNav === 'whatsapp' || activeNav === 'instagram' || activeNav === 'linkedin' || activeNav === 'facebook')
-    ? Array.from(new Set(savedLeads.flatMap((c) => getBdmUsers(getChatBdm(c)))))
+    ? Array.from(new Set(navChats.filter(hasGenuineCrmData).flatMap((c) => getBdmUsers(getChatBdm(c)))))
       .filter((name) => name && name !== '-')
       .sort((a, b) => a.localeCompare(b))
     : [];

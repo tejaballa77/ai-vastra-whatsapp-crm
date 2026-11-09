@@ -1313,8 +1313,42 @@ export function ColdCallsModule({
       ...rounds.flatMap(round => splitBdmNames(round.calledBy)),
     ]));
   };
-  const coldCallBdmOptions = Array.from(new Set(baseLeads.flatMap(getColdCallBdmUsers)))
-    .sort((a, b) => a.localeCompare(b));
+  // A lead counts as having "real data" only if something genuine was ever recorded on it
+  // (top-level call outcome/status/follow-up/notes, a follow-up round with real content, or an
+  // active contribution). Leads with none of that are excluded from the BDM dropdown entirely,
+  // so a name never appears there unless it is actually backed by data somewhere. This does NOT
+  // change getColdCallBdmUsers itself, so selecting an existing BDM filter still matches leads
+  // exactly as before — only the dropdown's own name list gets this extra check.
+  const leadHasAnyRealData = (lead: ColdCallLead): boolean => {
+    const hasTopLevel = Boolean(
+      (lead.callChoice && lead.callChoice !== 'PENDING') ||
+      (lead.callStatus && lead.callStatus !== 'PENDING') ||
+      (lead.followUpDate && lead.followUpDate.trim().length > 0) ||
+      (lead.note && lead.note.trim().length > 0) ||
+      (lead.notesList && lead.notesList.length > 0) ||
+      (lead.callOutcome && lead.callOutcome.trim().length > 0)
+    );
+    if (hasTopLevel) return true;
+
+    const rounds = getLeadFollowUps(lead);
+    const hasRoundData = rounds.some(round => Boolean(
+      (round.callChoice && round.callChoice !== 'PENDING') ||
+      (round.callStatus && round.callStatus !== 'PENDING') ||
+      (round.followUpDate && round.followUpDate.trim().length > 0) ||
+      (round.note && round.note.trim().length > 0) ||
+      (round.notesList && round.notesList.length > 0)
+    ));
+    if (hasRoundData) return true;
+
+    const rawBdmContributions = lead.customFields?.bdmContributions;
+    const bdmContributions = (
+      rawBdmContributions && typeof rawBdmContributions === 'object' && !Array.isArray(rawBdmContributions)
+    ) ? rawBdmContributions as Record<string, { fields?: Record<string, string>; noteKeys?: string[] }> : {};
+    return Object.values(bdmContributions).some((c) => Object.keys(c.fields || {}).length > 0 || (c.noteKeys || []).length > 0);
+  };
+  const coldCallBdmOptions = Array.from(new Set(
+    baseLeads.filter(leadHasAnyRealData).flatMap(getColdCallBdmUsers)
+  )).sort((a, b) => a.localeCompare(b));
 
   let filteredLeads = baseLeads.filter(l => {
     const q = searchQuery.toLowerCase();
